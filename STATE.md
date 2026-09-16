@@ -60,8 +60,12 @@ _Last updated: 2026-09-16_
 
 ## In Progress
 
-- M2's catch-up PR (#10: `feat/m1-baseline-symptom-model` → `main`) not yet merged.
-- M3 not yet committed/PR'd (still on `feat/m3-backend-domain-model`).
+- **M3 is merged to `main`** (PR #11) — done since this entry was first drafted.
+- M2's catch-up PR ([#10](https://github.com/arun-codewalnut/Cattle-Disease-Prediction-System/pull/10):
+  `feat/m1-baseline-symptom-model` → `main`) still open — was `CONFLICTING` after M3 merged
+  (both touched `STATE.md`/`HANDOFF.md`/`docs/DECISIONS.md`/`docs/ROADMAP.md`/
+  `docs/API_CONTRACTS.md`); resolved by merging `origin/main` into the branch and combining
+  both sides' content (no code conflicts — only shared docs). Being pushed now.
 
 ## Not Started
 

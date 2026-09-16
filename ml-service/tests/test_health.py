@@ -11,7 +11,7 @@ def test_health() -> None:
     assert response.json() == {"status": "ok"}
 
 
-def test_diagnose_stub() -> None:
+def test_diagnose_basic_smoke() -> None:
     response = client.post("/agent/diagnose", json={"symptoms": {"fever": True}})
     assert response.status_code == 200
     assert "X-Correlation-Id" in response.headers

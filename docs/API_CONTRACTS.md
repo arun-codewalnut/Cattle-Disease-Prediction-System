@@ -25,27 +25,35 @@ absent; each backend forwards it downstream and includes it in every log line.
 
 ## `ml-service` diagnosis endpoint (contract summary)
 
-`POST /agent/diagnose`
+`POST /agent/diagnose` — `X-Correlation-Id` is a header (per the shared convention above),
+not a body field.
 
 Request:
 ```json
 {
-  "correlation_id": "uuid",
   "symptoms": { "fever": true, "appetite_loss": true, "...": "..." },
-  "image_url": "optional"
+  "image_url": null
 }
 ```
 
-Response:
+Response (`200`):
 ```json
 {
   "diagnosis": "Foot and Mouth Disease",
   "confidence": 0.82,
-  "explanation": "...",
+  "explanation": "Predicted Foot and Mouth Disease with 82% confidence, based primarily on: ...",
   "recommended_action": "escalate_to_vet",
-  "sources": ["..."]
+  "sources": []
 }
 ```
+
+`recommended_action` is one of `escalate_to_vet` (always, for reportable/contagious
+diseases — see [docs/DISCLAIMER.md](DISCLAIMER.md), regardless of confidence),
+`consult_vet` (uncertain diagnosis, or any other diagnosed disease), or `monitor`
+(`"Healthy"` only). `sources` is `[]` until M6 wires up RAG.
+
+**Known error codes**: `MODEL_NOT_TRAINED` (`503`) — the model artifact isn't present;
+train it via `python -m training.symptom_model_train` in `ml-service/`.
 
 ## `backend` endpoints (contract summary, M3)
 
