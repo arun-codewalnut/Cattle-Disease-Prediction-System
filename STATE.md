@@ -48,14 +48,22 @@ _Last updated: 2026-09-16_
 - Full-application build+test verified working: `ml-service` (pytest 10/10), `frontend`
   (vitest 1/1 + production build), `backend` (`mvn test` — needs Postgres running; fixed
   CI to provide one via a service container, see `docs/DECISIONS.md`).
+- **M2 done** (issue #2, branch `feat/m2-wire-model-into-agent`, stacked on M1's branch since
+  M1 isn't merged yet): `/agent/diagnose` now calls the real M1 model instead of the stub.
+  Explicit, auditable `recommended_action` rule (`REPORTABLE_DISEASES` in
+  `app/agent/graph.py`) — reportable diseases always `escalate_to_vet` regardless of
+  confidence, per `docs/DISCLAIMER.md`. Missing-model case returns a structured
+  `MODEL_NOT_TRAINED` error, not a raw 500. 15/15 ml-service tests passing (all green on
+  first run — no bugs found this time). `docs/API_CONTRACTS.md` updated (also fixed a
+  pre-existing inaccuracy: `correlation_id` was wrongly shown as a body field, it's a header).
 
 ## In Progress
 
-- Nothing — M1 complete, not yet merged to `main` (still on `feat/m1-baseline-symptom-model`).
+- Nothing — M1 and M2 both complete, neither merged to `main` yet (M1 PR #8 open;
+  M2 not yet PR'd).
 
 ## Not Started
 
-- M2: FastAPI inference endpoints
 - M3: Spring Boot domain model + Flyway migrations
 - M4: React symptom-intake UI
 - M5: LangGraph agent wiring (intake → predict → explain)
