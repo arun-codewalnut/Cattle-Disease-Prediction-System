@@ -187,3 +187,30 @@ startup and fails without a reachable Postgres. This was a latent bug that would
 silently broken CI on the very first PR touching `backend`. Not introduced by M1 (M1 only
 touched `ml-service`) — just the first time `mvn test` (not `mvn compile`) was actually run
 end-to-end.
+
+---
+
+### 2026-09-16 — M2 branched from M1's branch, not from `main`
+
+**Decision**: `feat/m2-wire-model-into-agent` was created off `feat/m1-baseline-symptom-model`,
+not off `main`.
+
+**Why**: M2 directly depends on M1's code (`app/models/symptom_model.py`, `training/`), and
+M1's PR (#8) isn't merged yet. Branching from `main` would mean M2's code doesn't
+compile/import until M1 lands. This is a stacked-branch pattern — M2's PR should be
+reviewed/merged after M1's, or rebased onto `main` post-merge.
+
+---
+
+### 2026-09-16 — Escalation logic is a fixed lookup table, not model-driven
+
+**Decision**: `REPORTABLE_DISEASES` in `ml-service/app/agent/graph.py` is a hardcoded set
+(`{"Foot and Mouth Disease", "Lumpy Skin Disease"}`) that always forces
+`recommended_action: "escalate_to_vet"`, regardless of the model's confidence score.
+
+**Why**: this is the concrete enforcement of `docs/DISCLAIMER.md`'s safety constraint. A
+rule this consequential shouldn't be something the model could silently drift on as it's
+retrained — it needs to be auditable in a code diff, not buried in learned weights.
+
+**Consequences**: adding a new reportable disease later means editing this list explicitly
+(and ideally a test alongside it), not just retraining the model with new data.
