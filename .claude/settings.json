@@ -1,0 +1,35 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm run *)",
+      "Bash(mvn *)",
+      "Bash(git status)",
+      "Bash(git diff*)",
+      "Bash(git log*)",
+      "Bash(docker compose *)"
+    ],
+    "deny": [
+      "Read(**/.env)",
+      "Read(**/*.env)",
+      "Read(**/secrets/**)",
+      "Bash(*--dangerously-skip-permissions*)"
+    ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          { "type": "command", "command": "node .claude/hooks/block-dangerous-bash.js" }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          { "type": "command", "command": "node .claude/hooks/log-session-end.js" }
+        ]
+      }
+    ]
+  }
+}

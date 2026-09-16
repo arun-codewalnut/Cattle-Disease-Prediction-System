@@ -1,0 +1,19 @@
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+pydantic==2.10.4
+python-dotenv==1.0.1
+
+# ML
+xgboost==2.1.3
+scikit-learn==1.6.0
+pandas==2.2.3
+shap==0.46.0
+
+# Agent / RAG
+langgraph==0.2.60
+langchain-core==0.3.28
+chromadb==0.5.23
+
+# Dev/test
+pytest==8.3.4
+httpx==0.28.1

@@ -1,0 +1,48 @@
+# --- Node / React ---
+frontend/node_modules/
+frontend/dist/
+frontend/.env
+frontend/.env.local
+
+# --- Playwright e2e ---
+tests/e2e/node_modules/
+tests/e2e/playwright-report/
+tests/e2e/test-results/
+
+# --- Java / Spring Boot ---
+backend/target/
+backend/*.iml
+backend/.env
+
+# --- Python / FastAPI ---
+ml-service/.venv/
+ml-service/__pycache__/
+ml-service/**/__pycache__/
+ml-service/*.egg-info/
+ml-service/.pytest_cache/
+ml-service/data/*
+!ml-service/data/README.md
+ml-service/models/*.pkl
+ml-service/models/*.pt
+ml-service/models/*.onnx
+ml-service/.env
+
+# --- Claude Code local session data ---
+.claude/retro-logs/
+
+# --- IDE ---
+.idea/
+.vscode/
+*.swp
+
+# --- OS ---
+.DS_Store
+Thumbs.db
+
+# --- Logs ---
+*.log
+logs/
+
+# --- Env files (never commit real secrets) ---
+.env
+!.env.example

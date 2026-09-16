@@ -1,0 +1,42 @@
+name: Feature request / milestone task
+description: A new feature, milestone task, or model/capability to add.
+labels: ["enhancement"]
+body:
+  - type: input
+    id: milestone
+    attributes:
+      label: Related milestone
+      description: e.g. M1, M5 — see docs/ROADMAP.md. Leave blank if this is a stretch/new idea.
+    validations:
+      required: false
+  - type: textarea
+    id: description
+    attributes:
+      label: What do you want to add or change?
+    validations:
+      required: true
+  - type: textarea
+    id: why
+    attributes:
+      label: Why (what does this unblock or improve)?
+    validations:
+      required: true
+  - type: dropdown
+    id: service
+    attributes:
+      label: Primarily affects
+      options:
+        - frontend
+        - backend
+        - ml-service
+        - cross-service / docs / infra
+    validations:
+      required: true
+  - type: checkboxes
+    id: safety
+    attributes:
+      label: Safety check
+      options:
+        - label: If this touches diagnosis or escalation logic, I've read
+            docs/DISCLAIMER.md and this change preserves it.
+          required: false

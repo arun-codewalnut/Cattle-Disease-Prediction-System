@@ -1,0 +1,23 @@
+#!/bin/sh
+# First rung of the evidence ladder (see docs/API_CONTRACTS.md / PR template): only lints
+# the services that actually have staged changes, so this stays fast.
+set -e
+
+CHANGED=$(git diff --cached --name-only --diff-filter=ACM)
+
+echo "$CHANGED" | grep -q '^frontend/' && {
+  echo "-> frontend changed, running lint"
+  (cd frontend && npm run lint)
+}
+
+echo "$CHANGED" | grep -q '^backend/' && {
+  echo "-> backend changed, compiling"
+  (cd backend && mvn -q compile)
+}
+
+echo "$CHANGED" | grep -qE '^ml-service/.*\.py$' && {
+  echo "-> ml-service changed, running tests"
+  (cd ml-service && .venv/Scripts/python.exe -m pytest -q 2>/dev/null || .venv/bin/python -m pytest -q)
+}
+
+exit 0

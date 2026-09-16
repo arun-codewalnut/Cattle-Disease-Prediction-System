@@ -1,0 +1,42 @@
+name: Bug report
+description: Something in frontend/backend/ml-service isn't working as expected.
+labels: ["bug"]
+body:
+  - type: dropdown
+    id: service
+    attributes:
+      label: Affected service
+      options:
+        - frontend
+        - backend
+        - ml-service
+        - cross-service (correlation ID / contract mismatch / infra)
+    validations:
+      required: true
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: Include the correlation ID from the logs if you have one — it's how a
+        single request is traced across all three services.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+    validations:
+      required: false
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant logs
+      render: shell
+    validations:
+      required: false
