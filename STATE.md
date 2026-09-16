@@ -39,24 +39,32 @@ _Last updated: 2026-09-16_
   (github.com/arun-codewalnut/Cattle-Disease-Prediction-System).
 - GitHub Milestones M1–M7 created with matching issues #1–#7 (via `gh` CLI — see
   `docs/DECISIONS.md`). M8 (deployment) dropped from scope entirely.
-- **M1 done** (issue #1, branch `feat/m1-baseline-symptom-model`): baseline XGBoost symptom
-  classifier — `ml-service/app/models/symptom_model.py` (`predict()`),
-  `ml-service/training/` (synthetic data generator + trainer), 10/10 tests passing.
-  5-fold CV: accuracy 0.888, macro F1 0.888. Uses synthetic data (documented, not real
-  public data) and XGBoost's native `pred_contribs` instead of the `shap` package — both
-  are deliberate, documented deviations, see `docs/DECISIONS.md`.
-- Full-application build+test verified working: `ml-service` (pytest 10/10), `frontend`
-  (vitest 1/1 + production build), `backend` (`mvn test` — needs Postgres running; fixed
-  CI to provide one via a service container, see `docs/DECISIONS.md`).
+- **M1 done, merged to `main`** (issue #1, PR #8): baseline XGBoost symptom classifier —
+  `ml-service/app/models/symptom_model.py` (`predict()`), `ml-service/training/`, 10/10
+  tests passing. 5-fold CV: accuracy 0.888, macro F1 0.888. Synthetic dataset + XGBoost's
+  native `pred_contribs` instead of `shap` — deliberate, documented deviations.
+- **M2 done** (issue #2, PR #9): `/agent/diagnose` calls the real M1 model.
+  `REPORTABLE_DISEASES` escalation rule enforcing `docs/DISCLAIMER.md`. 15/15 tests passing.
+  **Merged into `feat/m1-baseline-symptom-model`, not `main` directly** (PR #9's base) — a
+  catch-up PR (#10) is open to bring it into `main`; not yet merged there as of this entry.
+- **M3 done** (issue #3, branch `feat/m3-backend-domain-model`, branched from `main` —
+  doesn't need M1/M2's code, the services are REST-decoupled): `Cattle`/`DiagnosisCase` JPA
+  entities, `POST /api/cattle` + `POST /api/cattle/{id}/diagnoses`, `MlServiceClient` with
+  structured error translation (`CATTLE_NOT_FOUND`, `CATTLE_TAG_DUPLICATE`,
+  `ML_SERVICE_UNAVAILABLE`, `ML_SERVICE_ERROR`). 9/9 backend tests passing (8 new). Found
+  and fixed a real bug: `RestClient.Builder` isn't auto-configured in this Spring Boot 4
+  setup — see `docs/DECISIONS.md`.
+- Full-application build+test re-verified at every milestone: `ml-service` pytest,
+  `frontend` vitest + production build, `backend` `mvn test` (needs Postgres — fixed CI to
+  provide one via a service container).
 
 ## In Progress
 
-- Nothing — M1 complete, not yet merged to `main` (still on `feat/m1-baseline-symptom-model`).
+- M2's catch-up PR (#10: `feat/m1-baseline-symptom-model` → `main`) not yet merged.
+- M3 not yet committed/PR'd (still on `feat/m3-backend-domain-model`).
 
 ## Not Started
 
-- M2: FastAPI inference endpoints
-- M3: Spring Boot domain model + Flyway migrations
 - M4: React symptom-intake UI
 - M5: LangGraph agent wiring (intake → predict → explain)
 - M6: RAG knowledge base (Chroma)
