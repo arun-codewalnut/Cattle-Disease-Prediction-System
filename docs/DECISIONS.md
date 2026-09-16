@@ -114,3 +114,76 @@ environment — the same propagation problem can recur unless the token is inste
 `claude mcp add --scope user -e GITHUB_PERSONAL_ACCESS_TOKEN=...` (stored directly in
 Claude Code's own config, bypassing OS env vars entirely). Requires Docker Desktop running
 locally, confirmed present (v29.7.2).
+
+---
+
+### 2026-09-16 — Dropped deployment milestone (M8); GitHub Milestones/Issues created via `gh` CLI
+
+**Decision**: M8 (deployment) removed from `docs/ROADMAP.md` entirely — this stays a
+local/learning project, not something hosted for real users. M1–M7 created as real GitHub
+Milestones (not just numbered titles) with matching issues (#1–#7), each with a description,
+acceptance criteria, dependency note, and — where no spec exists yet — an explicit pointer
+to write one before starting, per the spec-first convention.
+
+**Why**: User explicitly said M8 isn't required. The GitHub MCP server's `GITHUB_TOKEN`
+turned out to be a genuinely invalid token (confirmed via `gh auth status`), not an
+environment-propagation issue — but `gh` CLI had a separate, working keyring credential
+(`arun-codewalnut`, `repo` scope) the whole time, unaffected by the bad `GITHUB_TOKEN` env
+var once explicitly unset for the command (`env -u GITHUB_TOKEN gh ...`). Used that instead
+of continuing to debug the MCP path.
+
+**Consequences**: if `GITHUB_TOKEN` is ever fixed/removed from the environment, `gh`'s
+keyring credential becomes the default again with no special handling needed. Future
+GitHub-related work in this repo should default to `gh` CLI via Bash (matching the general
+guidance to use `gh` for GitHub tasks), not the MCP server, unless the MCP token issue is
+separately resolved.
+
+---
+
+### 2026-09-16 — M1 implemented with a synthetic dataset, not a real public one
+
+**Decision**: `ml-service/training/generate_synthetic_data.py` generates a documented,
+clearly-labeled synthetic symptom/disease dataset (5 classes, 750 rows); the M1 model is
+trained on that, not a real dataset.
+
+**Why**: no genuinely public, auth-free, ML-ready cattle-disease dataset was reliably
+fetchable in this environment — the well-known ones are Kaggle-hosted and need account/API
+auth. Blocking the whole M1→M7 pipeline on dataset sourcing wasn't worth it for a learning
+project; this keeps training → inference → tests real and working end to end.
+
+**Consequences**: model quality (88.8% CV accuracy) reflects synthetic, cleanly-separable
+symptom profiles, not real-world diagnostic difficulty — don't read too much into the
+numbers. Swapping in a real dataset later only requires replacing
+`ml-service/data/symptom_dataset.csv` (same schema) and re-running training; no code changes
+needed in `app/models/symptom_model.py` or `training/symptom_model_train.py`. Full rationale
+in `ml-service/data/synthetic-symptom-dataset/SOURCE.md`.
+
+---
+
+### 2026-09-16 — All-missing-symptoms input is explicitly short-circuited, not model-inferred
+
+**Decision**: `predict()` returns a hardcoded uniform-prior confidence (`1/len(DISEASES)`)
+and `"uncertain"` when zero symptom fields are provided, without calling the model at all.
+
+**Why**: empirically, XGBoost's learned missing-value default-routing produced a *confident*
+prediction ("Bovine Respiratory Disease", >0.4) for an all-NaN input during testing — a
+training-time artifact, not a real signal. The spec requires this case to report low
+confidence; trusting the raw model output here would have been dishonest.
+
+**Consequences**: this is a narrow special case (exactly zero evidence) — any partial input
+(even one symptom provided) still goes through the real model with native NaN handling for
+the rest.
+
+---
+
+### 2026-09-16 — Backend `mvn test` needs a real Postgres; CI now provides one
+
+**Decision**: `.github/workflows/ci.yml`'s `backend` job now runs a `postgres:16-alpine`
+service container. `backend/AGENTS.md` documents the local equivalent.
+
+**Why**: discovered while running the full build/test suite for issue #1 — the default
+`BackendApplicationTests.contextLoads()` boots the full Spring context, which runs Flyway on
+startup and fails without a reachable Postgres. This was a latent bug that would have
+silently broken CI on the very first PR touching `backend`. Not introduced by M1 (M1 only
+touched `ml-service`) — just the first time `mvn test` (not `mvn compile`) was actually run
+end-to-end.

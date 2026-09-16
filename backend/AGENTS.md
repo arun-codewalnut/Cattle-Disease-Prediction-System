@@ -7,7 +7,11 @@
   access to `repo.maven.apache.org`; prefer `mvn` directly in this environment.
 - **Run**: `mvn spring-boot:run`. **Build/verify**: `mvn -q compile` or `mvn -q verify`.
 - **Tests**: JUnit under `src/test/java`, mirroring the package under test. `mvn -q test`
-  runs them (`mvn -q verify` runs tests as part of the build).
+  runs them (`mvn -q verify` runs tests as part of the build). **Needs a real Postgres
+  running on `localhost:5432`** (matching `.env.example`'s defaults) — `BackendApplicationTests`
+  boots the full Spring context, which runs Flyway on startup. Quickest way:
+  `docker run -d -e POSTGRES_DB=cattlecare -e POSTGRES_USER=cattlecare -e POSTGRES_PASSWORD=cattlecare -p 5432:5432 postgres:16-alpine`,
+  or just `make up` first. CI provides this as a service container (see `.github/workflows/ci.yml`).
 - **DB migrations**: Flyway, `src/main/resources/db/migration/V<n>__description.sql`. Never
   edit a migration that may have already run — add a new one.
 - **Correlation ID**: handled by `config/CorrelationIdFilter.java` — reads/generates

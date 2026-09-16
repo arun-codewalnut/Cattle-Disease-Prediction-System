@@ -1,7 +1,7 @@
 # Spec: Baseline symptom-based disease classifier
 
 **Milestone**: M1
-**Status**: draft
+**Status**: done
 
 ## Actor + goal
 
@@ -55,19 +55,50 @@ explanation, trained on a public cattle disease dataset.
 
 ## Acceptance criteria
 
-- [ ] Training script (`ml-service/training/symptom_model_train.py`) trains an XGBoost
+- [x] Training script (`ml-service/training/symptom_model_train.py`) trains an XGBoost
       classifier on a documented public dataset and saves the artifact + a metadata entry
-      in `ml-service/models/REGISTRY.md`.
-- [ ] Model handles missing feature values without raising.
-- [ ] `predict(symptoms: dict) -> dict` in `ml-service/app/models/symptom_model.py` returns
+      in `ml-service/models/REGISTRY.md`. (Dataset is synthetic, not real-public — see
+      deviation #1 in the mirror-back above and `ml-service/data/synthetic-symptom-dataset/SOURCE.md`.)
+- [x] Model handles missing feature values without raising.
+- [x] `predict(symptoms: dict) -> dict` in `ml-service/app/models/symptom_model.py` returns
       the exact shape shown above.
-- [ ] Below-threshold confidence returns `"uncertain"`, never a bare low-confidence label.
-- [ ] SHAP (or equivalent) values back the `top_features` field — not a made-up ranking.
-- [ ] Unit tests in `ml-service/tests/` cover: a confident prediction, the all-missing edge
-      case, and at least one case per disease class in the dataset.
-- [ ] Cross-validated accuracy/F1 per class logged via MLflow (or written to
-      `ml-service/models/REGISTRY.md` if MLflow isn't wired up yet).
+- [x] Below-threshold confidence returns `"uncertain"`, never a bare low-confidence label.
+      (Zero-evidence input is explicitly short-circuited to a uniform-prior confidence —
+      see `predict()`'s docstring/comment.)
+- [x] SHAP (or equivalent) values back the `top_features` field — not a made-up ranking.
+      (XGBoost's native `pred_contribs=True`, TreeSHAP-equivalent — see deviation #2.)
+- [x] Unit tests in `ml-service/tests/` cover: a confident prediction, the all-missing edge
+      case, and at least one case per disease class in the dataset. (10/10 passing —
+      `ml-service/tests/test_symptom_model.py`.)
+- [x] Cross-validated accuracy/F1 per class logged via MLflow (or written to
+      `ml-service/models/REGISTRY.md` if MLflow isn't wired up yet). (5-fold CV:
+      accuracy 0.888, macro F1 0.888, per-class F1 0.809–0.922 — logged in REGISTRY.md.)
 
 ## Agent mirror-back
 
-_(Fill this in before writing code — restate intent, inputs/outputs, and any assumptions.)_
+**Intent**: expose `predict(symptoms: dict) -> dict` as a standalone, testable Python
+function (no API wiring — that's M2), backed by an XGBoost model trained by a separate
+script, with feature-attribution explanations and an uncertainty threshold.
+
+**Inputs**: a dict keyed by symptom name (from the fixed `FEATURES` list in
+`app/models/symptom_model.py`), boolean or `None`/absent for unknown. Unrecognized keys
+ignored.
+
+**Outputs**: `{"diagnosis": str, "confidence": float, "top_features": [{"feature": str,
+"contribution": float}]}` — `diagnosis` is `"uncertain"` and `top_features` is `[]` when
+confidence is below `0.4`.
+
+**Assumptions / deviations flagged before coding**:
+1. **No real public dataset used.** A genuinely public, auth-free, ML-ready cattle-disease
+   dataset wasn't reliably available to fetch in this environment (Kaggle-hosted ones need
+   account/API auth). Using a clearly-labeled **synthetic** dataset instead — documented in
+   `ml-service/data/synthetic-symptom-dataset/SOURCE.md` — with a realistic symptom/disease
+   schema, so the training → inference → test pipeline is real and swapping in genuine data
+   later only means replacing the CSV, not the code. Flagging this since the spec said
+   "public cattle disease dataset" and this isn't literally that.
+2. **Using XGBoost's built-in `pred_contribs=True`** (TreeSHAP-equivalent, computed by
+   XGBoost's own C++ core) instead of the separate `shap` package, to avoid the
+   already-documented Windows native-build blocker (`ml-service/AGENTS.md`). Satisfies the
+   spec's "SHAP (or equivalent)" allowance.
+3. MLflow isn't wired up — metrics written to `ml-service/models/REGISTRY.md`, as the spec
+   allows.
