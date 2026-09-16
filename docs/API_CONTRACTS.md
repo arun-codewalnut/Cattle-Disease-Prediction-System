@@ -46,3 +46,33 @@ Response:
   "sources": ["..."]
 }
 ```
+
+## `backend` endpoints (contract summary, M3)
+
+`POST /api/cattle` — create a cattle record.
+
+Request: `{"tagNumber": "COW-001", "farmId": 42}`
+Response (`201`): `{"id": 1, "tagNumber": "COW-001", "farmId": 42, "createdAt": "..."}`
+
+`POST /api/cattle/{cattleId}/diagnoses` — submit symptoms for a cattle, calls `ml-service`,
+persists the result.
+
+Request: `{"symptoms": {"fever": true, "...": "..."}}`
+Response (`201`):
+```json
+{
+  "id": 7,
+  "cattleId": 1,
+  "diagnosis": "Foot and Mouth Disease",
+  "confidence": 0.81,
+  "explanation": "...",
+  "recommendedAction": "escalate_to_vet",
+  "createdAt": "..."
+}
+```
+Note: `explanation` is returned live from `ml-service` but not persisted — `diagnosis_case`
+has no column for it (see `docs/DECISIONS.md`).
+
+**New error codes** (backend, via `ApiException`): `CATTLE_NOT_FOUND` (`404`),
+`CATTLE_TAG_DUPLICATE` (`409`), `ML_SERVICE_UNAVAILABLE` (`503`, connection failure to
+ml-service), `ML_SERVICE_ERROR` (`502`, ml-service returned an error response).
