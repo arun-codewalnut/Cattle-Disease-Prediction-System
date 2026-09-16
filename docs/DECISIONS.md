@@ -214,3 +214,34 @@ retrained — it needs to be auditable in a code diff, not buried in learned wei
 
 **Consequences**: adding a new reportable disease later means editing this list explicitly
 (and ideally a test alongside it), not just retraining the model with new data.
+
+---
+
+### 2026-09-16 — M3 branched from `main`, not from M1/M2's branches
+
+**Decision**: `feat/m3-backend-domain-model` branches off `main` (which has M1 merged, not
+M2 yet — see the M2 catch-up PR #10), unlike M2 which stacked on M1's branch.
+
+**Why**: M2 genuinely needed M1's Python files to import (same service, real code
+dependency). M3 is backend Java code calling `ml-service` over HTTP at runtime — the two
+services are decoupled by the REST boundary, so M3's code doesn't need M1/M2's Python files
+physically present in its branch to compile or unit-test. Branching from `main` avoids
+unnecessary stacking depth for a milestone that doesn't actually need it.
+
+---
+
+### 2026-09-16 — `RestClient.Builder` isn't auto-configured; call `RestClient.builder()` directly
+
+**Decision**: `MlServiceClient` calls the static `RestClient.builder()` factory method
+directly instead of injecting a Spring-managed `RestClient.Builder` bean.
+
+**Why**: discovered while running M3's tests — `BackendApplicationTests.contextLoads()`
+failed with `NoSuchBeanDefinitionException` for `RestClient.Builder`. In this Spring Boot 4
+setup (with the granular `spring-boot-starter-webmvc` rather than a monolithic `-web`
+starter), `RestClient` auto-configuration isn't pulled in automatically. Rather than chase
+down which specific starter module provides it, calling the static factory sidesteps the
+question entirely — `RestClient.builder()` needs no Spring context at all.
+
+**Consequences**: if a later milestone wants Spring-managed `RestClient` customization
+(e.g. a shared interceptor across multiple clients), revisit this — it may be worth finding
+and adding the right starter at that point instead of duplicating config per-client.

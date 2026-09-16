@@ -39,32 +39,36 @@ _Last updated: 2026-09-16_
   (github.com/arun-codewalnut/Cattle-Disease-Prediction-System).
 - GitHub Milestones M1–M7 created with matching issues #1–#7 (via `gh` CLI — see
   `docs/DECISIONS.md`). M8 (deployment) dropped from scope entirely.
-- **M1 done** (issue #1, branch `feat/m1-baseline-symptom-model`): baseline XGBoost symptom
-  classifier — `ml-service/app/models/symptom_model.py` (`predict()`),
-  `ml-service/training/` (synthetic data generator + trainer), 10/10 tests passing.
-  5-fold CV: accuracy 0.888, macro F1 0.888. Uses synthetic data (documented, not real
-  public data) and XGBoost's native `pred_contribs` instead of the `shap` package — both
-  are deliberate, documented deviations, see `docs/DECISIONS.md`.
-- Full-application build+test verified working: `ml-service` (pytest 10/10), `frontend`
-  (vitest 1/1 + production build), `backend` (`mvn test` — needs Postgres running; fixed
-  CI to provide one via a service container, see `docs/DECISIONS.md`).
-- **M2 done** (issue #2, branch `feat/m2-wire-model-into-agent`, stacked on M1's branch since
-  M1 isn't merged yet): `/agent/diagnose` now calls the real M1 model instead of the stub.
-  Explicit, auditable `recommended_action` rule (`REPORTABLE_DISEASES` in
-  `app/agent/graph.py`) — reportable diseases always `escalate_to_vet` regardless of
-  confidence, per `docs/DISCLAIMER.md`. Missing-model case returns a structured
-  `MODEL_NOT_TRAINED` error, not a raw 500. 15/15 ml-service tests passing (all green on
-  first run — no bugs found this time). `docs/API_CONTRACTS.md` updated (also fixed a
-  pre-existing inaccuracy: `correlation_id` was wrongly shown as a body field, it's a header).
+- **M1 done, merged to `main`** (issue #1, PR #8): baseline XGBoost symptom classifier —
+  `ml-service/app/models/symptom_model.py` (`predict()`), `ml-service/training/`, 10/10
+  tests passing. 5-fold CV: accuracy 0.888, macro F1 0.888. Synthetic dataset + XGBoost's
+  native `pred_contribs` instead of `shap` — deliberate, documented deviations.
+- **M2 done** (issue #2, PR #9): `/agent/diagnose` calls the real M1 model.
+  `REPORTABLE_DISEASES` escalation rule enforcing `docs/DISCLAIMER.md`. 15/15 tests passing.
+  **Merged into `feat/m1-baseline-symptom-model`, not `main` directly** (PR #9's base) — a
+  catch-up PR (#10) is open to bring it into `main`; not yet merged there as of this entry.
+- **M3 done** (issue #3, branch `feat/m3-backend-domain-model`, branched from `main` —
+  doesn't need M1/M2's code, the services are REST-decoupled): `Cattle`/`DiagnosisCase` JPA
+  entities, `POST /api/cattle` + `POST /api/cattle/{id}/diagnoses`, `MlServiceClient` with
+  structured error translation (`CATTLE_NOT_FOUND`, `CATTLE_TAG_DUPLICATE`,
+  `ML_SERVICE_UNAVAILABLE`, `ML_SERVICE_ERROR`). 9/9 backend tests passing (8 new). Found
+  and fixed a real bug: `RestClient.Builder` isn't auto-configured in this Spring Boot 4
+  setup — see `docs/DECISIONS.md`.
+- Full-application build+test re-verified at every milestone: `ml-service` pytest,
+  `frontend` vitest + production build, `backend` `mvn test` (needs Postgres — fixed CI to
+  provide one via a service container).
 
 ## In Progress
 
-- Nothing — M1 and M2 both complete, neither merged to `main` yet (M1 PR #8 open;
-  M2 not yet PR'd).
+- **M3 is merged to `main`** (PR #11) — done since this entry was first drafted.
+- M2's catch-up PR ([#10](https://github.com/arun-codewalnut/Cattle-Disease-Prediction-System/pull/10):
+  `feat/m1-baseline-symptom-model` → `main`) still open — was `CONFLICTING` after M3 merged
+  (both touched `STATE.md`/`HANDOFF.md`/`docs/DECISIONS.md`/`docs/ROADMAP.md`/
+  `docs/API_CONTRACTS.md`); resolved by merging `origin/main` into the branch and combining
+  both sides' content (no code conflicts — only shared docs). Being pushed now.
 
 ## Not Started
 
-- M3: Spring Boot domain model + Flyway migrations
 - M4: React symptom-intake UI
 - M5: LangGraph agent wiring (intake → predict → explain)
 - M6: RAG knowledge base (Chroma)

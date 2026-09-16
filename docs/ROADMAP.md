@@ -8,7 +8,8 @@ Tracked as GitHub Milestones + Issues on the repo.
 - [x] **M2** — FastAPI inference endpoints wrapping the model(s) — spec:
       [docs/specs/M2-wire-model-into-agent.md](specs/M2-wire-model-into-agent.md) — issue:
       [#2](https://github.com/arun-codewalnut/Cattle-Disease-Prediction-System/issues/2)
-- [ ] **M3** — Spring Boot domain model + Flyway migrations + Postgres — issue:
+- [x] **M3** — Spring Boot domain model + Flyway migrations + Postgres — spec:
+      [docs/specs/M3-backend-domain-model.md](specs/M3-backend-domain-model.md) — issue:
       [#3](https://github.com/arun-codewalnut/Cattle-Disease-Prediction-System/issues/3)
 - [ ] **M4** — React symptom-intake UI, calling the backend — issue:
       [#4](https://github.com/arun-codewalnut/Cattle-Disease-Prediction-System/issues/4)
