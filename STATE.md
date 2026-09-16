@@ -15,6 +15,8 @@ _Last updated: 2026-09-16_
 - No `LICENSE` file yet — open decision, not yet made.
 - `tests/e2e` browsers not installed yet (`npx playwright install --with-deps chromium`,
   one-time) — smoke test scaffold works, hasn't been run against a live `make up` stack yet.
+- Backend tests need a real Postgres running locally (not just `mvn compile`) — see
+  `backend/AGENTS.md` for the one-line `docker run` to start one.
 
 ## Done
 
@@ -33,21 +35,34 @@ _Last updated: 2026-09-16_
   guardrail hooks + deny rules, `docs/specs/` + M1 spec, `docs/REPO_MAP.md`, Vitest +
   Playwright wired and passing, `retrospective` skill, Mermaid diagrams, real pre-commit
   hook, explicit code-review + token-economics guidance.
+- Initial commit made and pushed to `origin/main`
+  (github.com/arun-codewalnut/Cattle-Disease-Prediction-System).
+- GitHub Milestones M1–M7 created with matching issues #1–#7 (via `gh` CLI — see
+  `docs/DECISIONS.md`). M8 (deployment) dropped from scope entirely.
+- **M1 done** (issue #1, branch `feat/m1-baseline-symptom-model`): baseline XGBoost symptom
+  classifier — `ml-service/app/models/symptom_model.py` (`predict()`),
+  `ml-service/training/` (synthetic data generator + trainer), 10/10 tests passing.
+  5-fold CV: accuracy 0.888, macro F1 0.888. Uses synthetic data (documented, not real
+  public data) and XGBoost's native `pred_contribs` instead of the `shap` package — both
+  are deliberate, documented deviations, see `docs/DECISIONS.md`.
+- Full-application build+test verified working: `ml-service` (pytest 10/10), `frontend`
+  (vitest 1/1 + production build), `backend` (`mvn test` — needs Postgres running; fixed
+  CI to provide one via a service container, see `docs/DECISIONS.md`).
 
 ## In Progress
 
-- Nothing yet — scaffold just created.
+- Nothing — M1 complete, not yet merged to `main` (still on `feat/m1-baseline-symptom-model`).
 
 ## Not Started
 
-- M1: Data collection + baseline XGBoost model (`ml-service/`)
 - M2: FastAPI inference endpoints
 - M3: Spring Boot domain model + Flyway migrations
 - M4: React symptom-intake UI
 - M5: LangGraph agent wiring (intake → predict → explain)
 - M6: RAG knowledge base (Chroma)
 - M7: Notifications (email/WhatsApp free tier)
-- M8: Deployment (free-tier hosting)
+
+Deployment (formerly M8) was dropped from scope — see `docs/DECISIONS.md`.
 
 Full roadmap: [docs/ROADMAP.md](docs/ROADMAP.md).
 

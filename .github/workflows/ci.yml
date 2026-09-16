@@ -28,6 +28,20 @@ jobs:
     defaults:
       run:
         working-directory: backend
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: cattlecare
+          POSTGRES_USER: cattlecare
+          POSTGRES_PASSWORD: cattlecare
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U cattlecare"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4

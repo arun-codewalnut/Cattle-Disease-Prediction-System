@@ -4,4 +4,4 @@ Trained model artifacts are gitignored (`*.pkl`/`*.pt`/`*.onnx`) — track versi
 
 | File | Disease | Trained on | Metric | Date |
 |---|---|---|---|---|
-| _(none yet)_ | | | | |
+| `symptom_model.pkl` | all (multiclass) | synthetic-symptom-dataset (750 rows) | acc=0.888, f1_macro=0.888 | 2026-09-16 |
