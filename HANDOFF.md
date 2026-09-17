@@ -5,43 +5,45 @@ End-of-session notes. Overwrite this each session — it's a handoff to "next se
 
 ---
 
-## This session (2026-09-16)
+## This session (2026-09-17)
 
-  governance gaps, pushed `main`, created GitHub Milestones + issues #1–#7 via `gh` CLI
-  (`env -u GITHUB_TOKEN gh ...` — GitHub MCP's own token is genuinely invalid). M8 dropped.
-- **M1 (issue #1) done, PR #8 merged into `main`.**
-- **M2 (issue #2) done, PR #9 merged — but into `feat/m1-baseline-symptom-model`, not
-  `main`** (that was PR #9's base, for a real reason — M2 needed M1's unmerged code). Opened
-  catch-up PR [#10](https://github.com/arun-codewalnut/Cattle-Disease-Prediction-System/pull/10)
-  to fix this.
-- **M3 (issue #3) done, PR #11 merged into `main` directly** — branched from `main`
-  directly (not stacked), since backend Java code doesn't need ml-service's Python files to
-  compile/test. `Cattle`/`DiagnosisCase` entities, `POST /api/cattle` +
-  `POST /api/cattle/{id}/diagnoses`, `MlServiceClient` with structured error handling. 9/9
-  backend tests passing (8 new). Found and fixed a real bug: `RestClient.Builder` isn't
-  auto-configured in this Spring Boot 4 setup — worked around by calling
-  `RestClient.builder()` directly rather than injecting a bean.
-- **PR #10 went `CONFLICTING`** once PR #11 (M3) merged — both touched the same shared docs
-  (`STATE.md`, `HANDOFF.md`, `docs/DECISIONS.md`, `docs/ROADMAP.md`, `docs/API_CONTRACTS.md`).
-  No code conflicts (M2 touched only `ml-service`, M3 only `backend`). Resolved by merging
-  `origin/main` into `feat/m1-baseline-symptom-model` and combining both sides' content by
-  hand (concatenating append-only decision-log entries, merging checkbox states, taking the
-  more-current version where one side had gone stale). Pushing the resolution now.
+- **`main` now has M1, M2, and M3 fully merged and verified working** — confirmed by
+  actually checking out `main` fresh and running the full build+test suite against it
+  (not just trusting PR "MERGED" status), after resolving a real merge conflict on PR #10
+  (M2's catch-up PR) caused by PR #11 (M3) merging into `main` first. See prior session's
+  `docs/DECISIONS.md` entries for the conflict-resolution details.
+- **M4 (issue #4) implemented**, branch `feat/m4-symptom-intake-ui`, branched from `main`.
+  React symptom-intake form → creates a cattle record → submits symptoms → renders the
+  diagnosis with urgency-appropriate styling and the disclaimer text. 3/3 Vitest tests
+  passing, lint clean, production build succeeds.
+- **Found and fixed two real bugs by actually running the full stack live** (Postgres +
+  ml-service + backend + frontend dev server) and submitting the form in a real browser —
+  neither was, or could have been, caught by mocked unit tests:
+  1. CORS was never configured on `backend` — added
+     `backend/.../config/WebConfig.java`.
+  2. `MlServiceClient`'s JDK `HttpClient` attempted an HTTP/2 upgrade that uvicorn rejects
+     — pinned to HTTP/1.1 explicitly.
+  Verified the fix live: submitted real symptoms through the browser, got back a real
+  diagnosis (Foot and Mouth Disease, 98% confidence, "Escalate to vet") rendered correctly.
+- Added `.claude/launch.json` (frontend dev server config) so `preview_start` works for
+  future UI verification — this didn't exist before.
+- **M4 not yet committed or PR'd.**
 
 ## Next session
 
-- Confirm PR #10 shows `MERGEABLE` after this push, then merge it — `main` still needs
-  M2's actual code even though this session resolved the *doc* conflicts.
+- Commit M4's work, push, open a PR against `main`.
 - Decide on a `LICENSE` (still open).
-- Start M4 ([issue #4](https://github.com/arun-codewalnut/Cattle-Disease-Prediction-System/issues/4)):
-  write its spec first, then the React symptom-intake UI calling the backend's new
-  `POST /api/cattle/{id}/diagnoses`.
-- `npx playwright install --with-deps chromium` in `tests/e2e/` — still not done.
-- **Lesson for future milestones**: check `main`'s actual content (not just a PR's "MERGED"
-  status) before assuming a milestone reached `main` — a stacked PR merging into its parent
-  branch instead of `main` looks identical to a normal merge in the PR list. Prefer merging
-  parent PRs (or rebasing the child branch onto `main`) before opening/merging a stacked
-  child PR, to avoid this class of conflict entirely.
+- Start M5 ([issue #5](https://github.com/arun-codewalnut/Cattle-Disease-Prediction-System/issues/5)):
+  write its spec first, then the real LangGraph `StateGraph` replacing the current
+  plain-function `run_diagnosis()` in `ml-service/app/agent/graph.py`.
+- `npx playwright install --with-deps chromium` in `tests/e2e/` — still not done. Given
+  this session found real integration bugs that only a live browser test caught, the
+  Playwright e2e suite (which drives a real browser against the real running stack) is
+  worth prioritizing over further manual verification once M5/M6 add more surface area.
+- **Process note for future UI milestones**: manual browser verification against the live
+  stack found bugs mocked tests structurally cannot catch (CORS, HTTP protocol
+  mismatches). Keep doing this for every UI-touching milestone, not just M4 — see
+  `agents/playbooks/run-stack.md`.
 
 ## Blockers
 
