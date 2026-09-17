@@ -24,6 +24,8 @@ ml-service/data/*
 !ml-service/data/README.md
 !ml-service/data/synthetic-symptom-dataset/
 !ml-service/data/synthetic-symptom-dataset/SOURCE.md
+!ml-service/data/veterinary-reference/
+ml-service/data/chroma_db/
 ml-service/models/*.pkl
 ml-service/models/*.pt
 ml-service/models/*.onnx

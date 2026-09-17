@@ -7,9 +7,11 @@ _Last updated: 2026-09-17_
 
 ## Known gaps
 
-- `shap`/`chromadb` need Microsoft C++ Build Tools to install natively on Windows (Python 3.13
-  has no prebuilt wheels yet) — works fine inside Docker (`make up`). See
-  [ml-service/AGENTS.md](ml-service/AGENTS.md).
+- `chromadb`/`chroma-hnswlib` cannot install natively on Windows/Python 3.13 — confirmed no
+  `cp313` wheel exists at all (any platform), not just "needs Build Tools." Verified working
+  via Docker instead — see [ml-service/AGENTS.md](ml-service/AGENTS.md) for the exact build
+  command (includes a fix for a network/proxy that was corrupting `apt-get`'s HTTP
+  downloads — forced to HTTPS).
 - `springdoc-openapi` Spring-Boot-4 compatibility unverified — not added to `backend/pom.xml`
   yet. See [backend/AGENTS.md](backend/AGENTS.md).
 - No `LICENSE` file yet — open decision, not yet made.
@@ -55,33 +57,37 @@ _Last updated: 2026-09-17_
   tests. **Found and fixed two real integration bugs live** (CORS never configured on
   `backend`; JDK `HttpClient` HTTP/2-upgrade vs. uvicorn incompatibility) — see
   `docs/DECISIONS.md`. Verified end-to-end in a real browser.
-- **M5 done** (issue #5, branch `feat/m5-langgraph-agent-orchestration`, branched from
-  `main`): `run_diagnosis()` is now a real LangGraph `StateGraph`
-  (`intake → route → predict_symptoms|predict_image → explain → recommend`) instead of one
-  plain function. `explain` node generates real LLM text via `app/agent/llm.py`'s
-  provider-swappable `get_llm()` (Ollama by default), falling back to the old deterministic
-  template on any LLM failure — diagnosis, confidence, and the `REPORTABLE_DISEASES`
-  escalation rule are all byte-for-byte unchanged from M1/M2 (deliberately — this milestone
-  improves explanation quality, not diagnostic accuracy, see `docs/DECISIONS.md`).
-  `image_url` now routes to a clear `NOT_IMPLEMENTED` (501) instead of being silently
-  ignored. New dependency `langchain-ollama==0.2.2` (version-pinned for compatibility with
-  the existing `langchain-core==0.3.28`). 21/21 ml-service tests passing (6 new). Found and
-  fixed a real test-suite performance bug: without mocking, every confident-diagnosis test
-  tried to actually reach Ollama (not installed here) and waited out a connection timeout —
-  15 tests went from ~2s to ~25s; fixed with an autouse `conftest.py` fixture that fails
-  fast by default (the honest reflection of this environment having no LLM available),
-  back to ~2s for 21 tests.
-- Full-application build+test re-verified at every milestone: `ml-service` pytest,
-  `frontend` vitest + production build, `backend` `mvn test` (needs Postgres — fixed CI to
-  provide one via a service container).
+- **M5 done, merged to `main`** (issue #5, PR #13): `run_diagnosis()` is a real LangGraph
+  `StateGraph` (`intake → route → predict_symptoms|predict_image → explain → recommend`).
+  `explain` generates real LLM text via `app/agent/llm.py`'s provider-swappable `get_llm()`
+  (Ollama by default), falling back to a deterministic template on any LLM failure —
+  diagnosis, confidence, and `REPORTABLE_DISEASES` unchanged from M1/M2 (deliberate —
+  explanation quality, not diagnostic accuracy). `image_url` → `NOT_IMPLEMENTED` (501). New
+  dep `langchain-ollama==0.2.2`. 21/21 tests. Found/fixed a test-suite perf bug (LLM
+  connection timeouts without mocking, 15 tests ~2s→~25s, fixed via autouse fail-fast
+  fixture).
+- **M6 done** (issue #6, branch `feat/m6-rag-knowledge-base`, branched from `main`):
+  `explain` node now retrieves grounding passages from a Chroma-backed knowledge base
+  (`app/rag/`, embedded `chromadb.PersistentClient`, not the unused networked service in
+  `docker-compose.yml`) before calling the LLM — `sources` field finally populated (only
+  when actually used to ground a successful LLM explanation, `[]` otherwise). 4 original
+  hand-written veterinary reference docs (`ml-service/data/veterinary-reference/`, same
+  "not real sourced data" honesty as M1's dataset). **`chromadb` confirmed impossible to
+  install natively on Windows/Python 3.13** (no `cp313` wheel exists, any platform) —
+  verified via Docker instead: 29/29 ml-service tests passing. Found/fixed two real
+  environment issues along the way: (1) a network/proxy corrupting `apt-get`'s plain-HTTP
+  downloads (fixed by forcing HTTPS in the Dockerfile), and (2) Docker Desktop's daemon
+  itself went unresponsive mid-build, needing a restart. See `docs/DECISIONS.md`.
+- Full-application build+test re-verified at every milestone: `ml-service` pytest (native
+  venv, or Docker for RAG-dependent tests since M6), `frontend` vitest + production build,
+  `backend` `mvn test` (needs Postgres — fixed CI to provide one via a service container).
 
 ## In Progress
 
-- M5 not yet committed/PR'd (still on `feat/m5-langgraph-agent-orchestration`).
+- M6 not yet committed/PR'd (still on `feat/m6-rag-knowledge-base`).
 
 ## Not Started
 
-- M6: RAG knowledge base (Chroma)
 - M7: Notifications (email/WhatsApp free tier)
 
 Deployment (formerly M8) was dropped from scope — see `docs/DECISIONS.md`.

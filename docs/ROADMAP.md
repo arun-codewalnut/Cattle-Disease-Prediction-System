@@ -17,7 +17,8 @@ Tracked as GitHub Milestones + Issues on the repo.
 - [x] **M5** — LangGraph agent wiring: intake → route to model(s) → predict → explain — spec:
       [docs/specs/M5-langgraph-agent-orchestration.md](specs/M5-langgraph-agent-orchestration.md) — issue:
       [#5](https://github.com/arun-codewalnut/Cattle-Disease-Prediction-System/issues/5)
-- [ ] **M6** — RAG knowledge base (Chroma) for grounded explanations — issue:
+- [x] **M6** — RAG knowledge base (Chroma) for grounded explanations — spec:
+      [docs/specs/M6-rag-knowledge-base.md](specs/M6-rag-knowledge-base.md) — issue:
       [#6](https://github.com/arun-codewalnut/Cattle-Disease-Prediction-System/issues/6)
 - [ ] **M7** — Notifications (email or WhatsApp Cloud API free tier) for escalation — issue:
       [#7](https://github.com/arun-codewalnut/Cattle-Disease-Prediction-System/issues/7)
