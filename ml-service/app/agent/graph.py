@@ -1,13 +1,14 @@
 """
 Agent wiring for /agent/diagnose — a real LangGraph StateGraph, not a free-form agent loop,
 so every path through the system is known in advance and auditable (this is a diagnosis
-tool; decisions need to stay traceable). See docs/specs/M5-langgraph-agent-orchestration.md.
+tool; decisions need to stay traceable). See docs/specs/M5-langgraph-agent-orchestration.md
+and docs/specs/M6-rag-knowledge-base.md.
 
 What this graph does NOT do: it doesn't change the diagnosis, confidence, or
-recommended_action logic — those are exactly what M1/M2 already computed. The only new
-observable behavior is that `explain` generates real LLM text (falling back to the old
-template if the LLM is unavailable), grounded strictly in the model's own output, not
-retrieved documents (that's M6).
+recommended_action logic — those are exactly what M1/M2 already computed. `explain`
+generates real LLM text (falling back to a template if the LLM is unavailable), grounded in
+the model's own output plus (M6) retrieved reference passages — never facts invented beyond
+what it's given.
 """
 from __future__ import annotations
 
@@ -20,6 +21,7 @@ from langgraph.graph import END, StateGraph
 from app.agent.llm import get_llm
 from app.errors import ApiError
 from app.models.symptom_model import predict
+from app.rag.retrieval import retrieve
 
 # Diseases that must always escalate regardless of model confidence, per docs/DISCLAIMER.md.
 # Deliberately a fixed, auditable list here rather than anything the model (or the LLM)
@@ -28,9 +30,9 @@ REPORTABLE_DISEASES = {"Foot and Mouth Disease", "Lumpy Skin Disease"}
 
 EXPLAIN_SYSTEM_PROMPT = (
     "You are explaining a machine-learning cattle disease prediction to a farmer. Only use "
-    "the diagnosis, confidence, and contributing symptoms given to you — do not invent "
-    "additional medical facts, causes, or treatment advice beyond what is provided. Keep it "
-    "to 2-3 plain-language sentences."
+    "the diagnosis, confidence, contributing symptoms, and reference material given to you "
+    "— do not invent additional medical facts, causes, or treatment advice beyond what is "
+    "provided. Keep it to 2-3 plain-language sentences."
 )
 
 
@@ -104,30 +106,48 @@ def predict_image_node(state: DiagnosisState) -> dict[str, Any]:
 
 def explain_node(state: DiagnosisState) -> dict[str, Any]:
     if state["diagnosis"] == "uncertain":
-        return {"explanation": _template_explanation(state)}
+        return {"explanation": _template_explanation(state), "sources": []}
+
+    # Retrieval failure (Chroma unreachable, empty collection) degrades to no retrieved
+    # context, same as an LLM failure degrades to the template — never blocks a diagnosis.
+    # retrieve() itself never raises (see app/rag/retrieval.py), but stay defensive here too.
+    try:
+        retrieved = retrieve(state["diagnosis"])
+    except Exception:
+        retrieved = []
 
     try:
         llm = get_llm()
         top_feature_names = [f["feature"] for f in state.get("top_features") or []]
+        context_block = ""
+        if retrieved:
+            passages = "\n\n".join(f"[{r['source']}] {r['text']}" for r in retrieved)
+            context_block = f"\n\nReference material:\n{passages}"
         human_prompt = (
             f"Diagnosis: {state['diagnosis']}\n"
             f"Confidence: {state['confidence']:.0%}\n"
-            f"Top contributing symptoms: {', '.join(top_feature_names) or 'none'}\n\n"
-            "Explain this result to the farmer."
+            f"Top contributing symptoms: {', '.join(top_feature_names) or 'none'}"
+            f"{context_block}\n\n"
+            "Explain this result to the farmer, drawing on the reference material above "
+            "when relevant."
         )
         response = llm.invoke(
             [SystemMessage(content=EXPLAIN_SYSTEM_PROMPT), HumanMessage(content=human_prompt)]
         )
-        return {"explanation": response.content}
+        # Only cite sources that were actually available to the explanation that's being
+        # shown — if the LLM call below fails instead, the except branch reports no sources,
+        # since the fallback template doesn't reference them.
+        sources = sorted({r["source"] for r in retrieved})
+        return {"explanation": response.content, "sources": sources}
     except Exception:
         # Any LLM failure (connection refused, timeout, malformed response, ...) degrades to
         # the deterministic template — a diagnosis tool cannot go down because a local LLM
         # daemon isn't running. See docs/specs/M5-langgraph-agent-orchestration.md.
-        return {"explanation": _template_explanation(state)}
+        return {"explanation": _template_explanation(state), "sources": []}
 
 
 def recommend_node(state: DiagnosisState) -> dict[str, Any]:
-    return {"recommended_action": _recommended_action(state["diagnosis"]), "sources": []}
+    return {"recommended_action": _recommended_action(state["diagnosis"])}
 
 
 def _build_graph():

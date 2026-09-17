@@ -329,3 +329,87 @@ known in advance, not improvised.
   LLM-success path is only tested via mocks here — a live check is a bonus for whoever
   installs Ollama locally, not a requirement of "done" for this milestone (see the spec's
   mirror-back).
+
+---
+
+### 2026-09-17 — M6: Chroma runs embedded, not as the networked docker-compose service
+
+**Decision**: `app/rag/retrieval.py` uses `chromadb.PersistentClient` (embedded, writes to
+`ml-service/data/chroma_db/`, gitignored) instead of connecting to the separate `chroma`
+service already defined (unused since the original scaffold) in `docker-compose.yml`.
+
+**Why**: no server process to run/coordinate, same free local embedding function either
+way (Chroma's bundled default — no API key), and far easier to test (point at a temp
+directory, no network dependency at all).
+
+**Consequences**: `docker-compose.yml`'s `chroma` service and `CHROMA_HOST`/`CHROMA_PORT`
+in `.env.example` are now genuinely unused — not removed in this milestone (kept the diff
+focused), flagged here for a future cleanup pass. `ml-service/AGENTS.md` documents the new
+persistence path.
+
+---
+
+### 2026-09-17 — M6: reference knowledge base is original hand-written content
+
+**Decision**: `ml-service/data/veterinary-reference/*.md` are original, hand-written
+educational summaries (symptoms, transmission, general management) for the 4 diagnosable
+diseases — not scraped, copied, or sourced from any specific external document.
+
+**Why**: same reasoning as M1's synthetic dataset. No confirmed freely-licensed veterinary
+corpus was readily available in this environment, and reproducing real (likely
+copyrighted) veterinary textbook/journal content wouldn't be appropriate. Documented in
+`ml-service/data/veterinary-reference/SOURCE.md`, consistent with `docs/DISCLAIMER.md`.
+
+**Consequences**: the *quality* of RAG-grounded explanations is bounded by these
+necessarily-brief, general summaries — not a substitute for real veterinary literature.
+Swapping in a real, properly-licensed corpus later is a data-only change (re-run
+`python -m app.rag.ingest` against new files) — no code changes needed, same pattern M1
+established for the training dataset.
+
+---
+
+### 2026-09-17 — ml-service Docker builds need `apt-get` forced to HTTPS in this network
+
+**Decision**: `ml-service/Dockerfile` now `sed`-rewrites `deb.debian.org` sources from
+`http://` to `https://` before `apt-get update`.
+
+**Why**: building the image (needed for M6's `chromadb`/`chroma-hnswlib`, which has no
+`cp313` wheel — see `ml-service/AGENTS.md`) failed 3 times in a row with `apt-get install`
+"Hash Sum mismatch" errors on different packages each time. The signature was diagnostic:
+the *expected* hash from the Packages index was identical across all retries, but the
+*received* file content differed every time — meaning something in this network path
+(likely a transparent proxy or security/inspection tool) was corrupting plain-HTTP
+downloads in transit, not a random flaky-network issue. Forcing HTTPS (which such tools
+generally can't transparently rewrite without a trusted MITM certificate) fixed it on the
+very next attempt.
+
+**Consequences**: if this project's Docker builds are ever run on a network without this
+interference, the `sed` step is a harmless no-op (HTTPS works everywhere `deb.debian.org`
+does). Also separately hit, mid-diagnosis: Docker Desktop's daemon itself went fully
+unresponsive (`docker ps` hanging) during the *first* build attempt — required the user to
+restart Docker Desktop before builds could proceed at all. Unclear if related to the
+network issue or coincidental; worth remembering as a troubleshooting step if `docker`
+commands start hanging with no error.
+
+---
+
+### 2026-09-17 — Fixed: native pytest was fully broken by an autouse RAG-ingestion fixture
+
+**Decision**: `tests/conftest.py`'s `_ingested_rag_knowledge_base` fixture now catches
+`ImportError` and returns `None` instead of letting it propagate. `tests/test_rag_retrieval.py`
+adds a module-level `pytest.importorskip("chromadb")`; the one RAG-dependent case in
+`test_agent_graph.py` adds the same call inside just that test function.
+
+**Why**: found while trying to commit M6's work — `pytest` natively errored on **all 29
+tests**, not just RAG ones, because the fixture is `session`-scoped and `autouse=True`;
+its `ImportError` (no `chromadb` natively) aborted session setup entirely, which pytest
+treats as every test erroring. This would also have silently broken our own
+`.githooks/pre-commit` for any future ml-service change. `retrieve()` itself already
+degraded gracefully (verified: `run_diagnosis()` works fine without `chromadb`, just
+`sources: []`) — the fixture just wasn't following the same pattern.
+
+**Consequences**: native `pytest` now genuinely reflects this environment honestly — 24
+pass, 2 skip (with a clear reason each), 0 errors. Docker still runs all 29. Any *new*
+RAG-dependent test needs the same `pytest.importorskip("chromadb")` treatment, not just
+"it happens to work because retrieve() degrades" — some assertions (like checking real
+`sources` content) genuinely can't be meaningful without a real Chroma collection.
