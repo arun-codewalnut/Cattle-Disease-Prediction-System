@@ -22,10 +22,19 @@ Tracked as GitHub Milestones + Issues on the repo.
       [#6](https://github.com/arun-codewalnut/Cattle-Disease-Prediction-System/issues/6)
 - [ ] **M7** — Notifications (email or WhatsApp Cloud API free tier) for escalation — issue:
       [#7](https://github.com/arun-codewalnut/Cattle-Disease-Prediction-System/issues/7)
+- [ ] **M8** — Image-based disease recognition, phase 1: wire upload → agent's
+      `predict_image` node end-to-end behind a placeholder classifier (no dataset/training
+      yet — that's a follow-up issue) — issue:
+      [#16](https://github.com/arun-codewalnut/Cattle-Disease-Prediction-System/issues/16)
 
 **Deployment is explicitly out of scope** — this stays a local/learning project, not
 something hosted for real users. Don't add a deployment milestone back without checking
 with the user first (see `docs/DECISIONS.md`).
 
-Stretch (post-MVP): image-based CNN classifier, IoT sensor anomaly detection, herd-level
-risk view, offline-first mobile client.
+Also tracked (not milestone-numbered): frontend UI redesign (cattle-themed, responsive,
+colorful, icon-driven) — issue:
+[#15](https://github.com/arun-codewalnut/Cattle-Disease-Prediction-System/issues/15).
+
+Stretch (post-MVP): real trained image-based CNN classifier (M8 phase 2, once a labeled
+dataset exists), IoT sensor anomaly detection, herd-level risk view, offline-first mobile
+client.
