@@ -82,15 +82,38 @@ _Last updated: 2026-09-17_
   venv, or Docker for RAG-dependent tests since M6), `frontend` vitest + production build,
   `backend` `mvn test` (needs Postgres — fixed CI to provide one via a service container).
 
+- **Frontend UI redesign done, not yet merged** (issue #15, branch
+  `feat/ui-redesign-cattle-theme`, branched from `main` after the M6 fast-forward): cattle/farm
+  visual theme (CSS-gradient sky + hills + sun, inline-SVG only, no downloaded imagery),
+  fully responsive (mobile/tablet/desktop, verified in a real browser at 375/768/1440px),
+  colorful palette with light+dark variants, hover/focus-visible states on every input, emoji
+  icons on every symptom field and the two identity fields, and an urgency-coded results card
+  (🚨 red / 🩺 amber / 👀 green) for the three `recommendedAction` values. Purely
+  presentational — no backend/ml-service change, no change to the create-cattle→submit-symptoms
+  flow, `X-Correlation-Id` generation, or `{code, message, details}` error handling. Existing
+  3/3 Vitest tests pass **unmodified** (labels/roles preserved by design — icons/backgrounds
+  added via `aria-hidden` siblings, never inside tested text). `npm run lint` and
+  `npm run build` both clean. Spec:
+  [docs/specs/frontend-ui-redesign.md](docs/specs/frontend-ui-redesign.md).
+- **Issue #16 / milestone M8 created**: image-based disease recognition, deliberately phased —
+  phase 1 (issue #16) wires the upload pipeline end-to-end behind a placeholder classifier
+  (no dataset/trained model exists yet); a real CNN is an explicit future phase, not scoped
+  into M8. `docs/ROADMAP.md` updated to list M8 and reference issues #15/#16.
+
 ## In Progress
 
-- M6 not yet committed/PR'd (still on `feat/m6-rag-knowledge-base`).
+- Frontend UI redesign (issue #15) — implementation done, PR not yet opened/merged.
 
 ## Not Started
 
 - M7: Notifications (email/WhatsApp free tier)
+- M8 phase 1: image-based disease recognition, placeholder classifier (issue #16)
+- M8 phase 2 (future, not yet an issue): real trained image classifier, once a labeled
+  cattle-disease image dataset is sourced
 
-Deployment (formerly M8) was dropped from scope — see `docs/DECISIONS.md`.
+Deployment (formerly M8 in the original numbering) was dropped from scope — see
+`docs/DECISIONS.md`. The M8 number was reused for image-based disease recognition this
+session, a deliberate, discussed reassignment — not a collision.
 
 Full roadmap: [docs/ROADMAP.md](docs/ROADMAP.md).
 
