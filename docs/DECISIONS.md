@@ -289,3 +289,43 @@ actually talk to each other.
 any other plain HTTP/1.1 server) needs the same explicit HTTP/1.1 pin — this isn't
 `ml-service`-specific, it's a JDK `HttpClient` default that surprises any HTTP/1.1-only
 server.
+
+---
+
+### 2026-09-17 — M5: LangGraph restructure improves explanation quality, not diagnosis accuracy
+
+**Decision**: `run_diagnosis()` is now a compiled LangGraph `StateGraph`
+(`intake → route → predict_symptoms|predict_image → explain → recommend`) instead of one
+plain function. `explain` calls an LLM (via `app/agent/llm.py`'s `get_llm()` abstraction,
+provider-swappable, local Ollama by default) to generate the explanation text, falling back
+to the old deterministic template on any failure.
+
+**Why**: this is explicitly *not* meant to improve diagnostic accuracy — the XGBoost model,
+its confidence score, and the `REPORTABLE_DISEASES` escalation rule are all byte-for-byte
+unchanged from M1/M2. Only the `explanation` field's content changes (LLM-generated,
+grounded strictly in the model's own output — not new medical claims). This distinction
+was worked out explicitly with the user before implementation, precisely to avoid the
+"it's using AI now, so it must be more medically right" misconception for a health-adjacent
+tool. See the M5 spec's opening section.
+
+**Alternatives considered**: a free-form agent loop (LLM decides what to call next) —
+rejected, same reasoning as the spec: a diagnosis tool needs every path through the system
+known in advance, not improvised.
+
+**Consequences**:
+- New dependency: `langchain-ollama==0.2.2`, chosen specifically because it's the newest
+  release still compatible with the already-pinned `langchain-core==0.3.28` — newer
+  `langchain-ollama` releases require `langchain-core>=0.3.33` or (as of `1.1.0`) `>=1.2`,
+  which would force an unplanned `langchain-core`/`langgraph` upgrade. Revisit this pin
+  together if a future milestone needs a newer `langchain-core`.
+- Test suite runtime regression, found and fixed in the same session: with no mocking,
+  every confident-diagnosis test was trying to actually reach Ollama (not installed in this
+  environment) and waiting out a connection timeout — 15 tests went from ~2s to ~25s total.
+  Fixed with an autouse `conftest.py` fixture that makes `get_llm()` raise immediately by
+  default (this is also the *honest* default, since Ollama genuinely isn't running here),
+  with individual tests overriding it locally to test the LLM-success path. Runtime back to
+  ~2s for 21 tests.
+- Confirmed via `where ollama` that Ollama isn't installed in this dev environment, so the
+  LLM-success path is only tested via mocks here — a live check is a bonus for whoever
+  installs Ollama locally, not a requirement of "done" for this milestone (see the spec's
+  mirror-back).

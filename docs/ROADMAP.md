@@ -14,7 +14,8 @@ Tracked as GitHub Milestones + Issues on the repo.
 - [x] **M4** — React symptom-intake UI, calling the backend — spec:
       [docs/specs/M4-symptom-intake-ui.md](specs/M4-symptom-intake-ui.md) — issue:
       [#4](https://github.com/arun-codewalnut/Cattle-Disease-Prediction-System/issues/4)
-- [ ] **M5** — LangGraph agent wiring: intake → route to model(s) → predict → explain — issue:
+- [x] **M5** — LangGraph agent wiring: intake → route to model(s) → predict → explain — spec:
+      [docs/specs/M5-langgraph-agent-orchestration.md](specs/M5-langgraph-agent-orchestration.md) — issue:
       [#5](https://github.com/arun-codewalnut/Cattle-Disease-Prediction-System/issues/5)
 - [ ] **M6** — RAG knowledge base (Chroma) for grounded explanations — issue:
       [#6](https://github.com/arun-codewalnut/Cattle-Disease-Prediction-System/issues/6)

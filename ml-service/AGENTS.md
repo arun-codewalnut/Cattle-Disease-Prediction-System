@@ -16,3 +16,11 @@
   the root `tests/e2e/`.
 - **Correlation ID**: read from `request.state.correlation_id` (set by
   `app/middleware.py`) — always include it when logging.
+- **LLM provider**: `app/agent/llm.py`'s `get_llm()` is the *only* place that should know
+  which provider is in use — never instantiate `ChatOllama` (or any provider) directly
+  elsewhere. Controlled by `LLM_PROVIDER`/`OLLAMA_BASE_URL`/`OLLAMA_MODEL` in `.env.example`.
+  Ollama isn't installed in this dev environment by default — the `explain` node falls back
+  to a deterministic template whenever the LLM call fails for any reason, so the app works
+  fully without it. To see real LLM-generated explanations locally: install
+  [Ollama](https://ollama.com/download), run `ollama pull llama3.1`, then `ollama serve`
+  (or just launch the Ollama app) before starting `ml-service`.

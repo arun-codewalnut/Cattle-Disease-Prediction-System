@@ -12,6 +12,7 @@ shap==0.46.0
 # Agent / RAG
 langgraph==0.2.60
 langchain-core==0.3.28
+langchain-ollama==0.2.2
 chromadb==0.5.23
 
 # Dev/test

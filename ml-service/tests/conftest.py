@@ -6,6 +6,7 @@ artifact. test_symptom_model.py's own fixture trains a separate model and passes
 explicitly — that's deliberate, not redundant: it's testing predict()'s model_path
 parameter directly.
 """
+import app.agent.graph as graph_module
 import app.models.symptom_model as symptom_model_module
 import pytest
 from training.generate_synthetic_data import main as generate_dataset
@@ -22,3 +23,17 @@ def _trained_default_model(tmp_path_factory):
 
     symptom_model_module.DEFAULT_MODEL_PATH = model_path
     return model_path
+
+
+@pytest.fixture(autouse=True)
+def _no_real_llm_calls(monkeypatch):
+    """Fails fast instead of actually trying to reach Ollama (which isn't running in this
+    environment) and waiting out the connection timeout on every confident-diagnosis test.
+    This is also the honest default: no LLM is available here, so `explain` should exercise
+    its fallback path by default. Tests that want the LLM-success path override this
+    locally with their own `monkeypatch.setattr(graph_module, "get_llm", ...)`."""
+
+    def _raise():
+        raise RuntimeError("no LLM available in tests by default — see conftest.py")
+
+    monkeypatch.setattr(graph_module, "get_llm", _raise)
