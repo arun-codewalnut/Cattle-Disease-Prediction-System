@@ -245,3 +245,47 @@ question entirely — `RestClient.builder()` needs no Spring context at all.
 **Consequences**: if a later milestone wants Spring-managed `RestClient` customization
 (e.g. a shared interceptor across multiple clients), revisit this — it may be worth finding
 and adding the right starter at that point instead of duplicating config per-client.
+
+---
+
+### 2026-09-17 — CORS wasn't configured on `backend`; added `WebConfig`
+
+**Decision**: `backend/src/main/java/com/cattlecare/backend/config/WebConfig.java` (new) —
+a `WebMvcConfigurer` allowing `cors.allowed-origins` (default `http://localhost:5173`) on
+`/api/**`.
+
+**Why**: discovered by actually running the full stack and submitting M4's form in a real
+browser — every call from `frontend` to `backend` was blocked outright by the browser's
+CORS preflight check, since nothing in `backend` ever set
+`Access-Control-Allow-Origin`. No unit test catches this class of bug — it only shows up
+with a real browser making a real cross-origin request. This is exactly why UI milestones
+get manually verified in a browser, not just unit-tested with mocks (see
+`agents/playbooks/run-stack.md` and the project's testing convention).
+
+**Consequences**: `cors.allowed-origins` will need updating (or becoming a list) if/when
+`frontend` is ever deployed somewhere other than `localhost:5173` — out of scope for now
+(deployment is explicitly out of scope, see the M8-dropped decision above), but worth
+remembering when that changes.
+
+---
+
+### 2026-09-17 — `MlServiceClient` forces HTTP/1.1 (JDK HttpClient vs. uvicorn incompatibility)
+
+**Decision**: `MlServiceClient` now builds its own `java.net.http.HttpClient` with
+`.version(HttpClient.Version.HTTP_1_1)` and passes it to `RestClient` via
+`JdkClientHttpRequestFactory`, instead of using `RestClient`'s default request factory.
+
+**Why**: also discovered via the same live end-to-end browser test — the diagnosis call from
+`backend` to `ml-service` failed with an opaque "ml-service returned an error: 400 Bad
+Request" until checking `ml-service`'s own logs, which showed `WARNING: Unsupported upgrade
+request.` / `WARNING: Invalid HTTP request received.`. Root cause: the JDK `HttpClient`
+underlying `RestClient` defaults to attempting an HTTP/2-cleartext upgrade (`Upgrade: h2c`)
+on the first request, which uvicorn's HTTP/1.1-only server rejects at the protocol level —
+before the request ever reaches FastAPI's routing or Pydantic validation. Another case a
+mocked unit test can't catch — this only appears when two real HTTP implementations
+actually talk to each other.
+
+**Consequences**: any future new HTTP client added in `backend` talking to `ml-service` (or
+any other plain HTTP/1.1 server) needs the same explicit HTTP/1.1 pin — this isn't
+`ml-service`-specific, it's a JDK `HttpClient` default that surprises any HTTP/1.1-only
+server.

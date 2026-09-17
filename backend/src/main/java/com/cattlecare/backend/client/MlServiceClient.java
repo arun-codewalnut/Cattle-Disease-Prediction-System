@@ -1,8 +1,12 @@
 package com.cattlecare.backend.client;
 
+import java.net.http.HttpClient;
+import java.util.Map;
+
 import org.slf4j.MDC;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.client.JdkClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestClient;
@@ -11,8 +15,6 @@ import org.springframework.web.client.RestClientResponseException;
 import com.cattlecare.backend.config.ApiException;
 import com.cattlecare.backend.config.CorrelationIdFilter;
 
-import java.util.Map;
-
 @Component
 public class MlServiceClient {
 
@@ -20,8 +22,17 @@ public class MlServiceClient {
 
     // RestClient.builder() is a plain static factory — no Spring bean needed, so this
     // doesn't depend on RestClient auto-configuration being present.
+    //
+    // Forces HTTP/1.1: the JDK HttpClient's default HTTP/2-with-upgrade behavior sends an
+    // `Upgrade: h2c` header that uvicorn's HTTP/1.1-only server rejects outright ("Unsupported
+    // upgrade request" / "Invalid HTTP request received" in ml-service's logs) — found by
+    // actually running the full stack, not caught by any mocked test.
     public MlServiceClient(@Value("${ml-service.base-url}") String baseUrl) {
-        this.restClient = RestClient.builder().baseUrl(baseUrl).build();
+        HttpClient jdkHttpClient = HttpClient.newBuilder().version(HttpClient.Version.HTTP_1_1).build();
+        this.restClient = RestClient.builder()
+                .baseUrl(baseUrl)
+                .requestFactory(new JdkClientHttpRequestFactory(jdkHttpClient))
+                .build();
     }
 
     public DiagnosisResult diagnose(Map<String, Object> symptoms, String imageUrl) {

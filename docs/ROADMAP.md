@@ -11,7 +11,8 @@ Tracked as GitHub Milestones + Issues on the repo.
 - [x] **M3** — Spring Boot domain model + Flyway migrations + Postgres — spec:
       [docs/specs/M3-backend-domain-model.md](specs/M3-backend-domain-model.md) — issue:
       [#3](https://github.com/arun-codewalnut/Cattle-Disease-Prediction-System/issues/3)
-- [ ] **M4** — React symptom-intake UI, calling the backend — issue:
+- [x] **M4** — React symptom-intake UI, calling the backend — spec:
+      [docs/specs/M4-symptom-intake-ui.md](specs/M4-symptom-intake-ui.md) — issue:
       [#4](https://github.com/arun-codewalnut/Cattle-Disease-Prediction-System/issues/4)
 - [ ] **M5** — LangGraph agent wiring: intake → route to model(s) → predict → explain — issue:
       [#5](https://github.com/arun-codewalnut/Cattle-Disease-Prediction-System/issues/5)
