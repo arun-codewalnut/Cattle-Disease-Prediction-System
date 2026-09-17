@@ -37,24 +37,35 @@ export default function DiagnosisIntake() {
   }
 
   return (
-    <div>
-      <h1>Cattle symptom checker</h1>
-      <SymptomForm
-        tagNumber={tagNumber}
-        farmId={farmId}
-        symptoms={symptoms}
-        onTagNumberChange={setTagNumber}
-        onFarmIdChange={setFarmId}
-        onSymptomChange={handleSymptomChange}
-        onSubmit={handleSubmit}
-        disabled={status === 'submitting'}
-      />
+    <div className="app-shell">
+      <header className="app-header">
+        <span className="app-logo" aria-hidden="true">🐄</span>
+        <div>
+          <h1>Cattle symptom checker</h1>
+          <p className="app-tagline">🌾 Quick symptom check for your herd, right from the field.</p>
+        </div>
+      </header>
 
-      {status === 'error' && error && (
-        <p role="alert">{error.message}</p>
-      )}
+      <main className="diagnosis-card">
+        <SymptomForm
+          tagNumber={tagNumber}
+          farmId={farmId}
+          symptoms={symptoms}
+          onTagNumberChange={setTagNumber}
+          onFarmIdChange={setFarmId}
+          onSymptomChange={handleSymptomChange}
+          onSubmit={handleSubmit}
+          disabled={status === 'submitting'}
+        />
 
-      {status === 'success' && result && <DiagnosisResult result={result} />}
+        {status === 'error' && error && (
+          <p role="alert" className="form-error">
+            <span aria-hidden="true">⚠️</span> {error.message}
+          </p>
+        )}
+
+        {status === 'success' && result && <DiagnosisResult result={result} />}
+      </main>
     </div>
   )
 }

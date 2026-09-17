@@ -18,7 +18,10 @@ export default function SymptomForm({
   return (
     <form onSubmit={handleSubmit}>
       <div>
-        <label htmlFor="tagNumber">Cattle tag number</label>
+        <label htmlFor="tagNumber">
+          <span aria-hidden="true">🏷️ </span>
+          Cattle tag number
+        </label>
         <input
           id="tagNumber"
           type="text"
@@ -30,7 +33,10 @@ export default function SymptomForm({
       </div>
 
       <div>
-        <label htmlFor="farmId">Farm ID</label>
+        <label htmlFor="farmId">
+          <span aria-hidden="true">🚜 </span>
+          Farm ID
+        </label>
         <input
           id="farmId"
           type="number"
@@ -42,24 +48,25 @@ export default function SymptomForm({
       </div>
 
       <fieldset disabled={disabled}>
-        <legend>Symptoms</legend>
-        {SYMPTOM_FIELDS.map((field) => (
-          <div key={field.key}>
-            <label htmlFor={field.key}>
+        <legend>🩺 Symptoms</legend>
+        <div className="symptom-grid">
+          {SYMPTOM_FIELDS.map((field) => (
+            <label key={field.key} htmlFor={field.key} className="symptom-chip">
               <input
                 id={field.key}
                 type="checkbox"
                 checked={symptoms[field.key]}
                 onChange={(event) => onSymptomChange(field.key, event.target.checked)}
               />
+              <span aria-hidden="true">{field.icon}</span>
               {field.label}
             </label>
-          </div>
-        ))}
+          ))}
+        </div>
       </fieldset>
 
       <button type="submit" disabled={disabled}>
-        {disabled ? 'Submitting…' : 'Get diagnosis'}
+        {disabled ? '⏳ Submitting…' : '🐄 Get diagnosis'}
       </button>
     </form>
   )
