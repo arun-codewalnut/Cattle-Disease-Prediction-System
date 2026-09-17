@@ -50,28 +50,37 @@ _Last updated: 2026-09-17_
   `POST /api/cattle` + `POST /api/cattle/{id}/diagnoses`, `MlServiceClient` with structured
   error translation. 9/9 backend tests passing (8 new). Found and fixed: `RestClient.Builder`
   isn't auto-configured in this Spring Boot 4 setup — see `docs/DECISIONS.md`.
-- **M4 done** (issue #4, branch `feat/m4-symptom-intake-ui`, branched from `main`): React
-  symptom-intake form (11 checkboxes + tag/farm ID) → `POST /api/cattle` →
-  `POST /api/cattle/{id}/diagnoses` → rendered result with urgency-appropriate styling and
-  the "not a confirmed diagnosis" disclaimer. 3/3 Vitest component tests passing. **Found
-  and fixed two real integration bugs by actually running the full stack and submitting the
-  form in a live browser** (neither was catchable by mocked unit tests): (1) CORS was never
-  configured on `backend` — added `WebConfig.java`; (2) the JDK `HttpClient` underlying
-  `MlServiceClient` attempted an HTTP/2 upgrade that uvicorn rejects — pinned to HTTP/1.1
-  explicitly. Both documented in `docs/DECISIONS.md`. Verified live end-to-end after fixing:
-  real diagnosis (Foot and Mouth Disease, 98% confidence, "Escalate to vet") rendered
-  correctly in the browser.
+- **M4 done, merged to `main`** (issue #4, PR #12): React symptom-intake form → creates
+  cattle → submits symptoms → rendered result with urgency styling + disclaimer. 3/3 Vitest
+  tests. **Found and fixed two real integration bugs live** (CORS never configured on
+  `backend`; JDK `HttpClient` HTTP/2-upgrade vs. uvicorn incompatibility) — see
+  `docs/DECISIONS.md`. Verified end-to-end in a real browser.
+- **M5 done** (issue #5, branch `feat/m5-langgraph-agent-orchestration`, branched from
+  `main`): `run_diagnosis()` is now a real LangGraph `StateGraph`
+  (`intake → route → predict_symptoms|predict_image → explain → recommend`) instead of one
+  plain function. `explain` node generates real LLM text via `app/agent/llm.py`'s
+  provider-swappable `get_llm()` (Ollama by default), falling back to the old deterministic
+  template on any LLM failure — diagnosis, confidence, and the `REPORTABLE_DISEASES`
+  escalation rule are all byte-for-byte unchanged from M1/M2 (deliberately — this milestone
+  improves explanation quality, not diagnostic accuracy, see `docs/DECISIONS.md`).
+  `image_url` now routes to a clear `NOT_IMPLEMENTED` (501) instead of being silently
+  ignored. New dependency `langchain-ollama==0.2.2` (version-pinned for compatibility with
+  the existing `langchain-core==0.3.28`). 21/21 ml-service tests passing (6 new). Found and
+  fixed a real test-suite performance bug: without mocking, every confident-diagnosis test
+  tried to actually reach Ollama (not installed here) and waited out a connection timeout —
+  15 tests went from ~2s to ~25s; fixed with an autouse `conftest.py` fixture that fails
+  fast by default (the honest reflection of this environment having no LLM available),
+  back to ~2s for 21 tests.
 - Full-application build+test re-verified at every milestone: `ml-service` pytest,
   `frontend` vitest + production build, `backend` `mvn test` (needs Postgres — fixed CI to
   provide one via a service container).
 
 ## In Progress
 
-- M4 not yet committed/PR'd (still on `feat/m4-symptom-intake-ui`).
+- M5 not yet committed/PR'd (still on `feat/m5-langgraph-agent-orchestration`).
 
 ## Not Started
 
-- M5: LangGraph agent wiring (intake → predict → explain)
 - M6: RAG knowledge base (Chroma)
 - M7: Notifications (email/WhatsApp free tier)
 
