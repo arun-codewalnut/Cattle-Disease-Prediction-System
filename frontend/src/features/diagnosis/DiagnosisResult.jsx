@@ -38,6 +38,30 @@ export default function DiagnosisResult({ result }) {
             </span>
           </span>
         </p>
+        {result.precautions?.length > 0 && (
+          <div className="guidance-block">
+            <h3>
+              <span aria-hidden="true">🛡️</span> Precautions
+            </h3>
+            <ul>
+              {result.precautions.map((item) => (
+                <li key={item}>{item}</li>
+              ))}
+            </ul>
+          </div>
+        )}
+        {result.nextSteps?.length > 0 && (
+          <div className="guidance-block">
+            <h3>
+              <span aria-hidden="true">📋</span> Next steps
+            </h3>
+            <ul>
+              {result.nextSteps.map((item) => (
+                <li key={item}>{item}</li>
+              ))}
+            </ul>
+          </div>
+        )}
         <p className="disclaimer">
           <em>
             This is a probabilistic estimate, not a confirmed diagnosis. Always consult a vet

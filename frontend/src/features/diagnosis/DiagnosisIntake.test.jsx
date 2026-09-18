@@ -40,6 +40,8 @@ describe('DiagnosisIntake', () => {
           confidence: 0.81,
           explanation: 'Predicted Foot and Mouth Disease with 81% confidence.',
           recommendedAction: 'escalate_to_vet',
+          precautions: ['Isolate the affected animal from the rest of the herd immediately.'],
+          nextSteps: ['Contact your veterinarian or local animal health authority immediately.'],
           createdAt: '2026-01-01T00:00:00Z',
         })
       )
@@ -49,6 +51,8 @@ describe('DiagnosisIntake', () => {
 
     expect(await screen.findByText(/likely: foot and mouth disease \(81% confidence\)/i)).toBeInTheDocument()
     expect(screen.getByText(/escalate to vet/i)).toBeInTheDocument()
+    expect(screen.getByText(/isolate the affected animal/i)).toBeInTheDocument()
+    expect(screen.getByText(/contact your veterinarian or local animal health authority/i)).toBeInTheDocument()
     expect(fetchMock).toHaveBeenCalledTimes(2)
 
     const [cattleCall, diagnosisCall] = fetchMock.mock.calls
