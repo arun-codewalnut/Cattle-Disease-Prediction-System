@@ -13,8 +13,9 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 
-/** Maps to the `diagnosis_case` table — see V1__init.sql. `symptoms` is JSONB, mapped via
- * Hibernate's native JSON support (no extra dependency needed). */
+/** Maps to the `diagnosis_case` table — see V1__init.sql and
+ * V2__rename_cattle_to_animal.sql. `symptoms` is JSONB, mapped via Hibernate's native JSON
+ * support (no extra dependency needed). */
 @Entity
 @Table(name = "diagnosis_case")
 public class DiagnosisCase {
@@ -23,8 +24,8 @@ public class DiagnosisCase {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "cattle_id", nullable = false)
-    private Long cattleId;
+    @Column(name = "animal_id", nullable = false)
+    private Long animalId;
 
     @Column(name = "correlation_id", nullable = false)
     private String correlationId;
@@ -50,13 +51,13 @@ public class DiagnosisCase {
     }
 
     public DiagnosisCase(
-            Long cattleId,
+            Long animalId,
             String correlationId,
             Map<String, Object> symptoms,
             String diagnosis,
             Double confidence,
             String recommendedAction) {
-        this.cattleId = cattleId;
+        this.animalId = animalId;
         this.correlationId = correlationId;
         this.symptoms = symptoms;
         this.diagnosis = diagnosis;
@@ -68,8 +69,8 @@ public class DiagnosisCase {
         return id;
     }
 
-    public Long getCattleId() {
-        return cattleId;
+    public Long getAnimalId() {
+        return animalId;
     }
 
     public String getCorrelationId() {

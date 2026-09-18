@@ -23,19 +23,19 @@ public class DiagnosisController {
         this.diagnosisService = diagnosisService;
     }
 
-    @PostMapping("/api/cattle/{cattleId}/diagnoses")
+    @PostMapping("/api/animals/{animalId}/diagnoses")
     public ResponseEntity<DiagnosisCaseResponse> submitSymptoms(
-            @PathVariable Long cattleId, @Valid @RequestBody SubmitSymptomsRequest request) {
-        DiagnosisCaseResponse response = diagnosisService.submitSymptoms(cattleId, request.symptoms());
+            @PathVariable Long animalId, @Valid @RequestBody SubmitSymptomsRequest request) {
+        DiagnosisCaseResponse response = diagnosisService.submitSymptoms(animalId, request.symptoms());
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
     // M8 phase 1 (docs/specs/M8-image-diagnosis-phase1.md) — image-based diagnosis, backed
     // by a placeholder classifier in ml-service, not a trained model yet.
-    @PostMapping(value = "/api/cattle/{cattleId}/diagnoses/image", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PostMapping(value = "/api/animals/{animalId}/diagnoses/image", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<DiagnosisCaseResponse> submitImage(
-            @PathVariable Long cattleId, @RequestParam("image") MultipartFile image) {
-        DiagnosisCaseResponse response = diagnosisService.submitImage(cattleId, image);
+            @PathVariable Long animalId, @RequestParam("image") MultipartFile image) {
+        DiagnosisCaseResponse response = diagnosisService.submitImage(animalId, image);
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 }

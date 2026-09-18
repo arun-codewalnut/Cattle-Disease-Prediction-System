@@ -5,6 +5,7 @@ import java.util.Map;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -47,6 +48,18 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(MissingServletRequestPartException.class)
     public ResponseEntity<ApiError> handleMissingPart(MissingServletRequestPartException ex) {
         ApiError error = new ApiError("IMAGE_REQUIRED", "An image file is required.", null);
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(error);
+    }
+
+    // Malformed JSON, or a value that doesn't fit the target type — e.g. an invalid
+    // `species` string for the Species enum (M11 is the first field that can actually
+    // trigger this). Same class of bug as MethodArgumentNotValidException above: without
+    // this handler, Jackson's raw deserialization exception would leak through the generic
+    // catch-all instead of a clean {code, message, details}.
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    public ResponseEntity<ApiError> handleUnreadableRequestBody(HttpMessageNotReadableException ex) {
+        ApiError error = new ApiError(
+                "INVALID_REQUEST_BODY", "Request body is malformed or contains an invalid value.", null);
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(error);
     }
 

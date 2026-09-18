@@ -1,18 +1,22 @@
-package com.cattlecare.backend.cattle;
+package com.cattlecare.backend.animal;
 
 import java.time.Instant;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 
-/** Maps to the `cattle` table — see V1__init.sql. */
+/** Maps to the `animal` table — see V2__rename_cattle_to_animal.sql. Renamed from `Cattle`
+ * in M11 (docs/specs/M11-buffalo-disease-detection.md) when the domain generalized beyond
+ * cattle-only. */
 @Entity
-@Table(name = "cattle")
-public class Cattle {
+@Table(name = "animal")
+public class Animal {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -24,16 +28,21 @@ public class Cattle {
     @Column(name = "farm_id", nullable = false)
     private Long farmId;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "species", nullable = false)
+    private Species species;
+
     @Column(name = "created_at", nullable = false)
     private Instant createdAt = Instant.now();
 
-    protected Cattle() {
+    protected Animal() {
         // JPA
     }
 
-    public Cattle(String tagNumber, Long farmId) {
+    public Animal(String tagNumber, Long farmId, Species species) {
         this.tagNumber = tagNumber;
         this.farmId = farmId;
+        this.species = species;
     }
 
     public Long getId() {
@@ -46,6 +55,10 @@ public class Cattle {
 
     public Long getFarmId() {
         return farmId;
+    }
+
+    public Species getSpecies() {
+        return species;
     }
 
     public Instant getCreatedAt() {

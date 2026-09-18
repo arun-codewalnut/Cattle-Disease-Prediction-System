@@ -7,7 +7,7 @@ import com.cattlecare.backend.diagnosis.DiagnosisCase;
 
 public record DiagnosisCaseResponse(
         Long id,
-        Long cattleId,
+        Long animalId,
         String diagnosis,
         Double confidence,
         String explanation,
@@ -23,7 +23,7 @@ public record DiagnosisCaseResponse(
             DiagnosisCase entity, String explanation, List<String> precautions, List<String> nextSteps) {
         return new DiagnosisCaseResponse(
                 entity.getId(),
-                entity.getCattleId(),
+                entity.getAnimalId(),
                 entity.getDiagnosis(),
                 entity.getConfidence(),
                 explanation,
