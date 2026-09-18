@@ -9,12 +9,21 @@ recommended_action logic — those are exactly what M1/M2 already computed. `exp
 generates real LLM text (falling back to a template if the LLM is unavailable), grounded in
 the model's own output plus (M6) retrieved reference passages — never facts invented beyond
 what it's given.
+
+`predict_image` (M8 phase 1) is a deterministic placeholder, not a trained model — see
+docs/specs/M8-image-diagnosis-phase1.md. It still flows through `recommend`, so the
+REPORTABLE_DISEASES escalation rule applies identically regardless of which path produced
+the diagnosis.
 """
 from __future__ import annotations
 
+import base64
+import binascii
+import hashlib
 from pathlib import Path
 from typing import Any, TypedDict
 
+import httpx
 from langchain_core.messages import HumanMessage, SystemMessage
 from langgraph.graph import END, StateGraph
 
@@ -28,6 +37,14 @@ from app.rag.retrieval import retrieve
 # could drift on.
 REPORTABLE_DISEASES = {"Foot and Mouth Disease", "Lumpy Skin Disease"}
 
+# M8 phase 1: no trained image model exists yet (see docs/specs/M8-image-diagnosis-phase1.md).
+# This is a deterministic hash of the image bytes, not a classifier — it exists only to
+# exercise the upload -> diagnosis -> escalation pipeline end to end. One reportable disease
+# is deliberately included so the escalation rule gets exercised by the image path too, not
+# just the symptom path.
+_PLACEHOLDER_DIAGNOSES = ("Healthy", "Lumpy Skin Disease", "Mastitis")
+_PLACEHOLDER_CONFIDENCE = 0.5
+
 EXPLAIN_SYSTEM_PROMPT = (
     "You are explaining a machine-learning cattle disease prediction to a farmer. Only use "
     "the diagnosis, confidence, contributing symptoms, and reference material given to you "
@@ -39,10 +56,12 @@ EXPLAIN_SYSTEM_PROMPT = (
 class DiagnosisState(TypedDict, total=False):
     symptoms: dict[str, Any]
     image_url: str | None
+    image_base64: str | None
     model_path: Path | None
     diagnosis: str
     confidence: float
     top_features: list[dict[str, Any]]
+    image_placeholder: bool
     explanation: str
     recommended_action: str
     sources: list[str]
@@ -76,7 +95,8 @@ def intake_node(state: DiagnosisState) -> dict[str, Any]:
 
 
 def route_after_intake(state: DiagnosisState) -> str:
-    return "predict_image" if state.get("image_url") else "predict_symptoms"
+    has_image = bool(state.get("image_url") or state.get("image_base64"))
+    return "predict_image" if has_image else "predict_symptoms"
 
 
 def predict_symptoms_node(state: DiagnosisState) -> dict[str, Any]:
@@ -96,15 +116,65 @@ def predict_symptoms_node(state: DiagnosisState) -> dict[str, Any]:
     }
 
 
+def _fetch_image_bytes(state: DiagnosisState) -> bytes | None:
+    image_base64 = state.get("image_base64")
+    if image_base64:
+        try:
+            return base64.b64decode(image_base64, validate=True)
+        except (binascii.Error, ValueError):
+            return None
+
+    image_url = state.get("image_url")
+    if image_url:
+        try:
+            response = httpx.get(image_url, timeout=3.0)
+            response.raise_for_status()
+            return response.content
+        except httpx.HTTPError:
+            return None
+
+    return None
+
+
 def predict_image_node(state: DiagnosisState) -> dict[str, Any]:
-    raise ApiError(
-        code="NOT_IMPLEMENTED",
-        message="Image-based prediction isn't implemented yet.",
-        status_code=501,
-    )
+    image_bytes = _fetch_image_bytes(state)
+
+    if image_bytes is None:
+        # Undecodable base64 or an unreachable image_url — degrade to "uncertain" rather
+        # than failing the request, same "never blocks a diagnosis" pattern as explain_node.
+        return {
+            "diagnosis": "uncertain",
+            "confidence": 0.0,
+            "top_features": [],
+            "image_placeholder": True,
+        }
+
+    digest = hashlib.sha256(image_bytes).digest()
+    diagnosis = _PLACEHOLDER_DIAGNOSES[digest[0] % len(_PLACEHOLDER_DIAGNOSES)]
+
+    return {
+        "diagnosis": diagnosis,
+        "confidence": _PLACEHOLDER_CONFIDENCE,
+        "top_features": [],
+        "image_placeholder": True,
+    }
 
 
 def explain_node(state: DiagnosisState) -> dict[str, Any]:
+    if state.get("image_placeholder"):
+        # Deliberately skips the LLM/RAG path entirely (unlike the symptom flow) so a
+        # placeholder result can never be phrased indistinguishably from a real, grounded
+        # explanation — see docs/specs/M8-image-diagnosis-phase1.md.
+        return {
+            "explanation": (
+                f"This is a placeholder image-based prediction ({state['diagnosis']}, "
+                f"{state['confidence']:.0%} confidence). No trained image-recognition model "
+                "exists yet — this result only demonstrates the upload-to-response pipeline "
+                "and must not be used for any real decision."
+            ),
+            "sources": [],
+        }
+
     if state["diagnosis"] == "uncertain":
         return {"explanation": _template_explanation(state), "sources": []}
 
@@ -165,9 +235,9 @@ def _build_graph():
         {"predict_symptoms": "predict_symptoms", "predict_image": "predict_image"},
     )
     builder.add_edge("predict_symptoms", "explain")
+    builder.add_edge("predict_image", "explain")
     builder.add_edge("explain", "recommend")
     builder.add_edge("recommend", END)
-    builder.add_edge("predict_image", END)  # unreachable in practice — the node always raises
 
     return builder.compile()
 
@@ -176,10 +246,18 @@ _compiled_graph = _build_graph()
 
 
 def run_diagnosis(
-    symptoms: dict[str, Any], image_url: str | None = None, model_path: Path | None = None
+    symptoms: dict[str, Any],
+    image_url: str | None = None,
+    image_base64: str | None = None,
+    model_path: Path | None = None,
 ) -> dict[str, Any]:
     final_state = _compiled_graph.invoke(
-        {"symptoms": symptoms, "image_url": image_url, "model_path": model_path}
+        {
+            "symptoms": symptoms,
+            "image_url": image_url,
+            "image_base64": image_base64,
+            "model_path": model_path,
+        }
     )
     return {
         "diagnosis": final_state["diagnosis"],

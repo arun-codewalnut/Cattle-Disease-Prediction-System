@@ -1,9 +1,9 @@
+import base64
 from types import SimpleNamespace
 
 import app.agent.graph as graph_module
 import pytest
 from app.agent.graph import run_diagnosis
-from app.errors import ApiError
 
 CONFIDENT_SYMPTOMS = {
     "fever": True,
@@ -61,12 +61,55 @@ def test_uncertain_diagnosis_never_calls_the_llm(monkeypatch):
     assert calls == []
 
 
-def test_image_url_routes_to_not_implemented():
-    with pytest.raises(ApiError) as exc_info:
-        run_diagnosis({"fever": True}, image_url="https://example.com/cow.jpg")
+def test_image_base64_produces_a_deterministic_placeholder_diagnosis():
+    image_bytes = b"not a real image, just deterministic bytes for the placeholder hash"
+    image_base64 = base64.b64encode(image_bytes).decode()
 
-    assert exc_info.value.code == "NOT_IMPLEMENTED"
-    assert exc_info.value.status_code == 501
+    first = run_diagnosis({}, image_base64=image_base64)
+    second = run_diagnosis({}, image_base64=image_base64)
+
+    assert first["diagnosis"] == second["diagnosis"]
+    assert first["confidence"] == second["confidence"] == 0.5
+    assert "placeholder" in first["explanation"].lower()
+    assert first["sources"] == []
+
+
+def test_image_placeholder_never_calls_the_llm(monkeypatch):
+    calls = []
+    monkeypatch.setattr(graph_module, "get_llm", lambda: calls.append("called"))
+    image_base64 = base64.b64encode(b"some bytes").decode()
+
+    run_diagnosis({}, image_base64=image_base64)
+
+    assert calls == []
+
+
+def test_image_placeholder_still_escalates_for_reportable_disease():
+    # Bytes whose sha256 first byte lands on "Lumpy Skin Disease" in
+    # _PLACEHOLDER_DIAGNOSES = ("Healthy", "Lumpy Skin Disease", "Mastitis") — found by
+    # brute-force search over small inputs, pinned here so the escalation assertion below is
+    # deterministic rather than probabilistic.
+    image_base64 = base64.b64encode(b"\x04").decode()
+
+    result = run_diagnosis({}, image_base64=image_base64)
+
+    assert result["diagnosis"] == "Lumpy Skin Disease"
+    assert result["recommended_action"] == "escalate_to_vet"
+
+
+def test_invalid_image_base64_degrades_to_uncertain_instead_of_failing():
+    result = run_diagnosis({}, image_base64="not valid base64!!!")
+
+    assert result["diagnosis"] == "uncertain"
+    assert result["recommended_action"] == "consult_vet"
+    assert "placeholder" in result["explanation"].lower()
+
+
+def test_unreachable_image_url_degrades_to_uncertain_instead_of_failing():
+    result = run_diagnosis({}, image_url="http://127.0.0.1:1/does-not-resolve.jpg")
+
+    assert result["diagnosis"] == "uncertain"
+    assert result["recommended_action"] == "consult_vet"
 
 
 def test_recommended_action_still_escalates_for_reportable_disease():

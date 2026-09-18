@@ -1,3 +1,4 @@
+import base64
 from pathlib import Path
 
 import app.models.symptom_model as symptom_model_module
@@ -65,6 +66,21 @@ def test_healthy_recommends_monitor() -> None:
     assert response.status_code == 200
     assert body["diagnosis"] == "Healthy"
     assert body["recommended_action"] == "monitor"
+
+
+def test_image_base64_returns_placeholder_diagnosis_not_501() -> None:
+    image_base64 = base64.b64encode(b"a fake photo for the placeholder pipeline").decode()
+
+    response = client.post(
+        "/agent/diagnose", json={"symptoms": {}, "image_base64": image_base64}
+    )
+    body = response.json()
+
+    assert response.status_code == 200
+    assert body["diagnosis"] in ("Healthy", "Lumpy Skin Disease", "Mastitis")
+    assert body["confidence"] == 0.5
+    assert "placeholder" in body["explanation"].lower()
+    assert body["sources"] == []
 
 
 def test_missing_model_returns_structured_error(monkeypatch, tmp_path: Path) -> None:
