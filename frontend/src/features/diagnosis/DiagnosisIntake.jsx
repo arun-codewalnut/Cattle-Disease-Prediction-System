@@ -1,7 +1,9 @@
 import { useState } from 'react'
-import { createCattle, submitSymptoms } from '../../api/diagnosisApi'
+import { createCattle, submitSymptoms, submitImage } from '../../api/diagnosisApi'
 import { ApiError } from '../../api/client'
+import CattleIdentityFields from './CattleIdentityFields'
 import SymptomForm from './SymptomForm'
+import ImageUploadForm from './ImageUploadForm'
 import DiagnosisResult from './DiagnosisResult'
 import { emptySymptoms } from './symptomFields'
 
@@ -9,6 +11,7 @@ export default function DiagnosisIntake() {
   const [tagNumber, setTagNumber] = useState('')
   const [farmId, setFarmId] = useState('')
   const [symptoms, setSymptoms] = useState(emptySymptoms())
+  const [image, setImage] = useState(null)
   const [status, setStatus] = useState('idle') // idle | submitting | success | error
   const [result, setResult] = useState(null)
   const [error, setError] = useState(null)
@@ -17,7 +20,28 @@ export default function DiagnosisIntake() {
     setSymptoms((prev) => ({ ...prev, [key]: checked }))
   }
 
+  // CattleIdentityFields lives outside both <form> elements below (it's shared by both), so
+  // the inputs' `required` attribute has no effect on either form's native submit validation
+  // — validate explicitly instead of relying on that.
+  function validateIdentityFields() {
+    if (!tagNumber.trim()) {
+      setError(new ApiError('TAG_NUMBER_REQUIRED', 'Please enter a cattle tag number.', null))
+      setStatus('error')
+      return false
+    }
+    if (!farmId.toString().trim() || Number.isNaN(Number(farmId))) {
+      setError(new ApiError('FARM_ID_REQUIRED', 'Please enter a valid farm ID.', null))
+      setStatus('error')
+      return false
+    }
+    return true
+  }
+
   async function handleSubmit() {
+    if (!validateIdentityFields()) {
+      return
+    }
+
     setStatus('submitting')
     setError(null)
     setResult(null)
@@ -36,6 +60,31 @@ export default function DiagnosisIntake() {
     }
   }
 
+  async function handleImageSubmit() {
+    if (!image || !validateIdentityFields()) {
+      return
+    }
+
+    setStatus('submitting')
+    setError(null)
+    setResult(null)
+
+    const correlationId = crypto.randomUUID()
+
+    try {
+      const cattle = await createCattle({ tagNumber, farmId }, correlationId)
+      const diagnosis = await submitImage(cattle.id, image, correlationId)
+      setResult(diagnosis)
+      setStatus('success')
+    } catch (err) {
+      const apiError = err instanceof ApiError ? err : new ApiError('UNKNOWN_ERROR', 'Something went wrong.', null)
+      setError(apiError)
+      setStatus('error')
+    }
+  }
+
+  const disabled = status === 'submitting'
+
   return (
     <div className="app-shell">
       <header className="app-header">
@@ -47,16 +96,26 @@ export default function DiagnosisIntake() {
       </header>
 
       <main className="diagnosis-card">
-        <SymptomForm
+        <CattleIdentityFields
           tagNumber={tagNumber}
           farmId={farmId}
-          symptoms={symptoms}
           onTagNumberChange={setTagNumber}
           onFarmIdChange={setFarmId}
+          disabled={disabled}
+        />
+
+        <SymptomForm
+          symptoms={symptoms}
           onSymptomChange={handleSymptomChange}
           onSubmit={handleSubmit}
-          disabled={status === 'submitting'}
+          disabled={disabled}
         />
+
+        <div className="form-divider" role="separator">
+          <span>or</span>
+        </div>
+
+        <ImageUploadForm image={image} onImageChange={setImage} onSubmit={handleImageSubmit} disabled={disabled} />
 
         {status === 'error' && error && (
           <p role="alert" className="form-error">
