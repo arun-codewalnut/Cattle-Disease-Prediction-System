@@ -3,7 +3,7 @@
 Living snapshot of project state. Update this whenever you finish a meaningful chunk of work —
 this is what an agent (or you) reads first when resuming.
 
-_Last updated: 2026-09-17_
+_Last updated: 2026-09-18_
 
 ## Known gaps
 
@@ -82,38 +82,61 @@ _Last updated: 2026-09-17_
   venv, or Docker for RAG-dependent tests since M6), `frontend` vitest + production build,
   `backend` `mvn test` (needs Postgres — fixed CI to provide one via a service container).
 
-- **Frontend UI redesign done, not yet merged** (issue #15, branch
-  `feat/ui-redesign-cattle-theme`, branched from `main` after the M6 fast-forward): cattle/farm
+- **Frontend UI redesign done, merged to `main`** (issue #15, PR #17): cattle/farm
   visual theme (CSS-gradient sky + hills + sun, inline-SVG only, no downloaded imagery),
   fully responsive (mobile/tablet/desktop, verified in a real browser at 375/768/1440px),
   colorful palette with light+dark variants, hover/focus-visible states on every input, emoji
   icons on every symptom field and the two identity fields, and an urgency-coded results card
   (🚨 red / 🩺 amber / 👀 green) for the three `recommendedAction` values. Purely
-  presentational — no backend/ml-service change, no change to the create-cattle→submit-symptoms
-  flow, `X-Correlation-Id` generation, or `{code, message, details}` error handling. Existing
-  3/3 Vitest tests pass **unmodified** (labels/roles preserved by design — icons/backgrounds
-  added via `aria-hidden` siblings, never inside tested text). `npm run lint` and
-  `npm run build` both clean. Spec:
+  presentational — no backend/ml-service change. Spec:
   [docs/specs/frontend-ui-redesign.md](docs/specs/frontend-ui-redesign.md).
-- **Issue #16 / milestone M8 created**: image-based disease recognition, deliberately phased —
-  phase 1 (issue #16) wires the upload pipeline end-to-end behind a placeholder classifier
-  (no dataset/trained model exists yet); a real CNN is an explicit future phase, not scoped
-  into M8. `docs/ROADMAP.md` updated to list M8 and reference issues #15/#16.
+- **M8 phase 1 done, not yet merged** (issue #16, branch `feat/m8-image-diagnosis-pipeline`,
+  branched from `main` after the #15 merge): `predict_image` in `ml-service` returns a
+  deterministic hash-based placeholder instead of `501`, routed through the same
+  `explain`/`recommend` path as symptom-based diagnoses so `REPORTABLE_DISEASES` escalation
+  applies identically — verified live (a placeholder result correctly escalated). New
+  `POST /api/cattle/{cattleId}/diagnoses/image` on `backend` (multipart, JPEG/PNG, ≤5MB,
+  base64-encoded and forwarded to ml-service as `image_base64`) — **images are never
+  persisted to disk**, a deliberate scope decision (see spec). Frontend: new
+  `ImageUploadForm` alongside the symptom checklist, sharing identity fields via a new
+  `CattleIdentityFields` component. Spec:
+  [docs/specs/M8-image-diagnosis-phase1.md](docs/specs/M8-image-diagnosis-phase1.md).
+  ml-service 29/2 (skipped), backend 15/15, frontend 7/7 + lint + build all green.
+- **Found and fixed two real bugs live** while manually testing M8 (user hit the second one
+  in actual use): (1) splitting the identity fields into a shared component moved them
+  outside both `<form>` elements, silently disabling native `required`-field validation for
+  both symptom and image submission — fixed with explicit validation in `DiagnosisIntake.jsx`
+  before either submit path fires. (2) `GlobalExceptionHandler` had no handler for
+  `MethodArgumentNotValidException`, so a blank tag number returned the raw Spring exception
+  (internal class names and all) as the error message — fixed with a proper
+  `VALIDATION_FAILED` mapping (`{code, message, details: {field: reason}}`), covered by a new
+  `CattleControllerTest` (this repo's first `@WebMvcTest`-based controller test — required
+  `WebMvcTest`/`MockitoBean` from their new Spring Boot 4 packages, not the deprecated
+  Boot-3-era ones).
+- **Six new milestones/issues created (M9–M14)**, after researching real candidate datasets
+  (found via web search, not guessed): M9 trains a real cattle image classifier on a
+  Kaggle 3-class dataset (Healthy/LSD/FMD, 3,244 images), replacing M8's placeholder; M10
+  adds RAG-grounded precautions/next-steps to every diagnosis (species-agnostic, benefits
+  the existing cattle flow immediately); M11–M14 add Buffalo, Sheep, Cat, and Dog per the
+  user's request — M11 is where the domain model first generalizes beyond "Cattle" (an open
+  design question flagged in that issue, not decided yet), and M13 (Cat) is a real pivot from
+  livestock to companion-animal diseases, flagged for its own `DISCLAIMER.md` review.
+  `docs/ROADMAP.md` updated to list all six.
 
 ## In Progress
 
-- Frontend UI redesign (issue #15) — implementation done, PR not yet opened/merged.
+- M8 phase 1 (issue #16) — implementation done, PR not yet opened/merged.
 
 ## Not Started
 
 - M7: Notifications (email/WhatsApp free tier)
-- M8 phase 1: image-based disease recognition, placeholder classifier (issue #16)
-- M8 phase 2 (future, not yet an issue): real trained image classifier, once a labeled
-  cattle-disease image dataset is sourced
+- M9: real cattle image classifier (issue #18)
+- M10: diagnosis precautions/next-steps (issue #19)
+- M11–M14: Buffalo, Sheep, Cat, Dog (issues #20–#23)
 
 Deployment (formerly M8 in the original numbering) was dropped from scope — see
-`docs/DECISIONS.md`. The M8 number was reused for image-based disease recognition this
-session, a deliberate, discussed reassignment — not a collision.
+`docs/DECISIONS.md`. The M8 number was reused for image-based disease recognition, a
+deliberate, discussed reassignment — not a collision.
 
 Full roadmap: [docs/ROADMAP.md](docs/ROADMAP.md).
 
