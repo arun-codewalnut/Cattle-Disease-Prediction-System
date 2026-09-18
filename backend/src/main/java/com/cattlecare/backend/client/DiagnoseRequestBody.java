@@ -9,5 +9,6 @@ import com.fasterxml.jackson.annotation.JsonProperty;
  * on Jackson's default camelCase, since this is a cross-service contract. */
 public record DiagnoseRequestBody(
         Map<String, Object> symptoms,
-        @JsonProperty("image_url") String imageUrl) {
+        @JsonProperty("image_url") String imageUrl,
+        @JsonProperty("image_base64") String imageBase64) {
 }

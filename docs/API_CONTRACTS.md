@@ -32,9 +32,15 @@ Request:
 ```json
 {
   "symptoms": { "fever": true, "appetite_loss": true, "...": "..." },
-  "image_url": null
+  "image_url": null,
+  "image_base64": null
 }
 ```
+Exactly one of `symptoms` (non-empty) / `image_url` / `image_base64` is meaningful per
+request — if either image field is set, `symptoms` is ignored and can be `{}`. `image_url`
+is fetched by `ml-service` (short timeout); `image_base64` is decoded directly. If both are
+absent/empty, this is a symptom-based request (`{}` symptoms yields `"uncertain"`, same as
+before M8).
 
 Response (`200`):
 ```json
@@ -66,8 +72,17 @@ particular explanation format, only that the field is always a non-empty string.
 text that isn't actually reflected in `explanation`.
 
 **Known error codes**: `MODEL_NOT_TRAINED` (`503`) — the model artifact isn't present;
-train it via `python -m training.symptom_model_train` in `ml-service/`. `NOT_IMPLEMENTED`
-(`501`) — `image_url` was provided; image-based prediction isn't built yet (M5+).
+train it via `python -m training.symptom_model_train` in `ml-service/`.
+
+**Image-based prediction (M8 phase 1)**: `predict_image` is a **deterministic placeholder**
+(a hash of the image bytes), not a trained model — see
+[docs/specs/M8-image-diagnosis-phase1.md](specs/M8-image-diagnosis-phase1.md). Its
+`explanation` always states this explicitly and never goes through the LLM/RAG path, so it
+can't be phrased indistinguishably from a real, grounded symptom-based explanation.
+`recommended_action` (including `escalate_to_vet`) still fires exactly as it would for a
+real diagnosis — the `REPORTABLE_DISEASES` rule doesn't know or care that the diagnosis came
+from a placeholder. An undecodable `image_base64` or an unreachable `image_url` degrades to
+`"uncertain"` (never a hard failure).
 
 ## `backend` endpoints (contract summary, M3)
 
@@ -95,6 +110,16 @@ Response (`201`):
 Note: `explanation` is returned live from `ml-service` but not persisted — `diagnosis_case`
 has no column for it (see `docs/DECISIONS.md`).
 
+`POST /api/cattle/{cattleId}/diagnoses/image` (M8 phase 1) — multipart/form-data, one part
+named `image` (JPEG or PNG, ≤ 5MB). Base64-encodes the file and calls `ml-service` with
+`image_base64` (`symptoms: {}`); persists and responds with the same
+`DiagnosisCaseResponse` shape as the symptom endpoint above. **The image itself is never
+persisted to disk** — see
+[docs/specs/M8-image-diagnosis-phase1.md](specs/M8-image-diagnosis-phase1.md) for why.
+
 **New error codes** (backend, via `ApiException`): `CATTLE_NOT_FOUND` (`404`),
 `CATTLE_TAG_DUPLICATE` (`409`), `ML_SERVICE_UNAVAILABLE` (`503`, connection failure to
-ml-service), `ML_SERVICE_ERROR` (`502`, ml-service returned an error response).
+ml-service), `ML_SERVICE_ERROR` (`502`, ml-service returned an error response),
+`UNSUPPORTED_IMAGE_TYPE` (`400`, not JPEG/PNG), `IMAGE_TOO_LARGE` (`400`, over 5MB),
+`IMAGE_REQUIRED` (`400`, no file part), `IMAGE_READ_FAILED` (`400`, couldn't read the
+uploaded bytes).
