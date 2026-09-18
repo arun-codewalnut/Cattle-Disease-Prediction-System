@@ -49,7 +49,9 @@ Response (`200`):
   "confidence": 0.82,
   "explanation": "This points to Foot and Mouth Disease — a highly contagious viral disease causing fever and blister-like lesions in the mouth and around the hooves, consistent with the symptoms observed...",
   "recommended_action": "escalate_to_vet",
-  "sources": ["foot-and-mouth-disease"]
+  "sources": ["foot-and-mouth-disease"],
+  "precautions": ["Isolate the affected animal from the rest of the herd immediately.", "..."],
+  "next_steps": ["Contact your veterinarian or local animal health authority immediately — this is a reportable disease.", "..."]
 }
 ```
 
@@ -84,6 +86,15 @@ real diagnosis — the `REPORTABLE_DISEASES` rule doesn't know or care that the 
 from a placeholder. An undecodable `image_base64` or an unreachable `image_url` degrades to
 `"uncertain"` (never a hard failure).
 
+**`precautions` / `next_steps` (M10)**: unlike `explanation`, these are **never LLM-generated**
+— looked up verbatim from hand-authored reference content (`ml-service/data/veterinary-reference/`,
+`## Precautions`/`## Next steps` sections) by exact match on the diagnosis, not a similarity
+search. This applies to every diagnosis path, including M8's placeholder — the guidance is
+real, only the diagnosis it's attached to might be a placeholder guess. See
+[docs/specs/M10-precautions-next-steps.md](specs/M10-precautions-next-steps.md) for why
+static lookup was chosen over LLM generation for this specific field. `[]` on lookup failure
+(never a hard failure, same principle as `sources`).
+
 ## `backend` endpoints (contract summary, M3)
 
 `POST /api/cattle` — create a cattle record.
@@ -104,11 +115,13 @@ Response (`201`):
   "confidence": 0.81,
   "explanation": "...",
   "recommendedAction": "escalate_to_vet",
+  "precautions": ["Isolate the affected animal from the rest of the herd immediately.", "..."],
+  "nextSteps": ["Contact your veterinarian or local animal health authority immediately — this is a reportable disease.", "..."],
   "createdAt": "..."
 }
 ```
-Note: `explanation` is returned live from `ml-service` but not persisted — `diagnosis_case`
-has no column for it (see `docs/DECISIONS.md`).
+Note: `explanation`, `precautions`, and `nextSteps` are all returned live from `ml-service`
+but not persisted — `diagnosis_case` has no columns for them (see `docs/DECISIONS.md`).
 
 `POST /api/cattle/{cattleId}/diagnoses/image` (M8 phase 1) — multipart/form-data, one part
 named `image` (JPEG or PNG, ≤ 5MB). Base64-encodes the file and calls `ml-service` with

@@ -41,7 +41,8 @@ class DiagnosisServiceTest {
         when(cattleService.getOrThrow(1L)).thenReturn(cattle);
 
         DiagnosisResult mlResult = new DiagnosisResult(
-                "Foot and Mouth Disease", 0.81, "Predicted FMD...", "escalate_to_vet", List.of());
+                "Foot and Mouth Disease", 0.81, "Predicted FMD...", "escalate_to_vet", List.of(),
+                List.of("Isolate the animal."), List.of("Contact your vet immediately."));
         when(mlServiceClient.diagnose(anyMap(), any())).thenReturn(mlResult);
 
         Map<String, Object> symptoms = Map.of("fever", true);
@@ -50,6 +51,8 @@ class DiagnosisServiceTest {
         assertEquals("Foot and Mouth Disease", response.diagnosis());
         assertEquals(0.81, response.confidence());
         assertEquals("escalate_to_vet", response.recommendedAction());
+        assertEquals(List.of("Isolate the animal."), response.precautions());
+        assertEquals(List.of("Contact your vet immediately."), response.nextSteps());
         verify(diagnosisCaseRepository).save(any(DiagnosisCase.class));
     }
 
@@ -97,7 +100,7 @@ class DiagnosisServiceTest {
 
         DiagnosisResult mlResult = new DiagnosisResult(
                 "Lumpy Skin Disease", 0.5, "This is a placeholder image-based prediction...",
-                "escalate_to_vet", List.of());
+                "escalate_to_vet", List.of(), List.of(), List.of());
         when(mlServiceClient.diagnose(eq(Map.of()), isNull(), anyString())).thenReturn(mlResult);
 
         MultipartFile image = new MockMultipartFile("image", "cow.jpg", "image/jpeg", new byte[] {1, 2, 3});

@@ -20,3 +20,15 @@ as a reportable disease the way FMD or LSD are.
 
 This is a general educational summary for a learning project, not veterinary guidance —
 see the project's disclaimer.
+
+## Precautions
+
+- Reduce stress on the affected animal — minimize handling, transport, and mixing with other animals.
+- Ensure good ventilation and avoid overcrowding in housing.
+- Keep the animal warm, dry, and with easy access to feed and water.
+
+## Next steps
+
+- Consult a veterinarian promptly — early antibiotic treatment for the bacterial component significantly improves outcomes.
+- Monitor breathing rate, appetite, and temperature closely over the following days.
+- Review vaccination and weaning/transport practices for the rest of the herd to reduce future risk.

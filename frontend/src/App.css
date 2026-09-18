@@ -322,6 +322,29 @@ section[data-urgent='true'] [role='alert'] {
   opacity: 0.85;
 }
 
+.guidance-block {
+  margin-top: 14px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+}
+
+.guidance-block h3 {
+  margin: 0 0 6px;
+  font-size: 1em;
+  color: var(--text-h);
+}
+
+.guidance-block ul {
+  margin: 0;
+  padding-left: 20px;
+}
+
+.guidance-block li {
+  margin: 4px 0;
+}
+
 @media (max-width: 480px) {
   .diagnosis-result {
     flex-direction: column;

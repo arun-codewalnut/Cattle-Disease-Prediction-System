@@ -1,6 +1,7 @@
 package com.cattlecare.backend.diagnosis.dto;
 
 import java.time.Instant;
+import java.util.List;
 
 import com.cattlecare.backend.diagnosis.DiagnosisCase;
 
@@ -11,9 +12,15 @@ public record DiagnosisCaseResponse(
         Double confidence,
         String explanation,
         String recommendedAction,
+        List<String> precautions,
+        List<String> nextSteps,
         Instant createdAt) {
 
-    public static DiagnosisCaseResponse from(DiagnosisCase entity, String explanation) {
+    // precautions/nextSteps are, like explanation, returned live from ml-service and never
+    // persisted (docs/specs/M10-precautions-next-steps.md — same precedent as explanation,
+    // see docs/API_CONTRACTS.md).
+    public static DiagnosisCaseResponse from(
+            DiagnosisCase entity, String explanation, List<String> precautions, List<String> nextSteps) {
         return new DiagnosisCaseResponse(
                 entity.getId(),
                 entity.getCattleId(),
@@ -21,6 +28,8 @@ public record DiagnosisCaseResponse(
                 entity.getConfidence(),
                 explanation,
                 entity.getRecommendedAction(),
+                precautions,
+                nextSteps,
                 entity.getCreatedAt());
     }
 }

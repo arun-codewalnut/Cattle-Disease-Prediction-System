@@ -19,3 +19,15 @@ there's no specific antiviral cure.
 
 This is a general educational summary for a learning project, not veterinary guidance —
 see the project's disclaimer.
+
+## Precautions
+
+- Isolate the affected animal and reduce its exposure to biting insects (fly/tick control) to limit further spread.
+- Restrict movement of animals, people, and equipment on and off the farm.
+- Avoid moving unaffected animals near affected ones until the situation is assessed.
+
+## Next steps
+
+- Contact your veterinarian or local animal health authority immediately — this is a reportable disease and must not be handled without official involvement.
+- Ask about vaccination options for the rest of the herd where available.
+- Follow any quarantine or biosecurity instructions given by animal health authorities.

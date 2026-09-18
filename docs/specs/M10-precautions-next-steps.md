@@ -1,0 +1,135 @@
+# Spec: Diagnosis precautions and next-steps
+
+**Milestone**: M10
+**Status**: in progress
+
+## Actor + goal
+
+A farmer/vet who just received a diagnosis gets concrete guidance beyond the urgency label —
+what to do right now (precautions) and what to do next (next steps) — for every diagnosis
+outcome (symptom-based today; image-based once M9 lands a real model), without that guidance
+ever softening the existing `escalate_to_vet` rule for reportable diseases.
+
+## Design decision: deterministic lookup, not LLM generation
+
+`explain_node`'s `explanation` is LLM-generated (grounded by RAG, falling back to a
+template). Precautions/next-steps are **not** generated the same way — they're retrieved
+verbatim from hand-authored reference content via an exact metadata lookup, never invented
+by the LLM. Reasoning:
+
+- Precaution/next-step text is treatment-adjacent — higher stakes than an explanatory
+  paragraph. An LLM asked to "generate precautions" could, in principle, phrase something
+  that reads as softening the escalation rule (e.g. suggesting monitoring is sufficient for
+  a reportable disease) even with a careful system prompt. A human-authored, tested,
+  verbatim-returned string can't drift in a way a prompt can't fully constrain.
+- `docs/DISCLAIMER.md` requires this to be exactly right, and "exactly right" is much easier
+  to guarantee (and unit test) for static, reviewed content than for LLM output.
+
+This means: no new LLM prompt, no new failure mode from an LLM call. The existing RAG
+collection is extended with two new sections per disease document, tagged with `section`
+metadata at ingest time, and looked up by exact `(source, section)` match — not the
+similarity search `retrieve()` already does for `explanation`.
+
+## Boundaries & failure states
+
+- Covers the 5 symptom-model diagnoses (`Foot and Mouth Disease`, `Lumpy Skin Disease`,
+  `Mastitis`, `Bovine Respiratory Disease`, `Healthy`) plus `"uncertain"` — every value
+  `diagnosis` can currently take. `Healthy` gets a new reference doc (general
+  preventive-care guidance) since it didn't need one before this milestone.
+- If the Chroma collection is empty/unreachable, or a diagnosis has no matching doc (should
+  not happen given the fixed diagnosis list, but don't assume): degrade to `[]` for both
+  fields, same "never blocks a diagnosis" principle as `retrieve()`'s existing behavior —
+  never raise, never guess.
+- Precautions/next-steps for a reportable disease (`REPORTABLE_DISEASES`) must always
+  include escalation-consistent guidance (contact a vet/authority, isolate the animal, don't
+  move it) — enforced by a dedicated test, not just manual review of the authored content.
+- **Not persisted to the database** — same precedent as `explanation`
+  (`docs/API_CONTRACTS.md`: "`explanation` is returned live from `ml-service` but not
+  persisted"). Returned live in every response; no new migration needed.
+- No personalized/dosage-specific treatment advice (medication names, amounts) — general
+  precautions only, consistent with `docs/DISCLAIMER.md`.
+
+## Examples
+
+**Response shape** (`ml-service` `POST /agent/diagnose`, extends the existing shape):
+```json
+{
+  "diagnosis": "Foot and Mouth Disease",
+  "confidence": 0.82,
+  "explanation": "...",
+  "recommended_action": "escalate_to_vet",
+  "sources": ["foot-and-mouth-disease"],
+  "precautions": [
+    "Isolate the affected animal from the rest of the herd immediately.",
+    "Restrict movement of animals, people, and equipment on/off the farm."
+  ],
+  "next_steps": [
+    "Contact your veterinarian or local animal health authority right away — this is a reportable disease.",
+    "Do not wait for symptoms to worsen before seeking help."
+  ]
+}
+```
+
+**`Healthy` case**: `precautions`/`next_steps` are general preventive-care guidance (routine
+monitoring, vaccination schedule reminders), not empty — a `monitor` recommendation
+shouldn't mean "nothing to say."
+
+**`uncertain` case**: generic guidance ("provide more symptom detail or consult a vet
+directly"), consistent with `_template_explanation`'s existing uncertain-case wording.
+
+## Not in scope
+
+- Any new species (M11-M14) — cattle-only, same as everything before it.
+- LLM-generated or personalized precautions — see design decision above.
+- Database persistence of these fields (see Boundaries).
+- Image-based diagnosis (M8's placeholder explicitly skips the LLM/RAG explain path — this
+  milestone doesn't change that; once M9 lands a real image model and removes the
+  placeholder branch, image-based diagnoses get precautions/next-steps for free through the
+  same `diagnosis`-keyed lookup).
+
+## Acceptance criteria
+
+- [x] Spec written and agreed in `docs/specs/` before implementation.
+- [x] `ml-service/data/veterinary-reference/` extended: `## Precautions` and `## Next steps`
+      sections on all 4 existing disease docs, plus a new `healthy.md`.
+- [x] `app/rag/ingest.py` tags each chunk with a `section` metadata field (parsed from `##`
+      headers), not just `source`.
+- [x] A new deterministic lookup (not `retrieve()`'s similarity search) returns
+      precautions/next-steps for a given diagnosis via exact `(source, section)` match.
+- [x] `ml-service`'s `DiagnoseResponse` includes `precautions: list[str]` and
+      `next_steps: list[str]`; `run_diagnosis()`'s returned dict includes both.
+- [x] Reportable diseases' precautions/next-steps always include escalation-consistent
+      guidance — covered by an explicit test, not just manual review.
+- [x] `backend`'s `DiagnosisResult`/`DiagnosisCaseResponse` thread the two new fields
+      through (live in the response, not persisted — see Boundaries).
+- [x] `frontend`'s `DiagnosisResult.jsx` renders both, visually distinct from the existing
+      explanation/action, for both symptom-based results.
+- [x] `docs/API_CONTRACTS.md` updated for the new fields.
+- [x] Full build/test suite green across all three services — ml-service native (36/2
+      skipped) and via Docker with real chromadb (48/48), backend (15/15), frontend
+      (lint + 7/7 + build) — plus manual end-to-end verification against the real running
+      stack (live `ml-service` in Docker with the real Chroma collection, native `backend`,
+      `frontend` dev server): a confident Foot and Mouth Disease diagnosis rendered real,
+      escalation-consistent precautions/next-steps in the browser.
+
+## Agent mirror-back
+
+**Intent**: give every diagnosis concrete, safe, never-softened guidance beyond the urgency
+label — sourced from reviewed static content, not LLM generation, because the stakes of this
+particular field are too high to leave to a prompt.
+
+**Inputs/outputs**: no new inputs. Output: two new `list[str]` fields threaded through all
+three services' existing response shapes.
+
+**Assumptions flagged before coding**:
+1. Deterministic lookup over LLM generation — the core design decision above, flagged since
+   it diverges from `explanation`'s LLM-grounded-by-RAG pattern despite living in the same
+   `explain`-adjacent part of the graph.
+2. New `healthy.md` reference doc — the issue didn't explicitly ask for `Healthy` coverage,
+   but leaving the most common outcome without precautions/next-steps would be a worse user
+   experience than the reportable-disease cases, so it's included rather than treated as a
+   future gap.
+3. Implemented as a new `precautions_node` between `explain` and `recommend` in the LangGraph
+   graph (not folded into `explain_node`) — keeps each node single-purpose, consistent with
+   the existing intake/predict/explain/recommend separation's own stated philosophy ("every
+   path through the system is known in advance and auditable").

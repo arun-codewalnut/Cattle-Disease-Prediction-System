@@ -20,6 +20,8 @@ class DiagnoseResponse(BaseModel):
     explanation: str
     recommended_action: str
     sources: list[str]
+    precautions: list[str]
+    next_steps: list[str]
 
 
 @router.post("/agent/diagnose", response_model=DiagnoseResponse)

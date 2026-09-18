@@ -3,7 +3,7 @@
 Living snapshot of project state. Update this whenever you finish a meaningful chunk of work —
 this is what an agent (or you) reads first when resuming.
 
-_Last updated: 2026-09-18 (session 3)_
+_Last updated: 2026-09-18 (session 4)_
 
 ## Known gaps
 
@@ -135,15 +135,42 @@ _Last updated: 2026-09-18 (session 3)_
   [docs/specs/M9-cattle-image-classifier.md](docs/specs/M9-cattle-image-classifier.md).
   Baseline re-verified unaffected before starting: ml-service 29/2 (skipped), backend 15/15,
   frontend 7/7 + lint + build, all green — this session's change is docs-only.
+- **M9 PR merged to `main`** (issue #18 stays open — only the spec-written acceptance
+  criterion was satisfied, per that PR's own scope).
+- **M10 done, not yet merged** (issue #19, branch `feat/m10-precautions-next-steps`,
+  branched from synced `main`): every diagnosis now returns `precautions`/`next_steps`
+  alongside `explanation`. **Deliberately not LLM-generated** — looked up verbatim from the
+  veterinary-reference docs via a new exact `(disease, section)` match
+  (`get_precautions()`), never a similarity search, so it can never soften the
+  `REPORTABLE_DISEASES` escalation rule. The 4 existing disease docs got new
+  `## Precautions`/`## Next steps` sections; a new `healthy.md` covers the `Healthy` case
+  (didn't need reference material before this). `app/rag/ingest.py` now tags each chunk
+  with a `section` metadata field; `retrieve()` (used for the LLM-grounded `explanation`)
+  is now filtered to `section: overview` only, so the two kinds of content never mix — a new
+  regression test locks this in. New `add_precautions` LangGraph node between `explain` and
+  `recommend`. Threaded through `backend` (`DiagnosisResult`/`DiagnosisCaseResponse`, live in
+  the response, not persisted — same precedent as `explanation`) and `frontend`
+  (`DiagnosisResult.jsx`, new "🛡️ Precautions"/"📋 Next steps" sections). Spec:
+  [docs/specs/M10-precautions-next-steps.md](docs/specs/M10-precautions-next-steps.md).
+  **Validated three ways**: ml-service native 36/2 (skipped), ml-service **in Docker with
+  real chromadb 48/48** (including the reportable-disease escalation-wording test and the
+  retrieve()-isolation regression test), backend 15/15, frontend lint + 7/7 + build all
+  green, **plus live end-to-end verification** — ran ml-service in Docker against the real
+  re-ingested Chroma collection, backend and frontend natively, submitted real FMD symptoms
+  in a real browser and confirmed real, escalation-consistent precautions/next-steps
+  rendered. (One false alarm along the way: an em-dash that looked mangled in a `curl | python`
+  verification command turned out to be that command's own console-encoding artifact, not an
+  app bug — confirmed by forcing UTF-8 mode and re-checking.)
 
 ## In Progress
 
-- M9 (issue #18) — spec written and blocked on the dataset; no code changes yet.
+- M10 (issue #19) — implementation done, PR not yet opened/merged.
 
 ## Not Started
 
 - M7: Notifications (email/WhatsApp free tier)
-- M10: diagnosis precautions/next-steps (issue #19)
+- M9 real implementation (issue #18 still open — only the spec landed; training itself is
+  blocked on the Kaggle dataset, see HANDOFF.md's Blockers)
 - M11–M14: Buffalo, Sheep, Cat, Dog (issues #20–#23)
 
 Deployment (formerly M8 in the original numbering) was dropped from scope — see
