@@ -3,7 +3,7 @@
 Living snapshot of project state. Update this whenever you finish a meaningful chunk of work —
 this is what an agent (or you) reads first when resuming.
 
-_Last updated: 2026-09-18 (session 4)_
+_Last updated: 2026-09-18 (session 5)_
 
 ## Known gaps
 
@@ -161,17 +161,51 @@ _Last updated: 2026-09-18 (session 4)_
   rendered. (One false alarm along the way: an em-dash that looked mangled in a `curl | python`
   verification command turned out to be that command's own console-encoding artifact, not an
   app bug — confirmed by forcing UTF-8 mode and re-checking.)
+- **M10 PR merged to `main`** (issue #19) — confirmed via `git pull` before branching for M11.
+- **M11 done, not yet merged** (issue #20, branch `feat/m11-buffalo-disease-detection`,
+  branched from synced `main`): Buffalo added as a second species, with two significant
+  design decisions made and logged (`docs/DECISIONS.md`), not deferred:
+  1. **Renamed `Cattle` → `Animal` throughout `backend`** — entity/repository/service/
+     controller/DTOs (package `.cattle` → `.animal`), `POST /api/cattle` →
+     `POST /api/animals`, `diagnosis_case.cattle_id` → `animal_id`, error codes
+     `CATTLE_NOT_FOUND`/`CATTLE_TAG_DUPLICATE` → `ANIMAL_NOT_FOUND`/`ANIMAL_TAG_DUPLICATE`.
+     New Flyway migration (`V2__rename_cattle_to_animal.sql`, `V1__init.sql` untouched).
+     Done now rather than deferred, since M12–M14 (Sheep/Cat/Dog) would otherwise repeat
+     this exact discussion. Breaking API change, no versioning ceremony — acceptable per
+     the standing local/learning-project position in `docs/DECISIONS.md`.
+  2. **Buffalo diagnosis reuses the existing cattle-trained symptom model**, explicitly
+     disclosed in the UI — no buffalo-specific dataset was found (same wall M9 hit for
+     cattle images; confirmed via web research, not assumed, that FMD and LSD both affect
+     buffalo, though LSD susceptibility is documented as lower than in cattle). `species`
+     (`COW`/`BUFFALO`, `@Enumerated(STRING)`, extensible) is captured on the `Animal` record
+     and shown in the UI but **not forwarded to ml-service** — no per-species model exists
+     yet to justify threading it further.
+  Also: `GlobalExceptionHandler` gains a proactive fix for malformed JSON / invalid enum
+  values (`HttpMessageNotReadableException`) — the same raw-exception-leak bug class fixed
+  reactively in M8, caught here before a user hit it, since an invalid `species` string is
+  the first thing that could trigger it. Frontend: `AnimalIdentityFields` (renamed from
+  `CattleIdentityFields`) gets a species `<select>`; a visible disclosure renders whenever
+  a non-`COW` species is chosen. Spec:
+  [docs/specs/M11-buffalo-disease-detection.md](docs/specs/M11-buffalo-disease-detection.md).
+  **Validated**: backend 17/17 (clean build, migration applies correctly), ml-service
+  unaffected (36/2 skipped, no ml-service files touched), frontend lint + 9/9 + build all
+  green, **plus live end-to-end verification**: created a Buffalo animal via
+  `POST /api/animals` in a real browser, confirmed the species disclosure rendered,
+  submitted symptoms, and confirmed the diagnosis correctly escalated (`Foot and Mouth
+  Disease`, `escalate_to_vet`) using the shared model exactly as designed — plus a direct
+  `curl` check of the new `INVALID_REQUEST_BODY` error path.
 
 ## In Progress
 
-- M10 (issue #19) — implementation done, PR not yet opened/merged.
+- M11 (issue #20) — implementation done, PR not yet opened/merged.
 
 ## Not Started
 
 - M7: Notifications (email/WhatsApp free tier)
 - M9 real implementation (issue #18 still open — only the spec landed; training itself is
   blocked on the Kaggle dataset, see HANDOFF.md's Blockers)
-- M11–M14: Buffalo, Sheep, Cat, Dog (issues #20–#23)
+- M12–M14: Sheep, Cat, Dog (issues #21–#23) — can now reuse M11's species-architecture
+  pattern without re-litigating it (per that spec's own intent)
 
 Deployment (formerly M8 in the original numbering) was dropped from scope — see
 `docs/DECISIONS.md`. The M8 number was reused for image-based disease recognition, a
