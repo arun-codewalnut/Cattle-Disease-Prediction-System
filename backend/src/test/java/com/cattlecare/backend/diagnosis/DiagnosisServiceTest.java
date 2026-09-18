@@ -4,6 +4,9 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyMap;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -14,6 +17,8 @@ import java.util.Map;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;
+import org.springframework.mock.web.MockMultipartFile;
+import org.springframework.web.multipart.MultipartFile;
 
 import com.cattlecare.backend.cattle.Cattle;
 import com.cattlecare.backend.cattle.CattleService;
@@ -82,6 +87,69 @@ class DiagnosisServiceTest {
         ApiException ex = assertThrows(ApiException.class, () -> diagnosisService.submitSymptoms(1L, Map.of()));
 
         assertEquals("ML_SERVICE_ERROR", ex.getCode());
+        verify(diagnosisCaseRepository, never()).save(any());
+    }
+
+    @Test
+    void submitImage_success_encodesAsBase64AndPersistsWithEmptySymptoms() {
+        Cattle cattle = new Cattle("COW-001", 42L);
+        when(cattleService.getOrThrow(1L)).thenReturn(cattle);
+
+        DiagnosisResult mlResult = new DiagnosisResult(
+                "Lumpy Skin Disease", 0.5, "This is a placeholder image-based prediction...",
+                "escalate_to_vet", List.of());
+        when(mlServiceClient.diagnose(eq(Map.of()), isNull(), anyString())).thenReturn(mlResult);
+
+        MultipartFile image = new MockMultipartFile("image", "cow.jpg", "image/jpeg", new byte[] {1, 2, 3});
+        DiagnosisCaseResponse response = diagnosisService.submitImage(1L, image);
+
+        assertEquals("Lumpy Skin Disease", response.diagnosis());
+        assertEquals("escalate_to_vet", response.recommendedAction());
+        verify(mlServiceClient).diagnose(eq(Map.of()), isNull(), eq("AQID")); // base64("\x01\x02\x03")
+        verify(diagnosisCaseRepository).save(any(DiagnosisCase.class));
+    }
+
+    @Test
+    void submitImage_unsupportedType_rejectedBeforeCattleLookupOrMlServiceCall() {
+        MultipartFile image = new MockMultipartFile("image", "cow.gif", "image/gif", new byte[] {1});
+
+        ApiException ex = assertThrows(ApiException.class, () -> diagnosisService.submitImage(1L, image));
+
+        assertEquals("UNSUPPORTED_IMAGE_TYPE", ex.getCode());
+        verify(cattleService, never()).getOrThrow(any());
+        verify(mlServiceClient, never()).diagnose(anyMap(), any(), any());
+    }
+
+    @Test
+    void submitImage_tooLarge_rejectedBeforeCattleLookupOrMlServiceCall() {
+        byte[] oversized = new byte[6 * 1024 * 1024];
+        MultipartFile image = new MockMultipartFile("image", "cow.jpg", "image/jpeg", oversized);
+
+        ApiException ex = assertThrows(ApiException.class, () -> diagnosisService.submitImage(1L, image));
+
+        assertEquals("IMAGE_TOO_LARGE", ex.getCode());
+        verify(cattleService, never()).getOrThrow(any());
+        verify(mlServiceClient, never()).diagnose(anyMap(), any(), any());
+    }
+
+    @Test
+    void submitImage_missingFile_rejected() {
+        MultipartFile empty = new MockMultipartFile("image", "empty.jpg", "image/jpeg", new byte[0]);
+
+        ApiException ex = assertThrows(ApiException.class, () -> diagnosisService.submitImage(1L, empty));
+
+        assertEquals("IMAGE_REQUIRED", ex.getCode());
+    }
+
+    @Test
+    void submitImage_cattleNotFound_neverCallsMlService() {
+        MultipartFile image = new MockMultipartFile("image", "cow.jpg", "image/jpeg", new byte[] {1});
+        when(cattleService.getOrThrow(999L))
+                .thenThrow(new ApiException("CATTLE_NOT_FOUND", "not found", HttpStatus.NOT_FOUND));
+
+        assertThrows(ApiException.class, () -> diagnosisService.submitImage(999L, image));
+
+        verify(mlServiceClient, never()).diagnose(anyMap(), any(), any());
         verify(diagnosisCaseRepository, never()).save(any());
     }
 }
