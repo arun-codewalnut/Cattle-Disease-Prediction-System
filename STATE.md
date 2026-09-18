@@ -3,7 +3,7 @@
 Living snapshot of project state. Update this whenever you finish a meaningful chunk of work —
 this is what an agent (or you) reads first when resuming.
 
-_Last updated: 2026-09-18_
+_Last updated: 2026-09-18 (session 3)_
 
 ## Known gaps
 
@@ -122,15 +122,27 @@ _Last updated: 2026-09-18_
   design question flagged in that issue, not decided yet), and M13 (Cat) is a real pivot from
   livestock to companion-animal diseases, flagged for its own `DISCLAIMER.md` review.
   `docs/ROADMAP.md` updated to list all six.
+- **M8 phase 1 merged to `main`** (issue #16, PR #24) — confirmed via `git pull` before
+  branching for M9.
+- **M9 spec written, blocked on data** (issue #18, branch `feat/m9-cattle-image-classifier`):
+  approach agreed (transfer learning on a pretrained torchvision backbone — new `torch`/
+  `torchvision` deps — fine-tuning only the classifier head; scope limited to the 3 classes
+  the candidate Kaggle dataset actually has: Healthy/LSD/FMD, explicitly not the symptom
+  model's other 2). **Blocked**: no Kaggle account/API token in this environment, and unlike
+  M1's synthetic-tabular-data fallback, there's no honest synthetic fallback for images — a
+  procedurally-generated "photo" would teach a CNN nothing real. Nothing past the spec
+  happens until the dataset is actually available locally. Spec:
+  [docs/specs/M9-cattle-image-classifier.md](docs/specs/M9-cattle-image-classifier.md).
+  Baseline re-verified unaffected before starting: ml-service 29/2 (skipped), backend 15/15,
+  frontend 7/7 + lint + build, all green — this session's change is docs-only.
 
 ## In Progress
 
-- M8 phase 1 (issue #16) — implementation done, PR not yet opened/merged.
+- M9 (issue #18) — spec written and blocked on the dataset; no code changes yet.
 
 ## Not Started
 
 - M7: Notifications (email/WhatsApp free tier)
-- M9: real cattle image classifier (issue #18)
 - M10: diagnosis precautions/next-steps (issue #19)
 - M11–M14: Buffalo, Sheep, Cat, Dog (issues #20–#23)
 
