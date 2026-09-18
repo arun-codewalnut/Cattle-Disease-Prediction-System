@@ -24,8 +24,24 @@ Tracked as GitHub Milestones + Issues on the repo.
       [#7](https://github.com/arun-codewalnut/Cattle-Disease-Prediction-System/issues/7)
 - [ ] **M8** — Image-based disease recognition, phase 1: wire upload → agent's
       `predict_image` node end-to-end behind a placeholder classifier (no dataset/training
-      yet — that's a follow-up issue) — issue:
+      yet — that's M9) — issue:
       [#16](https://github.com/arun-codewalnut/Cattle-Disease-Prediction-System/issues/16)
+- [ ] **M9** — Train a real cattle image classifier (Healthy/LSD/FMD), replacing M8's
+      byte-hash placeholder — issue:
+      [#18](https://github.com/arun-codewalnut/Cattle-Disease-Prediction-System/issues/18)
+- [ ] **M10** — Diagnosis precautions and next-steps, RAG-grounded (species-agnostic,
+      applies to the existing cattle flow immediately) — issue:
+      [#19](https://github.com/arun-codewalnut/Cattle-Disease-Prediction-System/issues/19)
+- [ ] **M11** — Buffalo disease detection — first new species; generalizes the domain model
+      to support animal type — issue:
+      [#20](https://github.com/arun-codewalnut/Cattle-Disease-Prediction-System/issues/20)
+- [ ] **M12** — Sheep disease detection — issue:
+      [#21](https://github.com/arun-codewalnut/Cattle-Disease-Prediction-System/issues/21)
+- [ ] **M13** — Cat disease detection — first companion-animal species, a real domain pivot
+      from livestock — issue:
+      [#22](https://github.com/arun-codewalnut/Cattle-Disease-Prediction-System/issues/22)
+- [ ] **M14** — Dog disease detection — issue:
+      [#23](https://github.com/arun-codewalnut/Cattle-Disease-Prediction-System/issues/23)
 
 **Deployment is explicitly out of scope** — this stays a local/learning project, not
 something hosted for real users. Don't add a deployment milestone back without checking
@@ -35,6 +51,9 @@ Also tracked (not milestone-numbered): frontend UI redesign (cattle-themed, resp
 colorful, icon-driven) — issue:
 [#15](https://github.com/arun-codewalnut/Cattle-Disease-Prediction-System/issues/15).
 
-Stretch (post-MVP): real trained image-based CNN classifier (M8 phase 2, once a labeled
-dataset exists), IoT sensor anomaly detection, herd-level risk view, offline-first mobile
+**Target species** (per user request, 2026-09-18): Cow (done), Buffalo, Sheep, Cat, Dog —
+sequenced M11→M14 above. M11 is where the domain model first generalizes beyond cattle; see
+that issue's "open design question" before assuming the shape of anything downstream.
+
+Stretch (post-MVP): IoT sensor anomaly detection, herd-level risk view, offline-first mobile
 client.
