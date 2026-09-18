@@ -168,3 +168,29 @@ def test_uncertain_diagnosis_never_calls_retrieval(monkeypatch):
 
     assert result["diagnosis"] == "uncertain"
     assert calls == []
+
+
+def test_uncertain_diagnosis_gets_hardcoded_precautions():
+    # "uncertain" isn't a disease, so get_precautions() short-circuits before touching
+    # Chroma at all (see app/rag/retrieval.py) — this runs natively, no chromadb needed,
+    # unlike the real-disease precautions tests in test_rag_retrieval.py.
+    result = run_diagnosis({})
+
+    assert result["diagnosis"] == "uncertain"
+    assert result["precautions"] == ["Keep monitoring the animal closely for any new or worsening symptoms."]
+    assert result["next_steps"] == [
+        "Provide more symptom details for a more confident prediction, or consult a vet directly."
+    ]
+
+
+def test_precautions_lookup_failure_does_not_block_diagnosis(monkeypatch):
+    def _broken_get_precautions(diagnosis, persist_dir=None):
+        raise RuntimeError("simulated Chroma failure")
+
+    monkeypatch.setattr(graph_module, "get_precautions", _broken_get_precautions)
+
+    result = run_diagnosis(CONFIDENT_SYMPTOMS)
+
+    assert result["diagnosis"] == "Foot and Mouth Disease"
+    assert result["precautions"] == []
+    assert result["next_steps"] == []

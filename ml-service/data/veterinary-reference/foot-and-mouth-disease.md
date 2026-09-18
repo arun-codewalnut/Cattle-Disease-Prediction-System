@@ -18,3 +18,15 @@ strict biosecurity, movement restriction, and supportive care under veterinary g
 
 This is a general educational summary for a learning project, not veterinary guidance —
 see the project's disclaimer.
+
+## Precautions
+
+- Isolate the affected animal from the rest of the herd immediately.
+- Restrict movement of animals, people, vehicles, and equipment on and off the farm.
+- Avoid moving other animals to or from the property until authorities give guidance.
+
+## Next steps
+
+- Contact your veterinarian or local animal health authority immediately — this is a reportable disease and must not be handled without official involvement.
+- Do not wait for symptoms to worsen before seeking help; early reporting limits spread.
+- Follow any quarantine or biosecurity instructions given by animal health authorities.

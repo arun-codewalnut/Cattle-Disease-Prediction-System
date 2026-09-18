@@ -20,3 +20,15 @@ spread between animals via milking equipment.
 
 This is a general educational summary for a learning project, not veterinary guidance —
 see the project's disclaimer.
+
+## Precautions
+
+- Milk the affected quarter last, or with separate equipment, to avoid spreading infection to other cows.
+- Keep the udder and milking equipment clean, and maintain good milking hygiene for the rest of the herd.
+- Avoid using milk from the affected quarter for human consumption or calf feeding until a vet advises otherwise.
+
+## Next steps
+
+- Consult a veterinarian for diagnosis confirmation and appropriate antibiotic treatment — mastitis usually needs treatment guided by a vet, not home remedies.
+- Monitor the animal's temperature, appetite, and milk appearance daily until resolved.
+- Review milking hygiene and housing conditions to reduce the risk of recurrence or spread to other cows.

@@ -14,6 +14,10 @@ what it's given.
 docs/specs/M8-image-diagnosis-phase1.md. It still flows through `recommend`, so the
 REPORTABLE_DISEASES escalation rule applies identically regardless of which path produced
 the diagnosis.
+
+`precautions` (M10) is a deterministic lookup, not LLM-generated — unlike `explanation`, its
+content is reviewed, static text returned verbatim by diagnosis, so it can never soften the
+REPORTABLE_DISEASES escalation rule. See docs/specs/M10-precautions-next-steps.md.
 """
 from __future__ import annotations
 
@@ -30,7 +34,7 @@ from langgraph.graph import END, StateGraph
 from app.agent.llm import get_llm
 from app.errors import ApiError
 from app.models.symptom_model import predict
-from app.rag.retrieval import retrieve
+from app.rag.retrieval import get_precautions, retrieve
 
 # Diseases that must always escalate regardless of model confidence, per docs/DISCLAIMER.md.
 # Deliberately a fixed, auditable list here rather than anything the model (or the LLM)
@@ -63,6 +67,8 @@ class DiagnosisState(TypedDict, total=False):
     top_features: list[dict[str, Any]]
     image_placeholder: bool
     explanation: str
+    precautions: list[str]
+    next_steps: list[str]
     recommended_action: str
     sources: list[str]
 
@@ -216,6 +222,17 @@ def explain_node(state: DiagnosisState) -> dict[str, Any]:
         return {"explanation": _template_explanation(state), "sources": []}
 
 
+def precautions_node(state: DiagnosisState) -> dict[str, Any]:
+    # get_precautions() itself never raises (see app/rag/retrieval.py) — stay defensive
+    # here too anyway, same belt-and-suspenders principle explain_node uses around
+    # retrieve(): a diagnosis must never fail because guidance text couldn't be looked up.
+    try:
+        result = get_precautions(state["diagnosis"])
+    except Exception:
+        return {"precautions": [], "next_steps": []}
+    return {"precautions": result["precautions"], "next_steps": result["next_steps"]}
+
+
 def recommend_node(state: DiagnosisState) -> dict[str, Any]:
     return {"recommended_action": _recommended_action(state["diagnosis"])}
 
@@ -226,6 +243,7 @@ def _build_graph():
     builder.add_node("predict_symptoms", predict_symptoms_node)
     builder.add_node("predict_image", predict_image_node)
     builder.add_node("explain", explain_node)
+    builder.add_node("add_precautions", precautions_node)
     builder.add_node("recommend", recommend_node)
 
     builder.set_entry_point("intake")
@@ -236,7 +254,8 @@ def _build_graph():
     )
     builder.add_edge("predict_symptoms", "explain")
     builder.add_edge("predict_image", "explain")
-    builder.add_edge("explain", "recommend")
+    builder.add_edge("explain", "add_precautions")
+    builder.add_edge("add_precautions", "recommend")
     builder.add_edge("recommend", END)
 
     return builder.compile()
@@ -265,4 +284,6 @@ def run_diagnosis(
         "explanation": final_state["explanation"],
         "recommended_action": final_state["recommended_action"],
         "sources": final_state.get("sources", []),
+        "precautions": final_state.get("precautions", []),
+        "next_steps": final_state.get("next_steps", []),
     }
