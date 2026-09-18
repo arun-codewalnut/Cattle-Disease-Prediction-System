@@ -95,22 +95,32 @@ real, only the diagnosis it's attached to might be a placeholder guess. See
 static lookup was chosen over LLM generation for this specific field. `[]` on lookup failure
 (never a hard failure, same principle as `sources`).
 
-## `backend` endpoints (contract summary, M3)
+## `backend` endpoints (contract summary, M3; renamed cattle → animal in M11)
 
-`POST /api/cattle` — create a cattle record.
+**M11 renamed every `/api/cattle...` endpoint to `/api/animals...`** (and `cattleId` →
+`animalId` in responses) when the domain generalized beyond cattle-only — see
+[docs/specs/M11-buffalo-disease-detection.md](specs/M11-buffalo-disease-detection.md). This
+is a breaking change with no versioning ceremony, acceptable per `docs/DECISIONS.md`'s
+standing position that this is a local/learning project with no external consumers.
 
-Request: `{"tagNumber": "COW-001", "farmId": 42}`
-Response (`201`): `{"id": 1, "tagNumber": "COW-001", "farmId": 42, "createdAt": "..."}`
+`POST /api/animals` — create an animal record.
 
-`POST /api/cattle/{cattleId}/diagnoses` — submit symptoms for a cattle, calls `ml-service`,
-persists the result.
+Request: `{"tagNumber": "COW-001", "farmId": 42, "species": "COW"}` — `species` is
+`"COW"` or `"BUFFALO"` (M11; grows one value per species milestone, see `docs/ROADMAP.md`
+M12–M14), required.
+Response (`201`): `{"id": 1, "tagNumber": "COW-001", "farmId": 42, "species": "COW", "createdAt": "..."}`
+
+`POST /api/animals/{animalId}/diagnoses` — submit symptoms for an animal, calls
+`ml-service`, persists the result. **`species` is not forwarded to `ml-service`** — no
+per-species model exists yet (M11 scope), so every species is diagnosed with the same
+cattle-trained model; the frontend discloses this for non-`COW` species.
 
 Request: `{"symptoms": {"fever": true, "...": "..."}}`
 Response (`201`):
 ```json
 {
   "id": 7,
-  "cattleId": 1,
+  "animalId": 1,
   "diagnosis": "Foot and Mouth Disease",
   "confidence": 0.81,
   "explanation": "...",
@@ -123,16 +133,19 @@ Response (`201`):
 Note: `explanation`, `precautions`, and `nextSteps` are all returned live from `ml-service`
 but not persisted — `diagnosis_case` has no columns for them (see `docs/DECISIONS.md`).
 
-`POST /api/cattle/{cattleId}/diagnoses/image` (M8 phase 1) — multipart/form-data, one part
+`POST /api/animals/{animalId}/diagnoses/image` (M8 phase 1) — multipart/form-data, one part
 named `image` (JPEG or PNG, ≤ 5MB). Base64-encodes the file and calls `ml-service` with
 `image_base64` (`symptoms: {}`); persists and responds with the same
 `DiagnosisCaseResponse` shape as the symptom endpoint above. **The image itself is never
 persisted to disk** — see
 [docs/specs/M8-image-diagnosis-phase1.md](specs/M8-image-diagnosis-phase1.md) for why.
 
-**New error codes** (backend, via `ApiException`): `CATTLE_NOT_FOUND` (`404`),
-`CATTLE_TAG_DUPLICATE` (`409`), `ML_SERVICE_UNAVAILABLE` (`503`, connection failure to
+**New error codes** (backend, via `ApiException`): `ANIMAL_NOT_FOUND` (`404`),
+`ANIMAL_TAG_DUPLICATE` (`409`), `ML_SERVICE_UNAVAILABLE` (`503`, connection failure to
 ml-service), `ML_SERVICE_ERROR` (`502`, ml-service returned an error response),
 `UNSUPPORTED_IMAGE_TYPE` (`400`, not JPEG/PNG), `IMAGE_TOO_LARGE` (`400`, over 5MB),
 `IMAGE_REQUIRED` (`400`, no file part), `IMAGE_READ_FAILED` (`400`, couldn't read the
-uploaded bytes).
+uploaded bytes), `VALIDATION_FAILED` (`400`, a `@Valid` field failed, e.g. a blank
+`tagNumber` — `details` has one entry per rejected field), `INVALID_REQUEST_BODY` (`400`,
+malformed JSON or a value that doesn't fit the target type, e.g. an invalid `species`
+string — M11).
