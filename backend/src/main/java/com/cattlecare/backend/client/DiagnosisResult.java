@@ -10,5 +10,7 @@ public record DiagnosisResult(
         double confidence,
         String explanation,
         @JsonProperty("recommended_action") String recommendedAction,
-        List<String> sources) {
+        List<String> sources,
+        List<String> precautions,
+        @JsonProperty("next_steps") List<String> nextSteps) {
 }

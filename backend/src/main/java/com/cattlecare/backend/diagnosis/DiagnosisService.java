@@ -57,7 +57,7 @@ public class DiagnosisService {
                 result.recommendedAction());
         diagnosisCaseRepository.save(entity);
 
-        return DiagnosisCaseResponse.from(entity, result.explanation());
+        return DiagnosisCaseResponse.from(entity, result.explanation(), result.precautions(), result.nextSteps());
     }
 
     public DiagnosisCaseResponse submitImage(Long cattleId, MultipartFile image) {
@@ -86,7 +86,7 @@ public class DiagnosisService {
                 result.recommendedAction());
         diagnosisCaseRepository.save(entity);
 
-        return DiagnosisCaseResponse.from(entity, result.explanation());
+        return DiagnosisCaseResponse.from(entity, result.explanation(), result.precautions(), result.nextSteps());
     }
 
     private void validateImage(MultipartFile image) {
