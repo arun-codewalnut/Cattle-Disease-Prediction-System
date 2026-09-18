@@ -8,7 +8,7 @@ function jsonResponse(ok, body) {
 }
 
 async function fillAndSubmit(user) {
-  await user.type(screen.getByLabelText(/cattle tag number/i), 'COW-001')
+  await user.type(screen.getByLabelText(/animal tag number/i), 'COW-001')
   await user.type(screen.getByLabelText(/farm id/i), '42')
   await user.click(screen.getByLabelText(/fever/i))
   await user.click(screen.getByRole('button', { name: /get diagnosis/i }))
@@ -26,16 +26,16 @@ describe('DiagnosisIntake', () => {
     vi.unstubAllGlobals()
   })
 
-  it('submits cattle + symptoms and renders the diagnosis result', async () => {
+  it('submits animal + symptoms and renders the diagnosis result', async () => {
     const user = userEvent.setup()
     fetchMock
       .mockResolvedValueOnce(
-        jsonResponse(true, { id: 1, tagNumber: 'COW-001', farmId: 42, createdAt: '2026-01-01T00:00:00Z' })
+        jsonResponse(true, { id: 1, tagNumber: 'COW-001', farmId: 42, species: 'COW', createdAt: '2026-01-01T00:00:00Z' })
       )
       .mockResolvedValueOnce(
         jsonResponse(true, {
           id: 7,
-          cattleId: 1,
+          animalId: 1,
           diagnosis: 'Foot and Mouth Disease',
           confidence: 0.81,
           explanation: 'Predicted Foot and Mouth Disease with 81% confidence.',
@@ -55,16 +55,17 @@ describe('DiagnosisIntake', () => {
     expect(screen.getByText(/contact your veterinarian or local animal health authority/i)).toBeInTheDocument()
     expect(fetchMock).toHaveBeenCalledTimes(2)
 
-    const [cattleCall, diagnosisCall] = fetchMock.mock.calls
-    expect(cattleCall[0]).toMatch(/\/api\/cattle$/)
-    expect(diagnosisCall[0]).toMatch(/\/api\/cattle\/1\/diagnoses$/)
-    expect(cattleCall[1].headers['X-Correlation-Id']).toBeTruthy()
+    const [animalCall, diagnosisCall] = fetchMock.mock.calls
+    expect(animalCall[0]).toMatch(/\/api\/animals$/)
+    expect(diagnosisCall[0]).toMatch(/\/api\/animals\/1\/diagnoses$/)
+    expect(animalCall[1].headers['X-Correlation-Id']).toBeTruthy()
+    expect(JSON.parse(animalCall[1].body)).toMatchObject({ tagNumber: 'COW-001', farmId: 42, species: 'COW' })
   })
 
-  it('shows an error and never submits symptoms when cattle creation fails', async () => {
+  it('shows an error and never submits symptoms when animal creation fails', async () => {
     const user = userEvent.setup()
     fetchMock.mockResolvedValueOnce(
-      jsonResponse(false, { code: 'CATTLE_TAG_DUPLICATE', message: 'Tag already exists.', details: null })
+      jsonResponse(false, { code: 'ANIMAL_TAG_DUPLICATE', message: 'Tag already exists.', details: null })
     )
 
     render(<DiagnosisIntake />)
@@ -74,11 +75,11 @@ describe('DiagnosisIntake', () => {
     expect(fetchMock).toHaveBeenCalledTimes(1)
   })
 
-  it('shows an error when the diagnosis call fails after cattle creation succeeds', async () => {
+  it('shows an error when the diagnosis call fails after animal creation succeeds', async () => {
     const user = userEvent.setup()
     fetchMock
       .mockResolvedValueOnce(
-        jsonResponse(true, { id: 1, tagNumber: 'COW-001', farmId: 42, createdAt: '2026-01-01T00:00:00Z' })
+        jsonResponse(true, { id: 1, tagNumber: 'COW-001', farmId: 42, species: 'COW', createdAt: '2026-01-01T00:00:00Z' })
       )
       .mockResolvedValueOnce(
         jsonResponse(false, { code: 'ML_SERVICE_UNAVAILABLE', message: 'ml-service is unreachable.', details: null })
@@ -91,16 +92,16 @@ describe('DiagnosisIntake', () => {
     expect(fetchMock).toHaveBeenCalledTimes(2)
   })
 
-  it('submits cattle + an uploaded photo and renders the placeholder diagnosis result', async () => {
+  it('submits animal + an uploaded photo and renders the placeholder diagnosis result', async () => {
     const user = userEvent.setup()
     fetchMock
       .mockResolvedValueOnce(
-        jsonResponse(true, { id: 1, tagNumber: 'COW-001', farmId: 42, createdAt: '2026-01-01T00:00:00Z' })
+        jsonResponse(true, { id: 1, tagNumber: 'COW-001', farmId: 42, species: 'COW', createdAt: '2026-01-01T00:00:00Z' })
       )
       .mockResolvedValueOnce(
         jsonResponse(true, {
           id: 9,
-          cattleId: 1,
+          animalId: 1,
           diagnosis: 'Healthy',
           confidence: 0.5,
           explanation: 'This is a placeholder image-based prediction (Healthy, 50% confidence).',
@@ -112,7 +113,7 @@ describe('DiagnosisIntake', () => {
     const image = new File(['fake-image-bytes'], 'cow.jpg', { type: 'image/jpeg' })
 
     render(<DiagnosisIntake />)
-    await user.type(screen.getByLabelText(/cattle tag number/i), 'COW-001')
+    await user.type(screen.getByLabelText(/animal tag number/i), 'COW-001')
     await user.type(screen.getByLabelText(/farm id/i), '42')
     await user.upload(screen.getByLabelText(/upload a photo/i), image)
     await user.click(screen.getByRole('button', { name: /diagnose from photo/i }))
@@ -120,9 +121,9 @@ describe('DiagnosisIntake', () => {
     expect(await screen.findByText(/likely: healthy \(50% confidence\)/i)).toBeInTheDocument()
     expect(fetchMock).toHaveBeenCalledTimes(2)
 
-    const [cattleCall, imageCall] = fetchMock.mock.calls
-    expect(cattleCall[0]).toMatch(/\/api\/cattle$/)
-    expect(imageCall[0]).toMatch(/\/api\/cattle\/1\/diagnoses\/image$/)
+    const [animalCall, imageCall] = fetchMock.mock.calls
+    expect(animalCall[0]).toMatch(/\/api\/animals$/)
+    expect(imageCall[0]).toMatch(/\/api\/animals\/1\/diagnoses\/image$/)
     expect(imageCall[1].body).toBeInstanceOf(FormData)
     expect(imageCall[1].body.get('image')).toBe(image)
     expect(imageCall[1].headers['X-Correlation-Id']).toBeTruthy()
@@ -144,7 +145,7 @@ describe('DiagnosisIntake', () => {
     await user.click(screen.getByLabelText(/fever/i))
     await user.click(screen.getByRole('button', { name: /get diagnosis/i }))
 
-    expect(await screen.findByRole('alert')).toHaveTextContent('Please enter a cattle tag number.')
+    expect(await screen.findByRole('alert')).toHaveTextContent('Please enter an animal tag number.')
     expect(fetchMock).not.toHaveBeenCalled()
   })
 
@@ -157,7 +158,50 @@ describe('DiagnosisIntake', () => {
     await user.upload(screen.getByLabelText(/upload a photo/i), image)
     await user.click(screen.getByRole('button', { name: /diagnose from photo/i }))
 
-    expect(await screen.findByRole('alert')).toHaveTextContent('Please enter a cattle tag number.')
+    expect(await screen.findByRole('alert')).toHaveTextContent('Please enter an animal tag number.')
     expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('defaults species to Cow and shows no disclaimer', () => {
+    render(<DiagnosisIntake />)
+
+    expect(screen.getByLabelText(/species/i)).toHaveValue('COW')
+    expect(screen.queryByText(/not trained on/i)).not.toBeInTheDocument()
+  })
+
+  it('shows the approximation disclosure and sends species when Buffalo is selected', async () => {
+    const user = userEvent.setup()
+    fetchMock
+      .mockResolvedValueOnce(
+        jsonResponse(true, { id: 2, tagNumber: 'BUF-001', farmId: 42, species: 'BUFFALO', createdAt: '2026-01-01T00:00:00Z' })
+      )
+      .mockResolvedValueOnce(
+        jsonResponse(true, {
+          id: 8,
+          animalId: 2,
+          diagnosis: 'Healthy',
+          confidence: 0.9,
+          explanation: 'Predicted Healthy with 90% confidence.',
+          recommendedAction: 'monitor',
+          precautions: [],
+          nextSteps: [],
+          createdAt: '2026-01-01T00:00:00Z',
+        })
+      )
+
+    render(<DiagnosisIntake />)
+    await user.selectOptions(screen.getByLabelText(/species/i), 'BUFFALO')
+
+    expect(screen.getByText(/isn't trained on buffalo-specific data yet/i)).toBeInTheDocument()
+
+    await user.type(screen.getByLabelText(/animal tag number/i), 'BUF-001')
+    await user.type(screen.getByLabelText(/farm id/i), '42')
+    await user.click(screen.getByLabelText(/fever/i))
+    await user.click(screen.getByRole('button', { name: /get diagnosis/i }))
+
+    await screen.findByText(/likely: healthy \(90% confidence\)/i)
+
+    const [animalCall] = fetchMock.mock.calls
+    expect(JSON.parse(animalCall[1].body)).toMatchObject({ species: 'BUFFALO' })
   })
 })
