@@ -412,4 +412,58 @@ degraded gracefully (verified: `run_diagnosis()` works fine without `chromadb`, 
 pass, 2 skip (with a clear reason each), 0 errors. Docker still runs all 29. Any *new*
 RAG-dependent test needs the same `pytest.importorskip("chromadb")` treatment, not just
 "it happens to work because retrieve() degrades" — some assertions (like checking real
+sources) genuinely can't be meaningful without a real Chroma collection.
+
+---
+
+### 2026-09-18 — Renamed `Cattle` → `Animal` + `species` field (M11), instead of deferring
+
+**Decision**: `backend`'s `Cattle` entity/repository/service/controller/DTOs, package
+(`.cattle` → `.animal`), API paths (`/api/cattle...` → `/api/animals...`), response field
+(`cattleId` → `animalId`), and error codes (`CATTLE_NOT_FOUND`/`CATTLE_TAG_DUPLICATE` →
+`ANIMAL_NOT_FOUND`/`ANIMAL_TAG_DUPLICATE`) all renamed in M11, plus a `species` enum field
+(`COW`/`BUFFALO` today) added via a new Flyway migration
+(`V2__rename_cattle_to_animal.sql` — `V1__init.sql` untouched, per `AGENTS.md`).
+
+**Why**: 3 more species are already planned (M12–M14 — Sheep/Cat/Dog, see
+`docs/ROADMAP.md`). Renaming once now costs one migration + one mechanical rename across 3
+services; deferring means doing the exact same rename later anyway, after more code has
+accumulated depending on the `Cattle` name, or leaving increasingly inaccurate naming in
+place as non-cattle species pile onto something still called "Cattle" in the code. This was
+explicitly flagged as an open question when issue #20 was created, to be resolved in M11's
+spec rather than asked about twice.
+
+**Alternatives considered**: keep the `Cattle` name and just add a `species` field —
+rejected because "Cattle" stops accurately describing the table/entity the moment a second
+species exists, and would read increasingly wrong through 3 more species milestones.
+
+**Consequences**: this is a breaking API change (`/api/cattle` → `/api/animals`, `cattleId`
+→ `animalId`) with no versioning ceremony — acceptable because this is a local/learning
+project with no external consumers (consistent with prior deployment-scope decisions in
+this log). The product's own name ("Cattle Disease Prediction System") is explicitly
+**not** part of this decision — that's a separate, bigger call, out of scope for M11.
+
+---
+
+### 2026-09-18 — Buffalo diagnosis reuses the cattle-trained model, disclosed as an approximation (M11)
+
+**Decision**: rather than blocking Buffalo support on a buffalo-specific dataset (none was
+confirmed available — same wall M9 hit for cattle images), M11 ships a real, working Buffalo
+diagnosis path that reuses the existing cattle-trained symptom model unchanged. `species` is
+captured on the `Animal` record and shown in the UI, but is **not forwarded to `ml-service`**
+— the request/response contract is unchanged. The frontend shows a visible disclosure
+whenever a non-`COW` species is selected.
+
+**Why**: Foot and Mouth Disease and Lumpy Skin Disease are both confirmed (via web research,
+not assumed) to affect buffalo, so the existing model's predictions are a reasonable
+approximation, not a wild guess — but LSD susceptibility in buffalo is documented as lower
+than in cattle, a real difference this decision doesn't erase, just discloses. Mirrors the
+M8 pattern: wire a real pipeline now, disclose the limitation, swap in a real model once
+data exists — rather than either blocking the whole milestone or silently presenting
+buffalo predictions as if a buffalo-trained model produced them.
+
+**Consequences**: a real buffalo-specific symptom or image model is tracked as explicit
+follow-up scope (not yet an issue), same status M9 was in before the Kaggle dataset was
+found. Threading `species` into `ml-service`'s contract is deferred until that follow-up
+has a real model to justify it — don't add the field speculatively.
 `sources` content) genuinely can't be meaningful without a real Chroma collection.

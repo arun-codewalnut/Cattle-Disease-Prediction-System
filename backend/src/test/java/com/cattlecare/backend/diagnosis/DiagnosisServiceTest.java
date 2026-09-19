@@ -20,8 +20,9 @@ import org.springframework.http.HttpStatus;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.web.multipart.MultipartFile;
 
-import com.cattlecare.backend.cattle.Cattle;
-import com.cattlecare.backend.cattle.CattleService;
+import com.cattlecare.backend.animal.Animal;
+import com.cattlecare.backend.animal.AnimalService;
+import com.cattlecare.backend.animal.Species;
 import com.cattlecare.backend.client.DiagnosisResult;
 import com.cattlecare.backend.client.MlServiceClient;
 import com.cattlecare.backend.config.ApiException;
@@ -29,16 +30,16 @@ import com.cattlecare.backend.diagnosis.dto.DiagnosisCaseResponse;
 
 class DiagnosisServiceTest {
 
-    private final CattleService cattleService = mock(CattleService.class);
+    private final AnimalService animalService = mock(AnimalService.class);
     private final MlServiceClient mlServiceClient = mock(MlServiceClient.class);
     private final DiagnosisCaseRepository diagnosisCaseRepository = mock(DiagnosisCaseRepository.class);
     private final DiagnosisService diagnosisService =
-            new DiagnosisService(cattleService, mlServiceClient, diagnosisCaseRepository);
+            new DiagnosisService(animalService, mlServiceClient, diagnosisCaseRepository);
 
     @Test
     void submitSymptoms_success_persistsAndReturnsDiagnosis() {
-        Cattle cattle = new Cattle("COW-001", 42L);
-        when(cattleService.getOrThrow(1L)).thenReturn(cattle);
+        Animal animal = new Animal("COW-001", 42L, Species.COW);
+        when(animalService.getOrThrow(1L)).thenReturn(animal);
 
         DiagnosisResult mlResult = new DiagnosisResult(
                 "Foot and Mouth Disease", 0.81, "Predicted FMD...", "escalate_to_vet", List.of(),
@@ -57,9 +58,9 @@ class DiagnosisServiceTest {
     }
 
     @Test
-    void submitSymptoms_cattleNotFound_neverCallsMlService() {
-        when(cattleService.getOrThrow(999L))
-                .thenThrow(new ApiException("CATTLE_NOT_FOUND", "not found", HttpStatus.NOT_FOUND));
+    void submitSymptoms_animalNotFound_neverCallsMlService() {
+        when(animalService.getOrThrow(999L))
+                .thenThrow(new ApiException("ANIMAL_NOT_FOUND", "not found", HttpStatus.NOT_FOUND));
 
         assertThrows(ApiException.class, () -> diagnosisService.submitSymptoms(999L, Map.of()));
 
@@ -69,8 +70,8 @@ class DiagnosisServiceTest {
 
     @Test
     void submitSymptoms_mlServiceUnavailable_doesNotPersistACase() {
-        Cattle cattle = new Cattle("COW-001", 42L);
-        when(cattleService.getOrThrow(1L)).thenReturn(cattle);
+        Animal animal = new Animal("COW-001", 42L, Species.COW);
+        when(animalService.getOrThrow(1L)).thenReturn(animal);
         when(mlServiceClient.diagnose(anyMap(), any()))
                 .thenThrow(new ApiException("ML_SERVICE_UNAVAILABLE", "unreachable", HttpStatus.SERVICE_UNAVAILABLE));
 
@@ -82,8 +83,8 @@ class DiagnosisServiceTest {
 
     @Test
     void submitSymptoms_mlServiceErrorResponse_doesNotPersistACase() {
-        Cattle cattle = new Cattle("COW-001", 42L);
-        when(cattleService.getOrThrow(1L)).thenReturn(cattle);
+        Animal animal = new Animal("COW-001", 42L, Species.COW);
+        when(animalService.getOrThrow(1L)).thenReturn(animal);
         when(mlServiceClient.diagnose(anyMap(), any()))
                 .thenThrow(new ApiException("ML_SERVICE_ERROR", "bad response", HttpStatus.BAD_GATEWAY));
 
@@ -95,8 +96,8 @@ class DiagnosisServiceTest {
 
     @Test
     void submitImage_success_encodesAsBase64AndPersistsWithEmptySymptoms() {
-        Cattle cattle = new Cattle("COW-001", 42L);
-        when(cattleService.getOrThrow(1L)).thenReturn(cattle);
+        Animal animal = new Animal("COW-001", 42L, Species.COW);
+        when(animalService.getOrThrow(1L)).thenReturn(animal);
 
         DiagnosisResult mlResult = new DiagnosisResult(
                 "Lumpy Skin Disease", 0.5, "This is a placeholder image-based prediction...",
@@ -113,25 +114,25 @@ class DiagnosisServiceTest {
     }
 
     @Test
-    void submitImage_unsupportedType_rejectedBeforeCattleLookupOrMlServiceCall() {
+    void submitImage_unsupportedType_rejectedBeforeAnimalLookupOrMlServiceCall() {
         MultipartFile image = new MockMultipartFile("image", "cow.gif", "image/gif", new byte[] {1});
 
         ApiException ex = assertThrows(ApiException.class, () -> diagnosisService.submitImage(1L, image));
 
         assertEquals("UNSUPPORTED_IMAGE_TYPE", ex.getCode());
-        verify(cattleService, never()).getOrThrow(any());
+        verify(animalService, never()).getOrThrow(any());
         verify(mlServiceClient, never()).diagnose(anyMap(), any(), any());
     }
 
     @Test
-    void submitImage_tooLarge_rejectedBeforeCattleLookupOrMlServiceCall() {
+    void submitImage_tooLarge_rejectedBeforeAnimalLookupOrMlServiceCall() {
         byte[] oversized = new byte[6 * 1024 * 1024];
         MultipartFile image = new MockMultipartFile("image", "cow.jpg", "image/jpeg", oversized);
 
         ApiException ex = assertThrows(ApiException.class, () -> diagnosisService.submitImage(1L, image));
 
         assertEquals("IMAGE_TOO_LARGE", ex.getCode());
-        verify(cattleService, never()).getOrThrow(any());
+        verify(animalService, never()).getOrThrow(any());
         verify(mlServiceClient, never()).diagnose(anyMap(), any(), any());
     }
 
@@ -145,10 +146,10 @@ class DiagnosisServiceTest {
     }
 
     @Test
-    void submitImage_cattleNotFound_neverCallsMlService() {
+    void submitImage_animalNotFound_neverCallsMlService() {
         MultipartFile image = new MockMultipartFile("image", "cow.jpg", "image/jpeg", new byte[] {1});
-        when(cattleService.getOrThrow(999L))
-                .thenThrow(new ApiException("CATTLE_NOT_FOUND", "not found", HttpStatus.NOT_FOUND));
+        when(animalService.getOrThrow(999L))
+                .thenThrow(new ApiException("ANIMAL_NOT_FOUND", "not found", HttpStatus.NOT_FOUND));
 
         assertThrows(ApiException.class, () -> diagnosisService.submitImage(999L, image));
 

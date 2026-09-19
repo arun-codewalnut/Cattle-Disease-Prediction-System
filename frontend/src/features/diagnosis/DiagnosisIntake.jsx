@@ -1,7 +1,7 @@
 import { useState } from 'react'
-import { createCattle, submitSymptoms, submitImage } from '../../api/diagnosisApi'
+import { createAnimal, submitSymptoms, submitImage } from '../../api/diagnosisApi'
 import { ApiError } from '../../api/client'
-import CattleIdentityFields from './CattleIdentityFields'
+import AnimalIdentityFields from './AnimalIdentityFields'
 import SymptomForm from './SymptomForm'
 import ImageUploadForm from './ImageUploadForm'
 import DiagnosisResult from './DiagnosisResult'
@@ -10,6 +10,7 @@ import { emptySymptoms } from './symptomFields'
 export default function DiagnosisIntake() {
   const [tagNumber, setTagNumber] = useState('')
   const [farmId, setFarmId] = useState('')
+  const [species, setSpecies] = useState('COW')
   const [symptoms, setSymptoms] = useState(emptySymptoms())
   const [image, setImage] = useState(null)
   const [status, setStatus] = useState('idle') // idle | submitting | success | error
@@ -20,12 +21,12 @@ export default function DiagnosisIntake() {
     setSymptoms((prev) => ({ ...prev, [key]: checked }))
   }
 
-  // CattleIdentityFields lives outside both <form> elements below (it's shared by both), so
+  // AnimalIdentityFields lives outside both <form> elements below (it's shared by both), so
   // the inputs' `required` attribute has no effect on either form's native submit validation
   // — validate explicitly instead of relying on that.
   function validateIdentityFields() {
     if (!tagNumber.trim()) {
-      setError(new ApiError('TAG_NUMBER_REQUIRED', 'Please enter a cattle tag number.', null))
+      setError(new ApiError('TAG_NUMBER_REQUIRED', 'Please enter an animal tag number.', null))
       setStatus('error')
       return false
     }
@@ -49,8 +50,8 @@ export default function DiagnosisIntake() {
     const correlationId = crypto.randomUUID()
 
     try {
-      const cattle = await createCattle({ tagNumber, farmId }, correlationId)
-      const diagnosis = await submitSymptoms(cattle.id, symptoms, correlationId)
+      const animal = await createAnimal({ tagNumber, farmId, species }, correlationId)
+      const diagnosis = await submitSymptoms(animal.id, symptoms, correlationId)
       setResult(diagnosis)
       setStatus('success')
     } catch (err) {
@@ -72,8 +73,8 @@ export default function DiagnosisIntake() {
     const correlationId = crypto.randomUUID()
 
     try {
-      const cattle = await createCattle({ tagNumber, farmId }, correlationId)
-      const diagnosis = await submitImage(cattle.id, image, correlationId)
+      const animal = await createAnimal({ tagNumber, farmId, species }, correlationId)
+      const diagnosis = await submitImage(animal.id, image, correlationId)
       setResult(diagnosis)
       setStatus('success')
     } catch (err) {
@@ -90,17 +91,19 @@ export default function DiagnosisIntake() {
       <header className="app-header">
         <span className="app-logo" aria-hidden="true">🐄</span>
         <div>
-          <h1>Cattle symptom checker</h1>
+          <h1>Livestock symptom checker</h1>
           <p className="app-tagline">🌾 Quick symptom check for your herd, right from the field.</p>
         </div>
       </header>
 
       <main className="diagnosis-card">
-        <CattleIdentityFields
+        <AnimalIdentityFields
           tagNumber={tagNumber}
           farmId={farmId}
+          species={species}
           onTagNumberChange={setTagNumber}
           onFarmIdChange={setFarmId}
+          onSpeciesChange={setSpecies}
           disabled={disabled}
         />
 

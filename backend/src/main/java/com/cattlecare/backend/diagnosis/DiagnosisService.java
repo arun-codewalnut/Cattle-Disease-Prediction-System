@@ -10,8 +10,8 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
-import com.cattlecare.backend.cattle.Cattle;
-import com.cattlecare.backend.cattle.CattleService;
+import com.cattlecare.backend.animal.Animal;
+import com.cattlecare.backend.animal.AnimalService;
 import com.cattlecare.backend.client.DiagnosisResult;
 import com.cattlecare.backend.client.MlServiceClient;
 import com.cattlecare.backend.config.ApiException;
@@ -24,24 +24,30 @@ public class DiagnosisService {
     // M8 phase 1 (docs/specs/M8-image-diagnosis-phase1.md): images are never persisted to
     // disk, only validated, base64-encoded, and forwarded to ml-service for one placeholder
     // prediction — see that spec for why.
+    //
+    // M11 (docs/specs/M11-buffalo-disease-detection.md): animal.getSpecies() is deliberately
+    // NOT forwarded to ml-service here — no buffalo-specific model exists yet, so every
+    // species is diagnosed with the same cattle-trained model. The frontend discloses this;
+    // don't silently imply species-aware diagnosis by threading the field through before a
+    // real model exists to justify it.
     private static final Set<String> ALLOWED_IMAGE_TYPES = Set.of("image/jpeg", "image/png");
     private static final long MAX_IMAGE_SIZE_BYTES = 5L * 1024 * 1024;
 
-    private final CattleService cattleService;
+    private final AnimalService animalService;
     private final MlServiceClient mlServiceClient;
     private final DiagnosisCaseRepository diagnosisCaseRepository;
 
     public DiagnosisService(
-            CattleService cattleService,
+            AnimalService animalService,
             MlServiceClient mlServiceClient,
             DiagnosisCaseRepository diagnosisCaseRepository) {
-        this.cattleService = cattleService;
+        this.animalService = animalService;
         this.mlServiceClient = mlServiceClient;
         this.diagnosisCaseRepository = diagnosisCaseRepository;
     }
 
-    public DiagnosisCaseResponse submitSymptoms(Long cattleId, Map<String, Object> symptoms) {
-        Cattle cattle = cattleService.getOrThrow(cattleId);
+    public DiagnosisCaseResponse submitSymptoms(Long animalId, Map<String, Object> symptoms) {
+        Animal animal = animalService.getOrThrow(animalId);
 
         // If this throws (unreachable / error response), nothing gets persisted below —
         // we don't record a case that never actually got a diagnosis.
@@ -49,7 +55,7 @@ public class DiagnosisService {
 
         String correlationId = MDC.get(CorrelationIdFilter.MDC_KEY);
         DiagnosisCase entity = new DiagnosisCase(
-                cattle.getId(),
+                animal.getId(),
                 correlationId,
                 symptoms,
                 result.diagnosis(),
@@ -60,9 +66,9 @@ public class DiagnosisService {
         return DiagnosisCaseResponse.from(entity, result.explanation(), result.precautions(), result.nextSteps());
     }
 
-    public DiagnosisCaseResponse submitImage(Long cattleId, MultipartFile image) {
+    public DiagnosisCaseResponse submitImage(Long animalId, MultipartFile image) {
         validateImage(image);
-        Cattle cattle = cattleService.getOrThrow(cattleId);
+        Animal animal = animalService.getOrThrow(animalId);
 
         String imageBase64;
         try {
@@ -78,7 +84,7 @@ public class DiagnosisService {
 
         String correlationId = MDC.get(CorrelationIdFilter.MDC_KEY);
         DiagnosisCase entity = new DiagnosisCase(
-                cattle.getId(),
+                animal.getId(),
                 correlationId,
                 Map.of(),
                 result.diagnosis(),

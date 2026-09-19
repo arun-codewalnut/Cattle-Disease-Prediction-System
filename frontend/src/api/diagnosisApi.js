@@ -1,15 +1,15 @@
 import { apiPost, apiPostMultipart } from './client'
 
-export function createCattle({ tagNumber, farmId }, correlationId) {
-  return apiPost('/api/cattle', { tagNumber, farmId: Number(farmId) }, correlationId)
+export function createAnimal({ tagNumber, farmId, species }, correlationId) {
+  return apiPost('/api/animals', { tagNumber, farmId: Number(farmId), species }, correlationId)
 }
 
-export function submitSymptoms(cattleId, symptoms, correlationId) {
-  return apiPost(`/api/cattle/${cattleId}/diagnoses`, { symptoms }, correlationId)
+export function submitSymptoms(animalId, symptoms, correlationId) {
+  return apiPost(`/api/animals/${animalId}/diagnoses`, { symptoms }, correlationId)
 }
 
-export function submitImage(cattleId, imageFile, correlationId) {
+export function submitImage(animalId, imageFile, correlationId) {
   const formData = new FormData()
   formData.append('image', imageFile)
-  return apiPostMultipart(`/api/cattle/${cattleId}/diagnoses/image`, formData, correlationId)
+  return apiPostMultipart(`/api/animals/${animalId}/diagnoses/image`, formData, correlationId)
 }

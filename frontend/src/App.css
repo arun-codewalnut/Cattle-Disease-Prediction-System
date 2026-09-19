@@ -65,7 +65,8 @@ label {
 }
 
 input[type='text'],
-input[type='number'] {
+input[type='number'],
+select {
   width: 100%;
   box-sizing: border-box;
   padding: 10px 14px;
@@ -78,17 +79,28 @@ input[type='number'] {
 }
 
 input[type='text']:hover,
-input[type='number']:hover {
+input[type='number']:hover,
+select:hover {
   border-color: var(--accent);
   transform: translateY(-1px);
   box-shadow: 0 4px 10px rgba(0, 0, 0, 0.06);
 }
 
 input[type='text']:focus-visible,
-input[type='number']:focus-visible {
+input[type='number']:focus-visible,
+select:focus-visible {
   outline: 3px solid var(--accent-border);
   outline-offset: 1px;
   border-color: var(--accent);
+}
+
+.species-disclaimer {
+  margin: 8px 0 0;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: var(--urgency-consult-bg);
+  color: var(--text);
+  font-size: 0.85em;
 }
 
 fieldset {
