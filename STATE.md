@@ -3,7 +3,7 @@
 Living snapshot of project state. Update this whenever you finish a meaningful chunk of work —
 this is what an agent (or you) reads first when resuming.
 
-_Last updated: 2026-09-18 (session 5)_
+_Last updated: 2026-09-19 (session 6)_
 
 ## Known gaps
 
@@ -194,18 +194,41 @@ _Last updated: 2026-09-18 (session 5)_
   submitted symptoms, and confirmed the diagnosis correctly escalated (`Foot and Mouth
   Disease`, `escalate_to_vet`) using the shared model exactly as designed — plus a direct
   `curl` check of the new `INVALID_REQUEST_BODY` error path.
+- **M11 PR merged to `main`** (issue #20) — confirmed via `git pull` before branching for
+  M12.
+- **M12 done, not yet merged** (issue #21, branch `feat/m12-sheep-disease-detection`,
+  branched from synced `main`): Sheep added as a third species. Much lighter than M11, as
+  designed — no architecture change, per that issue's own "not in scope." Confirmed via web
+  research (not assumed): Foot and Mouth Disease affects sheep too (though sheep/goats often
+  show little or no visible illness with FMD, unlike cattle — a real detection-risk nuance).
+  More significantly: **foot rot and sheep pox are real, common sheep-specific diseases the
+  current 5-disease model can't represent at all** — a bigger gap than Buffalo had, where
+  the existing classes were at least a reasonable approximation. No sheep dataset found
+  either (same pattern as M9/M11). Implementation: `SHEEP` added to the `Species` enum
+  (one line — the M11 architecture needed nothing else) and to frontend
+  `SPECIES_OPTIONS`; the non-Cow disclosure text was **strengthened** to say some diseases
+  aren't representable at all, not just "not trained on this species" — the Buffalo-era
+  wording would have undersold Sheep's actual gap. Spec:
+  [docs/specs/M12-sheep-disease-detection.md](docs/specs/M12-sheep-disease-detection.md).
+  **Validated**: backend 18/18, ml-service unaffected (36/2 skipped, no ml-service files
+  touched), frontend lint + 10/10 + build all green, **plus live end-to-end verification**:
+  created a Sheep animal via `POST /api/animals` in a real browser, confirmed the
+  strengthened disclosure rendered, submitted FMD-indicative symptoms, and confirmed the
+  diagnosis correctly escalated (`Foot and Mouth Disease`, `escalate_to_vet`) via the shared
+  model.
 
 ## In Progress
 
-- M11 (issue #20) — implementation done, PR not yet opened/merged.
+- M12 (issue #21) — implementation done, PR not yet opened/merged.
 
 ## Not Started
 
 - M7: Notifications (email/WhatsApp free tier)
 - M9 real implementation (issue #18 still open — only the spec landed; training itself is
   blocked on the Kaggle dataset, see HANDOFF.md's Blockers)
-- M12–M14: Sheep, Cat, Dog (issues #21–#23) — can now reuse M11's species-architecture
-  pattern without re-litigating it (per that spec's own intent)
+- M13–M14: Cat, Dog (issues #22–#23) — M13 is a bigger pivot to companion-animal diseases,
+  flagged for its own `DISCLAIMER.md` review; M14 should be light like M12 once M13 settles
+  the companion-animal framing
 
 Deployment (formerly M8 in the original numbering) was dropped from scope — see
 `docs/DECISIONS.md`. The M8 number was reused for image-based disease recognition, a

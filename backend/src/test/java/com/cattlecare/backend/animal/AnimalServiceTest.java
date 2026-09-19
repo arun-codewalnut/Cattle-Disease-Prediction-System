@@ -42,6 +42,16 @@ class AnimalServiceTest {
     }
 
     @Test
+    void create_sheep_savesAndReturnsAnimalWithSheepSpecies() {
+        Animal saved = new Animal("SHE-001", 3L, Species.SHEEP);
+        when(animalRepository.save(any())).thenReturn(saved);
+
+        Animal result = animalService.create("SHE-001", 3L, Species.SHEEP);
+
+        assertEquals(Species.SHEEP, result.getSpecies());
+    }
+
+    @Test
     void create_duplicateTag_throwsApiExceptionWithConflict() {
         when(animalRepository.save(any())).thenThrow(new DataIntegrityViolationException("duplicate"));
 

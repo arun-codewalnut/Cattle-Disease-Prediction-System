@@ -204,4 +204,41 @@ describe('DiagnosisIntake', () => {
     const [animalCall] = fetchMock.mock.calls
     expect(JSON.parse(animalCall[1].body)).toMatchObject({ species: 'BUFFALO' })
   })
+
+  it('shows the species-gap disclosure and sends species when Sheep is selected', async () => {
+    const user = userEvent.setup()
+    fetchMock
+      .mockResolvedValueOnce(
+        jsonResponse(true, { id: 3, tagNumber: 'SHE-001', farmId: 11, species: 'SHEEP', createdAt: '2026-01-01T00:00:00Z' })
+      )
+      .mockResolvedValueOnce(
+        jsonResponse(true, {
+          id: 10,
+          animalId: 3,
+          diagnosis: 'uncertain',
+          confidence: 0.2,
+          explanation: 'Not enough symptom information was provided to make a confident prediction.',
+          recommendedAction: 'consult_vet',
+          precautions: [],
+          nextSteps: [],
+          createdAt: '2026-01-01T00:00:00Z',
+        })
+      )
+
+    render(<DiagnosisIntake />)
+    await user.selectOptions(screen.getByLabelText(/species/i), 'SHEEP')
+
+    expect(screen.getByText(/isn't trained on sheep-specific data yet/i)).toBeInTheDocument()
+    expect(screen.getByText(/sheep-only diseases aren't represented by it at all/i)).toBeInTheDocument()
+
+    await user.type(screen.getByLabelText(/animal tag number/i), 'SHE-001')
+    await user.type(screen.getByLabelText(/farm id/i), '11')
+    await user.click(screen.getByLabelText(/fever/i))
+    await user.click(screen.getByRole('button', { name: /get diagnosis/i }))
+
+    await screen.findByText(/not enough symptom information was provided/i)
+
+    const [animalCall] = fetchMock.mock.calls
+    expect(JSON.parse(animalCall[1].body)).toMatchObject({ species: 'SHEEP' })
+  })
 })

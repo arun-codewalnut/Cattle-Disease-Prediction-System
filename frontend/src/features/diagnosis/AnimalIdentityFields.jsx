@@ -36,7 +36,9 @@ export default function AnimalIdentityFields({
           <p className="species-disclaimer">
             <span aria-hidden="true">ℹ️</span> The diagnosis model isn't trained on{' '}
             {SPECIES_OPTIONS.find((option) => option.value === species)?.label.toLowerCase()}-specific
-            data yet — results use the cattle model as an approximation.
+            data yet, and some {SPECIES_OPTIONS.find((option) => option.value === species)?.label.toLowerCase()}
+            -only diseases aren't represented by it at all — results use the cattle model as
+            an approximation and may miss species-specific conditions.
           </p>
         )}
       </div>
