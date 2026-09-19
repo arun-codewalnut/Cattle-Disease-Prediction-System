@@ -106,14 +106,18 @@ standing position that this is a local/learning project with no external consume
 `POST /api/animals` — create an animal record.
 
 Request: `{"tagNumber": "COW-001", "farmId": 42, "species": "COW"}` — `species` is
-`"COW"` or `"BUFFALO"` (M11; grows one value per species milestone, see `docs/ROADMAP.md`
-M12–M14), required.
+`"COW"`, `"BUFFALO"`, or `"SHEEP"` (M11/M12; grows one value per species milestone, see
+`docs/ROADMAP.md` M13–M14), required.
 Response (`201`): `{"id": 1, "tagNumber": "COW-001", "farmId": 42, "species": "COW", "createdAt": "..."}`
 
 `POST /api/animals/{animalId}/diagnoses` — submit symptoms for an animal, calls
 `ml-service`, persists the result. **`species` is not forwarded to `ml-service`** — no
-per-species model exists yet (M11 scope), so every species is diagnosed with the same
-cattle-trained model; the frontend discloses this for non-`COW` species.
+per-species model exists yet (M11/M12 scope), so every species is diagnosed with the same
+cattle-trained model; the frontend discloses this for non-`COW` species. For `SHEEP`
+specifically, this is a bigger gap than for `BUFFALO` — real sheep-specific diseases (foot
+rot, sheep pox) aren't represented by the model at all, not just "untrained on this
+species" — see
+[docs/specs/M12-sheep-disease-detection.md](specs/M12-sheep-disease-detection.md).
 
 Request: `{"symptoms": {"fever": true, "...": "..."}}`
 Response (`201`):
