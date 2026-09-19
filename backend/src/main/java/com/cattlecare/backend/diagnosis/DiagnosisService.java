@@ -12,6 +12,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 import com.cattlecare.backend.animal.Animal;
 import com.cattlecare.backend.animal.AnimalService;
+import com.cattlecare.backend.animal.Species;
 import com.cattlecare.backend.client.DiagnosisResult;
 import com.cattlecare.backend.client.MlServiceClient;
 import com.cattlecare.backend.config.ApiException;
@@ -33,6 +34,13 @@ public class DiagnosisService {
     private static final Set<String> ALLOWED_IMAGE_TYPES = Set.of("image/jpeg", "image/png");
     private static final long MAX_IMAGE_SIZE_BYTES = 5L * 1024 * 1024;
 
+    // M13 (docs/specs/M13-cat-disease-detection.md): reusing the cattle model is a disclosed
+    // approximation for livestock (Buffalo/Sheep share the disease family), but would be an
+    // actively wrong result for a companion animal like Cat — the model's disease list and
+    // symptom vocabulary don't apply at all. Diagnosis is blocked for any species not in
+    // this set, not just hidden in the UI, so a direct API call can't bypass it either.
+    static final Set<Species> DIAGNOSIS_SUPPORTED_SPECIES = Set.of(Species.COW, Species.BUFFALO, Species.SHEEP);
+
     private final AnimalService animalService;
     private final MlServiceClient mlServiceClient;
     private final DiagnosisCaseRepository diagnosisCaseRepository;
@@ -48,6 +56,7 @@ public class DiagnosisService {
 
     public DiagnosisCaseResponse submitSymptoms(Long animalId, Map<String, Object> symptoms) {
         Animal animal = animalService.getOrThrow(animalId);
+        requireDiagnosisSupported(animal);
 
         // If this throws (unreachable / error response), nothing gets persisted below —
         // we don't record a case that never actually got a diagnosis.
@@ -69,6 +78,7 @@ public class DiagnosisService {
     public DiagnosisCaseResponse submitImage(Long animalId, MultipartFile image) {
         validateImage(image);
         Animal animal = animalService.getOrThrow(animalId);
+        requireDiagnosisSupported(animal);
 
         String imageBase64;
         try {
@@ -93,6 +103,15 @@ public class DiagnosisService {
         diagnosisCaseRepository.save(entity);
 
         return DiagnosisCaseResponse.from(entity, result.explanation(), result.precautions(), result.nextSteps());
+    }
+
+    private void requireDiagnosisSupported(Animal animal) {
+        if (!DIAGNOSIS_SUPPORTED_SPECIES.contains(animal.getSpecies())) {
+            throw new ApiException(
+                    "DIAGNOSIS_NOT_SUPPORTED_FOR_SPECIES",
+                    "Diagnosis isn't available yet for species " + animal.getSpecies() + ".",
+                    HttpStatus.BAD_REQUEST);
+        }
     }
 
     private void validateImage(MultipartFile image) {
