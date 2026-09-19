@@ -6,6 +6,7 @@ import SymptomForm from './SymptomForm'
 import ImageUploadForm from './ImageUploadForm'
 import DiagnosisResult from './DiagnosisResult'
 import { emptySymptoms } from './symptomFields'
+import { DIAGNOSIS_SUPPORTED_SPECIES, SPECIES_OPTIONS } from './species'
 
 export default function DiagnosisIntake() {
   const [tagNumber, setTagNumber] = useState('')
@@ -85,6 +86,7 @@ export default function DiagnosisIntake() {
   }
 
   const disabled = status === 'submitting'
+  const diagnosisSupported = DIAGNOSIS_SUPPORTED_SPECIES.includes(species)
 
   return (
     <div className="app-shell">
@@ -107,18 +109,40 @@ export default function DiagnosisIntake() {
           disabled={disabled}
         />
 
-        <SymptomForm
-          symptoms={symptoms}
-          onSymptomChange={handleSymptomChange}
-          onSubmit={handleSubmit}
-          disabled={disabled}
-        />
+        {diagnosisSupported ? (
+          <>
+            <SymptomForm
+              symptoms={symptoms}
+              onSymptomChange={handleSymptomChange}
+              onSubmit={handleSubmit}
+              disabled={disabled}
+            />
 
-        <div className="form-divider" role="separator">
-          <span>or</span>
-        </div>
+            <div className="form-divider" role="separator">
+              <span>or</span>
+            </div>
 
-        <ImageUploadForm image={image} onImageChange={setImage} onSubmit={handleImageSubmit} disabled={disabled} />
+            <ImageUploadForm
+              image={image}
+              onImageChange={setImage}
+              onSubmit={handleImageSubmit}
+              disabled={disabled}
+            />
+          </>
+        ) : (
+          <div className="species-unavailable">
+            <span className="species-unavailable__icon" aria-hidden="true">
+              🚧
+            </span>
+            <p>
+              <strong>
+                Diagnosis for {SPECIES_OPTIONS.find((option) => option.value === species)?.label} isn't
+                available yet.
+              </strong>
+            </p>
+            <p>This is tracked as future work — check back in a later update.</p>
+          </div>
+        )}
 
         {status === 'error' && error && (
           <p role="alert" className="form-error">
