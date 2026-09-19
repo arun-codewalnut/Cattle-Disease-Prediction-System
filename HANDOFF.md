@@ -5,46 +5,38 @@ End-of-session notes. Overwrite this each session — it's a handoff to "next se
 
 ---
 
-## This session (2026-09-18)
+## This session (2026-09-19)
 
-- Confirmed M10's PR had already been merged to `main` — synced before branching for M11.
-- **Implemented M11** (issue #20): Buffalo added as a second species. This was the
-  architecturally significant one in the M11–M14 sequence — see STATE.md for the full
-  detail list. Two decisions made and logged in `docs/DECISIONS.md` rather than deferred:
-  1. Renamed `Cattle` → `Animal` throughout `backend` now, not later — 3 more species
-     already planned (M12–M14), so doing this once now beats repeating the discussion.
-  2. Buffalo reuses the cattle-trained model, explicitly disclosed — no buffalo dataset was
-     found (researched via web search, not assumed), and unlike M1's synthetic tabular
-     data, there's no honest fallback for a real model. Mirrors M8's "wire the pipeline,
-     disclose the limitation" pattern.
-- Used a research subagent to map every backend file touching `Cattle` before starting the
-  rename, rather than discovering references reactively file-by-file — found the exact
-  V1 migration SQL, the `DiagnosisCase.cattleId` FK column, and every test method name in
-  one pass, which made the actual rename mechanical instead of exploratory.
-- Proactively fixed a bug class before a user hit it this time: `GlobalExceptionHandler` now
-  handles malformed JSON/invalid enum values cleanly, since M11's `species` field is the
-  first thing that could actually trigger the same raw-exception-leak bug fixed reactively
-  for blank `tagNumber` in the M8 PR.
-- **Validated, then committed**: backend 17/17 (clean build, migration verified applying),
-  ml-service unaffected (confirmed, not assumed — no ml-service files were touched),
-  frontend lint + 9/9 + build, plus a live browser run creating a Buffalo animal and
-  confirming both the disclosure and correct escalation. All M11 work committed (3 focused
-  commits: backend rename, frontend, docs) — see git log on
-  `feat/m11-buffalo-disease-detection`. PR opened against `main`.
+- Confirmed M11's PR had already been merged to `main` — synced before branching for M12.
+- **Implemented M12** (issue #21): Sheep added as a third species. Confirmed the M11
+  architecture prediction was right — this needed no architecture change, just an enum
+  value, a dropdown option, and updated copy. See STATE.md for the full detail list.
+- The one thing worth carrying forward: **Sheep's gap is bigger than Buffalo's**. Buffalo's
+  diseases (FMD, LSD) were at least a reasonable overlap with the existing 5-class model.
+  Sheep's most common species-specific disease — foot rot — isn't represented by the model
+  *at all*, and neither is sheep pox. Reused the Buffalo-era disclosure wording as a
+  starting point but strengthened it rather than copy-pasting it unchanged, since "not
+  trained on this species" would have undersold the real gap for Sheep specifically.
+- **Validated, then committed**: backend 18/18, ml-service confirmed unaffected (no
+  ml-service files touched), frontend lint + 10/10 + build, plus a live browser run creating
+  a Sheep animal and confirming both the strengthened disclosure and correct escalation. All
+  M12 work committed (3 focused commits: backend, frontend, docs) — see git log on
+  `feat/m12-sheep-disease-detection`. PR opened against `main`.
 
 ## Next session
 
-- Review and merge the issue #20 PR (M11) once it's had a look.
-- M12 (Sheep, issue #21) can now reuse M11's species architecture directly — that spec
-  should be much smaller than M11's, mostly about sheep-specific disease coverage/data, not
-  another architecture discussion.
+- Review and merge the issue #21 PR (M12) once it's had a look.
+- M13 (Cat, issue #22) is the next real pivot — companion-animal diseases share almost
+  nothing with the livestock disease list, so this one needs its own disease research and a
+  `docs/DISCLAIMER.md` review (different audience: pet owner, not farmer/vet), not just
+  another one-line species addition like M12 was.
 - **Still waiting on the user for M9's dataset** (issue #18 stays open, spec-only) — see
-  Blockers.
+  Blockers. Worth asking up front whether the user has (or wants to source) datasets for
+  M13/M14 too, rather than rediscovering the same "no dataset found" wall a third time.
 - Decide on a `LICENSE` (still open, carried over from several sessions back).
 - Fix `GITHUB_TOKEN` for GitHub MCP so the `gh` CLI workaround (`env -u GITHUB_TOKEN gh ...`)
   isn't needed every session.
-- Other open issues, unstarted: M7 (notifications, #7), M13/M14 (Cat/Dog, #22/#23 — M13 is
-  a bigger pivot to companion-animal diseases, flagged for its own `DISCLAIMER.md` review).
+- M7 (notifications, issue #7) is still open and unstarted, independent of the species work.
 - `npx playwright install --with-deps chromium` in `tests/e2e/` — still not done.
 - Consider a future cleanup pass: `docker-compose.yml`'s `chroma` service and
   `CHROMA_HOST`/`CHROMA_PORT` in `.env.example` are still unused (M6 uses embedded Chroma) —
@@ -58,9 +50,9 @@ End-of-session notes. Overwrite this each session — it's a handoff to "next se
   and gives the local folder path, or (b) the user places a Kaggle API token at
   `~/.kaggle/kaggle.json` or via `KAGGLE_USERNAME`/`KAGGLE_KEY` env vars (never pasted in
   chat) and confirms it's there, so the `kaggle` CLI can be scripted directly. Carried over
-  three sessions now, still blocking. Same situation will likely recur for M12–M14's
-  species-specific datasets — worth asking the user up front next time rather than
-  rediscovering the same wall each milestone.
+  four sessions now, still blocking. Same "no dataset found" wall was hit again for M12
+  (Sheep) — worth raising with the user proactively for M13/M14 rather than waiting to hit
+  it a third and fourth time.
 - `GITHUB_TOKEN` used by the GitHub MCP server is invalid ("Bad credentials" on every MCP
   call, multiple sessions running now) — not blocking, since `gh` CLI has a separate working
   keyring login (`env -u GITHUB_TOKEN gh ...` per call), but MCP itself needs a real token
