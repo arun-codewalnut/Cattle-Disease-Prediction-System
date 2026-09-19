@@ -13,3 +13,26 @@ This system is a **learning project**, not a certified veterinary diagnostic too
 Any feature that adds real-world action (notifications, escalation, reporting to an
 authority) must preserve this behavior. See
 [docs/API_CONTRACTS.md](API_CONTRACTS.md) for the `recommended_action` field this maps to.
+
+## Companion animals (M13+)
+
+This project started as livestock-only (cattle/buffalo/sheep), where "reportable disease"
+means economically significant, herd-level contagious diseases (Foot and Mouth Disease,
+Lumpy Skin Disease) that animal-health authorities require reporting. Companion animals
+(cat, dog) carry a different equivalent: **rabies**. Veterinarians are under a legal
+mandatory-reporting obligation for suspected or confirmed rabies in cats and dogs to local
+public-health authorities — a real, non-optional equivalent to `REPORTABLE_DISEASES`, with
+even higher stakes (rabies is a fatal zoonotic disease).
+
+**Whenever a real companion-animal diagnosis model is built** (none exists yet — see
+`docs/specs/M13-cat-disease-detection.md`), rabies/suspected rabies exposure must be added
+to a companion-animal equivalent of `REPORTABLE_DISEASES` from the first version of that
+model, not retrofitted after. Until then, diagnosis is deliberately blocked entirely for
+species without a real model (`DIAGNOSIS_NOT_SUPPORTED_FOR_SPECIES`) — reusing the
+cattle-trained model's output for a cat or dog would present a livestock disease as if it
+were a real finding for a companion animal, which is worse than no answer at all.
+
+The rest of this document's guarantees (probabilistic estimate, not a diagnosis; never the
+sole basis for a real decision) apply identically regardless of audience — a pet owner needs
+the same honesty a farmer/vet does, just framed for a different context and different stakes
+(an individual companion animal, not herd economics).
