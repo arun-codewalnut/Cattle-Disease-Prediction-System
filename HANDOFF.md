@@ -5,46 +5,40 @@ End-of-session notes. Overwrite this each session — it's a handoff to "next se
 
 ---
 
-## This session (2026-09-19)
+## This session (2026-09-20)
 
-- Confirmed M12's PR had already been merged to `main` — synced before branching for M13.
-- **Implemented M13** (issue #22): Cat added as a fourth species — the real pivot in the
-  M11–M14 sequence, as expected. See STATE.md for the full detail list.
-- **The central judgment call this session: refused to reuse the cattle model for Cat.**
-  M11/M12 reused it for Buffalo/Sheep because those species share the livestock disease
-  family closely enough to call it a disclosed approximation. A cat doesn't get Foot and
-  Mouth Disease or Lumpy Skin Disease, and the model's symptom vocabulary
-  (`milk_yield_drop`, `udder_swelling`) doesn't even apply to a cat. Predicting a cattle
-  disease name for someone's pet would be a real correctness/safety problem, not a scoping
-  shortcut — so diagnosis is blocked entirely for Cat instead, enforced at both the backend
-  (rejects even a direct API call) and frontend (no submittable form exists) layers. This
-  was more conservative than issue #22's literal "train and wire in a cat-aware model"
-  wording, and worth flagging clearly rather than quietly narrowing scope.
-- Resolved the three open questions from issue #22 with real web research, not assumptions:
-  a starter cat disease list (URI, ringworm, FIV), rabies as the confirmed
-  legally-mandatory companion-animal escalation-equivalent, and a new companion-animal
-  section in `docs/DISCLAIMER.md`.
-- Found real candidate cat-disease datasets this time (a Hugging Face-mirrored symptom
-  dataset, Roboflow image sets) — unlike the "nothing found" outcome for Buffalo/Sheep.
-  Did not download anything — flagged for the user's decision, same "ask before fetching"
-  boundary as M9's Kaggle situation.
-- **Validated, then committed**: backend 21/21, ml-service confirmed unaffected, frontend
-  lint + 11/11 + build, plus a live browser run confirming Cat hides the diagnosis forms
-  entirely and a direct `curl` check confirming both diagnosis endpoints reject a Cat animal
-  cleanly. All M13 work committed (3 focused commits: backend, frontend, docs) — see git log
-  on `feat/m13-cat-disease-detection`. PR opened against `main`.
+- Confirmed M13's PR (#22) had already been merged to `main` — synced before branching for M14.
+- **Implemented M14** (issue #23): Dog added as a fifth species. See STATE.md for the full
+  detail list.
+- **Central decision, confirmed with the user before coding, not assumed**: mirror M13's
+  conservative "block diagnosis entirely, don't source data/train a model this session" call
+  rather than issue #23's literal wording. Asked via `AskUserQuestion` (M13-style block vs.
+  full scope with real dataset sourcing + training); the user picked the conservative option.
+- Did real web research (AVMA, VCA, AKC) for the dog disease list required by issue #23 —
+  canine distemper, canine parvovirus, kennel cough (CIRDC), sarcoptic/demodectic mange — and
+  re-confirmed the same Hugging Face/Kaggle dataset candidates M13 found, still not downloaded.
+- Reread `docs/DISCLAIMER.md` before touching it and found it already dog-inclusive from M13
+  ("companion animals (cat, dog)", "cats and dogs") — made **no edit** to it this session,
+  documented as a deliberate decision in the spec rather than silently skipping a step M13 did.
+- Confirmed `DiagnosisIntake.jsx`/`AnimalIdentityFields.jsx` needed no code changes — both
+  already gate generically on `DIAGNOSIS_SUPPORTED_SPECIES`, no Cat-specific hardcoding to
+  generalize.
+- **Validated, then committed**: backend 23/23, ml-service confirmed unaffected (no
+  ml-service files touched), frontend lint + 12/12 + build, plus a live end-to-end run: `curl`
+  confirmed a Dog animal's symptom and image diagnosis both reject with a clean `400
+  DIAGNOSIS_NOT_SUPPORTED_FOR_SPECIES`, a Cow diagnosis still succeeded normally, and a real
+  browser run confirmed selecting Dog hides the diagnosis forms entirely (Cow still works after
+  switching back).
 
 ## Next session
 
-- Review and merge the issue #22 PR (M13) once it's had a look.
-- M14 (Dog, issue #23) should be lighter now that M13 settled the companion-animal framing —
-  likely similar in shape to M13 itself (block diagnosis, document a disease list, reuse the
-  rabies escalation-equivalent) rather than a new framing discussion, unless dog-specific
-  research turns up a reason to diverge.
-- **Real cat/dog models are still blocked on data** — but this time there are actual
-  candidates worth evaluating (see STATE.md's M13 entry) rather than "nothing found." Worth
-  asking the user directly: should a follow-up issue be opened to evaluate/download the
-  Hugging Face pet-symptoms dataset or the Roboflow cat-skin/ringworm image sets?
+- Open a PR for M14 (issue #23) once the user confirms — not opened yet this session.
+- M14 is the last of the five originally-requested species (`docs/ROADMAP.md`'s "Target
+  species" note) — no more species milestones queued after this.
+- **Real cat/dog models are still blocked on data** — candidates are known (Hugging Face
+  `karenwky/pet-health-symptoms-dataset`, two Kaggle multi-species datasets) but nothing has
+  been downloaded across M13 or M14. Worth asking the user directly: should a follow-up issue
+  be opened to evaluate/download one of these?
 - **Still waiting on the user for M9's cattle-image dataset** (issue #18 stays open,
   spec-only) — see Blockers.
 - Decide on a `LICENSE` (still open, carried over from several sessions back).
@@ -63,11 +57,11 @@ End-of-session notes. Overwrite this each session — it's a handoff to "next se
   the user hasn't provided one yet. Two ways to unblock: (a) the user downloads it manually
   and gives the local folder path, or (b) the user places a Kaggle API token at
   `~/.kaggle/kaggle.json` or via `KAGGLE_USERNAME`/`KAGGLE_KEY` env vars (never pasted in
-  chat) and confirms it's there. Carried over five sessions now, still blocking.
-- **M13 found real cat-disease dataset candidates but didn't fetch them** — not strictly a
-  blocker (M13 shipped without needing them, by design), but real follow-up work needs the
-  user's decision on which candidate (if any) to pursue, and possibly a Hugging Face token
-  or Roboflow API key depending on which one.
+  chat) and confirms it's there. Carried over six sessions now, still blocking.
+- **M13/M14 found real cat/dog-disease dataset candidates but didn't fetch them** — not
+  strictly a blocker (both shipped without needing them, by design), but real follow-up work
+  needs the user's decision on which candidate (if any) to pursue, and possibly a Hugging Face
+  token or a review of the Kaggle datasets' licensing.
 - `GITHUB_TOKEN` used by the GitHub MCP server is invalid ("Bad credentials" on every MCP
   call, multiple sessions running now) — not blocking, since `gh` CLI has a separate working
   keyring login (`env -u GITHUB_TOKEN gh ...` per call), but MCP itself needs a real token
