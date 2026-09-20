@@ -13,7 +13,7 @@ export default function DiagnosisIntake() {
   const [farmId, setFarmId] = useState('')
   const [species, setSpecies] = useState('COW')
   const [symptoms, setSymptoms] = useState(emptySymptoms())
-  const [image, setImage] = useState(null)
+  const [images, setImages] = useState([])
   const [status, setStatus] = useState('idle') // idle | submitting | success | error
   const [result, setResult] = useState(null)
   const [error, setError] = useState(null)
@@ -63,7 +63,7 @@ export default function DiagnosisIntake() {
   }
 
   async function handleImageSubmit() {
-    if (!image || !validateIdentityFields()) {
+    if (images.length === 0 || !validateIdentityFields()) {
       return
     }
 
@@ -75,7 +75,7 @@ export default function DiagnosisIntake() {
 
     try {
       const animal = await createAnimal({ tagNumber, farmId, species }, correlationId)
-      const diagnosis = await submitImage(animal.id, image, correlationId)
+      const diagnosis = await submitImage(animal.id, images, correlationId)
       setResult(diagnosis)
       setStatus('success')
     } catch (err) {
@@ -127,8 +127,8 @@ export default function DiagnosisIntake() {
 
         {(diagnosisSupported || imageOnlySupported) && (
           <ImageUploadForm
-            image={image}
-            onImageChange={setImage}
+            images={images}
+            onImagesChange={setImages}
             onSubmit={handleImageSubmit}
             disabled={disabled}
           />

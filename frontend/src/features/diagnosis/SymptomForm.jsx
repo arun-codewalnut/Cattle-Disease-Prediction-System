@@ -27,7 +27,13 @@ export default function SymptomForm({ symptoms, onSymptomChange, onSubmit, disab
       </fieldset>
 
       <button type="submit" disabled={disabled}>
-        {disabled ? '⏳ Submitting…' : '🐄 Get diagnosis'}
+        {disabled ? (
+          <>
+            <span className="btn-spinner" aria-hidden="true" /> Submitting…
+          </>
+        ) : (
+          '🐄 Get diagnosis'
+        )}
       </button>
     </form>
   )
