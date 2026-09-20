@@ -3,6 +3,8 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import app.agent.graph as graph_module
+import app.models.cat_image_model as cat_image_model_module
+import app.models.dog_image_model as dog_image_model_module
 import app.models.image_model as image_model_module
 import pytest
 from app.agent.graph import run_diagnosis
@@ -116,6 +118,77 @@ def test_image_diagnosis_still_escalates_for_reportable_disease():
     assert result["recommended_action"] == "escalate_to_vet"
 
 
+# M13/M14 follow-up: Cat/Dog each have their own real, trained IMAGE model — same
+# gitignored-artifact-so-skip-in-CI reasoning as the cattle model above. Species picks which
+# model predict_image_node calls; see app.agent.graph._IMAGE_MODEL_BY_SPECIES.
+_CAT_IMAGE_MODEL_PATH = cat_image_model_module.DEFAULT_MODEL_PATH
+_CAT_IMAGES_DIR = Path(__file__).resolve().parents[1] / "data" / "cat-images"
+_HAS_TRAINED_CAT_IMAGE_MODEL = _CAT_IMAGE_MODEL_PATH.exists()
+
+_DOG_IMAGE_MODEL_PATH = dog_image_model_module.DEFAULT_MODEL_PATH
+_DOG_IMAGES_DIR = Path(__file__).resolve().parents[1] / "data" / "dog-images"
+_HAS_TRAINED_DOG_IMAGE_MODEL = _DOG_IMAGE_MODEL_PATH.exists()
+
+
+def _sample_species_image_base64(images_dir: Path, folder: str) -> str:
+    sample = next((images_dir / folder).glob("*.jpg"))
+    return base64.b64encode(sample.read_bytes()).decode()
+
+
+def _sample_species_images_base64(images_dir: Path, folder: str, n: int = 10) -> list[str]:
+    # random.sample (fixed seed), not "first N by directory order" — a directory listing can
+    # cluster same-shoot/similarly-hard images together, which made an earlier version of this
+    # test flaky on a real, correctly-behaving model. A seeded random spread is a fairer,
+    # still-reproducible sample of the class.
+    import random
+
+    all_files = sorted((images_dir / folder).glob("*.jpg"))
+    samples = random.Random(42).sample(all_files, min(n, len(all_files)))
+    return [base64.b64encode(s.read_bytes()).decode() for s in samples]
+
+
+@pytest.mark.skipif(not _HAS_TRAINED_CAT_IMAGE_MODEL, reason="no local ml-service/models/cat_image_model.pt")
+def test_cat_species_routes_to_the_cat_model_per_class():
+    # Cat's real per-class F1 is 0.77-0.86, not 1.0 — asserting a single arbitrary sample per
+    # class would occasionally fail on a genuinely-correct model just from picking an unlucky
+    # image. Requiring half of 10 random samples correct is comfortably below the model's real
+    # recall (77-86%) while still failing on genuine breakage (~25% expected from 4-way chance).
+    for folder, expected in [
+        ("flea-allergy", "Flea Allergy"),
+        ("healthy", "Healthy"),
+        ("ringworm", "Ringworm"),
+        ("scabies", "Scabies"),
+    ]:
+        images = _sample_species_images_base64(_CAT_IMAGES_DIR, folder)
+        diagnoses = [run_diagnosis({}, image_base64=img, species="CAT")["diagnosis"] for img in images]
+        correct = sum(1 for d in diagnoses if d == expected)
+        assert correct >= 5, f"{folder}: only {correct}/10 correctly diagnosed as {expected}, got {diagnoses}"
+
+
+@pytest.mark.skipif(not _HAS_TRAINED_DOG_IMAGE_MODEL, reason="no local ml-service/models/dog_image_model.pt")
+def test_dog_species_routes_to_the_dog_model():
+    # Only asserting Mange here, not all 4 classes — the dog model's real, measured accuracy
+    # is 52.6% (0.25 F1 for Canine Distemper specifically), so asserting a specific diagnosis
+    # for every class would be asserting noise. Mange is the one class this model is actually
+    # decent at (0.75 F1, still not perfect) — see docs/specs/M14-dog-disease-detection.md.
+    # Same random-sample reasoning as the Cat test above: honest given real, imperfect F1.
+    images = _sample_species_images_base64(_DOG_IMAGES_DIR, "mange")
+    diagnoses = [run_diagnosis({}, image_base64=img, species="DOG")["diagnosis"] for img in images]
+    correct = sum(1 for d in diagnoses if d == "Mange")
+    assert correct >= 5, f"only {correct}/10 correctly diagnosed as Mange, got {diagnoses}"
+
+
+@pytest.mark.skipif(
+    not (_HAS_TRAINED_CAT_IMAGE_MODEL and _HAS_TRAINED_DOG_IMAGE_MODEL),
+    reason="no local ml-service/models/{cat,dog}_image_model.pt",
+)
+def test_unrecognized_species_falls_back_to_the_cattle_model():
+    # COW/BUFFALO/SHEEP, or no species at all, must keep working exactly as before
+    # species-aware routing existed — this is the regression check for that.
+    result = run_diagnosis({}, image_base64=_sample_image_base64("healthy"), species="BUFFALO")
+    assert result["diagnosis"] == "Healthy"
+
+
 def test_image_bytes_that_arent_a_real_image_degrade_to_uncertain():
     # Valid base64, but not a decodable image — app/models/image_model.py's own PIL-decode
     # failure path, distinct from _fetch_image_bytes's "couldn't even get bytes" cases below.
@@ -142,6 +215,24 @@ def test_missing_image_model_returns_structured_error(monkeypatch, tmp_path):
 
     with pytest.raises(ApiError) as exc_info:
         run_diagnosis({}, image_base64=_VALID_1X1_PNG_BASE64)
+
+    assert exc_info.value.code == "MODEL_NOT_TRAINED"
+
+
+def test_missing_cat_image_model_returns_structured_error(monkeypatch, tmp_path):
+    monkeypatch.setattr(cat_image_model_module, "DEFAULT_MODEL_PATH", tmp_path / "does-not-exist.pt")
+
+    with pytest.raises(ApiError) as exc_info:
+        run_diagnosis({}, image_base64=_VALID_1X1_PNG_BASE64, species="CAT")
+
+    assert exc_info.value.code == "MODEL_NOT_TRAINED"
+
+
+def test_missing_dog_image_model_returns_structured_error(monkeypatch, tmp_path):
+    monkeypatch.setattr(dog_image_model_module, "DEFAULT_MODEL_PATH", tmp_path / "does-not-exist.pt")
+
+    with pytest.raises(ApiError) as exc_info:
+        run_diagnosis({}, image_base64=_VALID_1X1_PNG_BASE64, species="DOG")
 
     assert exc_info.value.code == "MODEL_NOT_TRAINED"
 
