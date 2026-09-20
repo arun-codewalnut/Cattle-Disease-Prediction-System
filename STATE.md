@@ -3,7 +3,7 @@
 Living snapshot of project state. Update this whenever you finish a meaningful chunk of work —
 this is what an agent (or you) reads first when resuming.
 
-_Last updated: 2026-09-19 (session 7)_
+_Last updated: 2026-09-20 (session 8)_
 
 ## Known gaps
 
@@ -243,19 +243,44 @@ _Last updated: 2026-09-19 (session 7)_
   `curl`, directly confirmed both the symptom and image diagnosis endpoints reject it
   cleanly, and in the real browser confirmed selecting Cat hides the symptom/photo forms
   entirely (switching back to Cow correctly restores them).
+- **M13 PR merged to `main`** (issue #22) — confirmed via `git pull` before branching for M14.
+- **M14 done, not yet merged** (issue #23, branch `feat/m14-dog-disease-detection`, branched
+  from synced `main`): Dog added as a fifth species — the last of the five from the original
+  request. **Deliberately mirrors M13's "block, don't approximate" call rather than issue
+  #23's literal "source a dataset, train and wire in a dog-aware model" wording** — same
+  reasoning as Cat (the cattle model's disease list/symptom vocabulary don't apply to a
+  companion animal at all), confirmed explicitly with the user before starting rather than
+  assumed. Resolved issue #23's research asks with real citations (AVMA, VCA, AKC): a starter
+  dog disease list (canine distemper, canine parvovirus, kennel cough/CIRDC, sarcoptic/
+  demodectic mange), documented for future use, not wired into any model. Rabies
+  escalation-equivalent and `docs/DISCLAIMER.md`'s companion-animal framing were **not**
+  re-derived — both were already written dog-inclusive by M13, confirmed by rereading the
+  file rather than assumed, so `DISCLAIMER.md` needed no edit this milestone (a deliberate,
+  documented decision, not an oversight). Implementation: `DOG` added to the `Species` enum
+  and frontend `SPECIES_OPTIONS`; `DiagnosisIntake.jsx`/`AnimalIdentityFields.jsx` needed no
+  code changes since both already gate generically on `DIAGNOSIS_SUPPORTED_SPECIES` with no
+  Cat-specific hardcoding. `docs/API_CONTRACTS.md` updated (`DOG` in the species list, the
+  `CAT`-only rejection paragraph extended to cover both). Found (not downloaded) the same
+  Hugging Face pet-symptoms dataset M13 flagged, plus two Kaggle multi-species candidates —
+  flagged as follow-up, same "ask before fetching" boundary. Spec:
+  [docs/specs/M14-dog-disease-detection.md](docs/specs/M14-dog-disease-detection.md).
+  **Validated**: backend 23/23 (2 new tests each in `AnimalServiceTest`/
+  `DiagnosisServiceTest`, mirroring the Cat tests), ml-service unaffected (no ml-service files
+  touched), frontend lint + 12/12 + build all green, **plus live end-to-end verification**:
+  created a Dog animal via `curl`, confirmed both the symptom and image diagnosis endpoints
+  reject it with a clean `400 DIAGNOSIS_NOT_SUPPORTED_FOR_SPECIES`, confirmed a Cow diagnosis
+  still succeeds normally, and in the real browser confirmed selecting Dog hides the
+  symptom/photo forms entirely (switching back to Cow correctly restores them).
 
 ## In Progress
 
-- M13 (issue #22) — implementation done, PR not yet opened/merged.
+- M14 (issue #23) — implementation done, PR not yet opened.
 
 ## Not Started
 
 - M7: Notifications (email/WhatsApp free tier)
 - M9 real implementation (issue #18 still open — only the spec landed; training itself is
   blocked on the Kaggle dataset, see HANDOFF.md's Blockers)
-- M14: Dog (issue #23) — should be much lighter now that M13 settled the companion-animal
-  framing (rabies escalation-equivalent, disclaimer section, the "block rather than
-  approximate" pattern for species without a real model)
 
 Deployment (formerly M8 in the original numbering) was dropped from scope — see
 `docs/DECISIONS.md`. The M8 number was reused for image-based disease recognition, a
