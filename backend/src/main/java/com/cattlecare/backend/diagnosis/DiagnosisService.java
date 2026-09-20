@@ -34,10 +34,11 @@ public class DiagnosisService {
     private static final Set<String> ALLOWED_IMAGE_TYPES = Set.of("image/jpeg", "image/png");
     private static final long MAX_IMAGE_SIZE_BYTES = 5L * 1024 * 1024;
 
-    // M13 (docs/specs/M13-cat-disease-detection.md): reusing the cattle model is a disclosed
+    // M13/M14 (docs/specs/M13-cat-disease-detection.md,
+    // docs/specs/M14-dog-disease-detection.md): reusing the cattle model is a disclosed
     // approximation for livestock (Buffalo/Sheep share the disease family), but would be an
-    // actively wrong result for a companion animal like Cat — the model's disease list and
-    // symptom vocabulary don't apply at all. Diagnosis is blocked for any species not in
+    // actively wrong result for a companion animal like Cat or Dog — the model's disease list
+    // and symptom vocabulary don't apply at all. Diagnosis is blocked for any species not in
     // this set, not just hidden in the UI, so a direct API call can't bypass it either.
     static final Set<Species> DIAGNOSIS_SUPPORTED_SPECIES = Set.of(Species.COW, Species.BUFFALO, Species.SHEEP);
 

@@ -157,9 +157,10 @@ class DiagnosisServiceTest {
         verify(diagnosisCaseRepository, never()).save(any());
     }
 
-    // M13 (docs/specs/M13-cat-disease-detection.md): the cattle model's disease list and
-    // symptom vocabulary don't apply to a cat at all, unlike Buffalo/Sheep - diagnosis must
-    // be rejected outright, not silently run through the cattle model.
+    // M13/M14 (docs/specs/M13-cat-disease-detection.md,
+    // docs/specs/M14-dog-disease-detection.md): the cattle model's disease list and symptom
+    // vocabulary don't apply to a cat or dog at all, unlike Buffalo/Sheep - diagnosis must be
+    // rejected outright, not silently run through the cattle model.
 
     @Test
     void submitSymptoms_catSpecies_rejectedBeforeMlServiceCall() {
@@ -178,6 +179,31 @@ class DiagnosisServiceTest {
         Animal cat = new Animal("CAT-001", 5L, Species.CAT);
         when(animalService.getOrThrow(1L)).thenReturn(cat);
         MultipartFile image = new MockMultipartFile("image", "cat.jpg", "image/jpeg", new byte[] {1});
+
+        ApiException ex = assertThrows(ApiException.class, () -> diagnosisService.submitImage(1L, image));
+
+        assertEquals("DIAGNOSIS_NOT_SUPPORTED_FOR_SPECIES", ex.getCode());
+        verify(mlServiceClient, never()).diagnose(anyMap(), any(), any());
+        verify(diagnosisCaseRepository, never()).save(any());
+    }
+
+    @Test
+    void submitSymptoms_dogSpecies_rejectedBeforeMlServiceCall() {
+        Animal dog = new Animal("DOG-001", 5L, Species.DOG);
+        when(animalService.getOrThrow(1L)).thenReturn(dog);
+
+        ApiException ex = assertThrows(ApiException.class, () -> diagnosisService.submitSymptoms(1L, Map.of()));
+
+        assertEquals("DIAGNOSIS_NOT_SUPPORTED_FOR_SPECIES", ex.getCode());
+        verify(mlServiceClient, never()).diagnose(anyMap(), any());
+        verify(diagnosisCaseRepository, never()).save(any());
+    }
+
+    @Test
+    void submitImage_dogSpecies_rejectedBeforeMlServiceCall() {
+        Animal dog = new Animal("DOG-001", 5L, Species.DOG);
+        when(animalService.getOrThrow(1L)).thenReturn(dog);
+        MultipartFile image = new MockMultipartFile("image", "dog.jpg", "image/jpeg", new byte[] {1});
 
         ApiException ex = assertThrows(ApiException.class, () -> diagnosisService.submitImage(1L, image));
 
