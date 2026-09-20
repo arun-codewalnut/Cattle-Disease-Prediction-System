@@ -10,10 +10,15 @@ scikit-learn==1.6.0
 pandas==2.2.3
 shap==0.46.0
 
-# Image classifier (M9) — CPU wheels, install with:
-#   pip install --index-url https://download.pytorch.org/whl/cpu torch torchvision
-torch==2.14.0
-torchvision==0.29.0
+# Image classifier (M9) — CPU wheels. The +cpu version suffix + extra-index-url below make
+# `pip install -r requirements.txt` alone resolve the CPU build, same as CI does — a bare
+# `torch==2.14.0` (no +cpu) silently resolves to PyPI's default CUDA build instead, which
+# pulls in hundreds of MB of nvidia-*/triton/cuda-toolkit packages and blew past this repo's
+# CI runner's disk quota the first time this was pushed (confirmed via the failed run's log,
+# not guessed).
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch==2.14.0+cpu
+torchvision==0.29.0+cpu
 
 # Agent / RAG
 langgraph==0.2.60

@@ -41,19 +41,21 @@ End-of-session notes. Overwrite this each session — it's a handoff to "next se
 
 ## Next session
 
-- **Commit and (if asked) push/PR the M9 work** — not done yet this session, stopped after
-  verification to hand off cleanly. Suggested split: data+deps, model+training script, graph
-  wiring, docs+tests (mirrors how M13/M14 split their commits).
+- M9 committed, pushed, and PR'd ([#31](https://github.com/arun-codewalnut/Cattle-Disease-Prediction-System/pull/31)).
+  **First CI run failed** (`ml-service` job): plain `pip install -r requirements.txt` resolved
+  `torch==2.14.0`/`torchvision==0.29.0` to PyPI's default **CUDA** build, not the CPU one used
+  locally — hundreds of MB of `nvidia-*`/`triton`/`cuda-toolkit` packages exhausted the CI
+  runner's disk (`OSError: [Errno 28] No space left on device`). **Fixed**: pinned
+  `torch==2.14.0+cpu`/`torchvision==0.29.0+cpu` plus a `--extra-index-url
+  https://download.pytorch.org/whl/cpu` directive line in `requirements.txt` — verified locally
+  in a disposable venv that a plain `pip install -r requirements.txt` (no extra flags, matching
+  CI exactly) now resolves the CPU wheels with zero `nvidia-*`/CUDA packages. Pushed as a
+  follow-up commit; **re-check the PR's CI once it reruns** to confirm this actually fixed it on
+  the real Linux runner, not just in the local simulation.
 - Companion-animal (Cat/Dog) real model: still blocked on data, now with **evaluated, not just
   found** candidates — worth discussing whether to look for a better/larger canine or feline-
   specific dataset (search terms used so far: generic "animal disease/symptom dataset" —
   a more targeted search might turn up something with better per-species sample counts).
-- `requirements.txt` now pins `torch==2.14.0`/`torchvision==0.29.0` without the
-  `--index-url https://download.pytorch.org/whl/cpu` flag baked in (pip doesn't support an
-  index URL inside requirements.txt per-package) — CI's plain `pip install -r requirements.txt`
-  may pull a much larger CUDA-enabled wheel instead of the CPU one used locally. Worth
-  checking CI logs/timing once this is pushed; if it's a problem, a `constraints.txt` or a
-  CI-specific install step pointing at the CPU index is the fix.
 - Decide on a `LICENSE` (still open, carried over from several sessions back).
 - Fix `GITHUB_TOKEN` for GitHub MCP so the `gh` CLI workaround (`env -u GITHUB_TOKEN gh ...`)
   isn't needed every session.
