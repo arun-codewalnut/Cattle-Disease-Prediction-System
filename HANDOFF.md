@@ -5,64 +5,53 @@ End-of-session notes. Overwrite this each session — it's a handoff to "next se
 
 ---
 
-## This session (2026-09-20, continued further)
+## This session (2026-09-20, continued further still)
 
-- M9's PR ([#31](https://github.com/arun-codewalnut/Cattle-Disease-Prediction-System/pull/31))
-  hit a real CI failure after merge-adjacent testing looked clean locally: `pip install -r
-  requirements.txt` on the Linux runner resolved `torch`/`torchvision` to PyPI's default CUDA
-  build (hundreds of MB of `nvidia-*`/`triton` packages), exhausting the runner's disk. Fixed
-  by pinning the `+cpu` version suffix and an `--extra-index-url` directive in
-  `requirements.txt` — verified the fix in a disposable local venv against a plain `pip
-  install -r requirements.txt` (no special flags) before pushing, matching exactly what CI
-  runs. CI went green; the PR merged.
-- You asked to train all 5 species so an uploaded photo gets a real diagnosis for each.
-  Investigated honestly rather than assuming this was achievable: Buffalo/Sheep have zero
-  image (or even symptom) data anywhere found across any session; Cat/Dog's best-known
-  candidates (Roboflow, flagged back in M13) turned out to require a login/API key — confirmed
-  by testing, not assumed. A fresh Kaggle search found real, adequate, anonymously-downloadable
-  data for Cat and Dog specifically (not Buffalo/Sheep — still nothing there).
-- **Trained and shipped real Cat and Dog image models** (branch
-  `feat/m13-m14-real-cat-dog-image-models`, off synced `main` after M9 merged):
-  - Cat: 83.0% accuracy, 0.829 macro F1 (Flea Allergy/Healthy/Ringworm/Scabies) — solid,
-    comparable to M9's cattle model. Disease list changed from M13's original URI/Ringworm/FIV
-    research since no image data exists for URI/FIV — confirmed with you before proceeding.
-  - Dog: 52.6% accuracy, 0.489 macro F1 — genuinely weak, especially Canine Distemper (0.25
-    F1). Tried a legitimate fix (flip augmentation, split before augmenting to avoid leaking
-    into validation) — didn't help; likely a signal problem (systemic diseases lack a strong
-    single-photo visual signature), not fixable with more of the same data. No Healthy class
-    exists for Dog at all. **Confirmed with you explicitly**: ship it anyway, loudly disclosed
-    (frontend warning + `docs/DISCLAIMER.md`), rather than withholding or quietly narrowing
-    scope.
-  - Real architecture change: species is now forwarded backend→ml-service for the **image**
-    endpoint only (symptom path unchanged, still species-blind). `ml-service`'s
-    `predict_image_node` picks the model by species, falling back to the cattle model for
-    Cow/Buffalo/Sheep/unset — verified as a regression test, not just assumed unaffected.
-  - Frontend's diagnosis-availability UI went from binary (full/blocked) to 3-way (full /
-    image-only / blocked) — Cat/Dog now show only the photo upload form, each with its own
-    disclosure (Cat: informational note; Dog: a loud ⚠️ warning with the real accuracy number
-    and the no-Healthy-class gap, shown before any photo is even uploaded).
-  - Rabies escalation is still not code — neither model has a Rabies class to attach the rule
-    to. Not a gap introduced this session; the same honest "not yet" from M13, unchanged.
-- **Validated, not yet committed**: ml-service 45/2 skipped (new Cat/Dog tests use random,
-  seeded multi-image sampling after an initial single-sample version turned out flaky against
-  a real, correctly-behaving-but-imperfect model), backend 24/24, frontend lint + 13/13 +
-  build. Live end-to-end: real Cat/Dog photos through the actual backend multipart endpoint,
-  correct diagnoses; confirmed symptom submission still rejects for both; confirmed Cow
-  regression-free; confirmed in the real browser that Cat/Dog show the correct image-only UI
-  with the right disclosure text.
+- PR #32 (real Cat/Dog image models) pushed, opened, and CI-green (`frontend`/`backend`/
+  `ml-service` all pass; `mergemitra-analysis` fails the same way it did on #31 — an org-level
+  check unrelated to this repo's own workflow, not something to chase). Not merged yet.
+- Added a `README.md` section on testing diagnosis manually and retraining any model from
+  scratch, plus fixed a duplicate `dog_image_model.pt` row in `REGISTRY.md` (the training
+  script appends rather than replaces — caught this while pulling exact numbers to answer
+  "how much data is each model trained on").
+- You asked for a UI pass: a species preview image on selection, up to 5 photos per diagnosis
+  with a warning if they disagree, and general visual polish. Showed a quick interactive
+  mockup first to align on direction before building. Two real decisions surfaced and got your
+  explicit answer rather than a guess:
+  1. **What "5 photos disagree" means**: compare the 5 photos' own diagnosis results against
+     each other, not verify "is this actually a cat" (no species-detection model exists — that
+     would be new scope, flagged, not started).
+  2. **Branching**: new branch `feat/multi-photo-diagnosis-ui`, stacked on the still-open
+     Cat/Dog branch rather than waiting for #32 to merge, so it could use the working Cat/Dog
+     image endpoints right away.
+- **Implemented**: `POST /api/animals/{id}/diagnoses/image` now takes 1-5 files and returns
+  `ImageDiagnosisBatchResponse { results, diagnosesAgree }` (breaking change, same
+  no-versioning-ceremony precedent as M11) — backend loops the existing single-image
+  `ml-service` call per photo, **no ml-service changes needed**. Frontend gained a 5-slot photo
+  tray (`ImageUploadForm.jsx`, reworked), a species preview card that swaps instantly on
+  selection (`SpeciesPreview.jsx`, new), a disagreement warning banner
+  (`DiagnosisResult.jsx`, split into card + list), and general polish (animated spinner,
+  entrance animations, kept the existing farm-themed background since it was already good).
+- **Validated, not yet committed**: backend 16/16, frontend 14/14 + build. Live end-to-end via
+  `curl`: disagreement correctly detected in two real cases (a misclassified Cat photo, an
+  "uncertain" Dog photo mixed with two Mange photos), `TOO_MANY_IMAGES` correctly rejects a
+  6th photo. Confirmed in the real browser (desktop + mobile) that the species preview swaps
+  correctly and the photo tray's 5 slots have correct accessible labels — could not literally
+  drive the file picker in the built-in browser (same limitation noted for M9's manual
+  verification), covered instead by the passing Vitest `user.upload()` tests.
 
 ## Next session
 
-- **Commit and (if asked) push/PR the Cat/Dog work** — stopped after verification to hand off
-  cleanly, same pattern as M9.
-- Buffalo/Sheep still have zero real data of any kind (image or symptom) — still using the
-  disclosed cattle-model approximation, unchanged by anything this session did. Worth another
-  look if a future session wants to close that gap.
-- Dog's image model quality is a real, standing concern — if better data ever turns up
-  (specifically photos of *systemic* disease presentation, not just more skin-condition
-  photos), worth revisiting; the current 52.6% accuracy is disclosed, not fixed.
-- `requirements.txt`'s CPU-wheel pin is now confirmed working on real CI (not just locally) —
-  no further action needed there unless torch/torchvision get upgraded again.
+- **Commit and (if asked) push/PR the multi-photo/UI work** — stopped after verification to
+  hand off cleanly. This PR's diff will include PR #32's changes until #32 merges (it's
+  stacked on that branch) — mention that in the new PR's description so it's not a surprise
+  in review.
+- Merge PR #32 (and then this new one, once opened) when ready.
+- Buffalo/Sheep still have zero real data of any kind — unchanged by anything recent.
+- Dog's image model quality (52.6% accuracy) is still a real, standing concern, now made more
+  visible via the loud UI warning and the disagreement banner (a Dog photo batch will likely
+  show disagreement often, by design — that's the model being honest about its own limits,
+  not a UI bug).
 - Decide on a `LICENSE` (still open, carried over from several sessions back).
 - Fix `GITHUB_TOKEN` for GitHub MCP so the `gh` CLI workaround (`env -u GITHUB_TOKEN gh ...`)
   isn't needed every session.
@@ -71,16 +60,18 @@ End-of-session notes. Overwrite this each session — it's a handoff to "next se
 - Consider a future cleanup pass: `docker-compose.yml`'s `chroma` service and
   `CHROMA_HOST`/`CHROMA_PORT` in `.env.example` are still unused (M6 uses embedded Chroma) —
   flagged, not urgent.
+- Possible follow-up flagged during this session, not started: a real species-detection model
+  (verify an uploaded photo actually looks like the selected species) — meaningfully bigger
+  scope than what was built here, needs its own data-sourcing pass.
 
 ## Blockers
 
 - **Buffalo/Sheep real model**: no image or symptom data found for either across any session
   so far — would need fresh dataset research if this becomes a priority.
-- **Dog image model quality**: not a "missing data" blocker in the usual sense — real data
-  exists and was used, the result is just weak for 3 of 4 classes. A different kind of data
-  (photos where the systemic symptoms are visually apparent — e.g., lethargy/nasal discharge
-  framing rather than close-up skin shots) might help more than additional volume of the same
-  kind; unverified, worth testing if picked up again.
+- **Dog image model quality**: real data exists and was used, the result is just weak for 3 of
+  4 classes. A different kind of data (photos where systemic symptoms are visually apparent
+  rather than close-up skin shots) might help more than additional volume of the same kind;
+  unverified, worth testing if picked up again.
 - `GITHUB_TOKEN` used by the GitHub MCP server is invalid ("Bad credentials" on every MCP
   call, multiple sessions running now) — not blocking, since `gh` CLI has a separate working
   keyring login (`env -u GITHUB_TOKEN gh ...` per call), but MCP itself needs a real token
