@@ -255,4 +255,18 @@ describe('DiagnosisIntake', () => {
 
     expect(fetchMock).not.toHaveBeenCalled()
   })
+
+  it('blocks diagnosis entirely for Dog instead of reusing the cattle model', async () => {
+    const user = userEvent.setup()
+
+    render(<DiagnosisIntake />)
+    await user.selectOptions(screen.getByLabelText(/species/i), 'DOG')
+
+    expect(screen.getByText(/diagnosis isn't available yet for dog/i)).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /get diagnosis/i })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /diagnose from photo/i })).not.toBeInTheDocument()
+    expect(screen.queryByLabelText(/fever/i)).not.toBeInTheDocument()
+
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
 })
