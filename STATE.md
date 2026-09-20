@@ -393,13 +393,24 @@ _Last updated: 2026-09-20 (session 11)_
   live in the browser (desktop + mobile 375px) that the species preview swaps correctly for
   all 5 species and the photo tray's 5 slots render with correct accessible labels — could
   not literally drive the file picker in the built-in browser (same tooling limitation as
-  M9), covered instead by the passing Vitest suite's `user.upload()` simulation. Not yet
-  committed — pending.
+  M9), covered instead by the passing Vitest suite's `user.upload()` simulation.
+- **Found and fixed a real bug while explaining the app to the user**: `POST /api/animals`
+  always inserted a new row, so a second diagnosis for the same real animal (same tag number)
+  permanently failed with `ANIMAL_TAG_DUPLICATE` — there was no way to ever revisit an animal
+  after its first diagnosis, which defeats the point of `tagNumber`/`farmId` existing at all
+  (case history, per `AGENTS.md`'s stated backend responsibility). `AnimalService.create` →
+  `findOrCreate`: looks up by tag first (globally unique, confirmed via
+  `V1__init.sql`), reuses the existing record when `farmId`/`species` both match, still
+  rejects as a real conflict if either doesn't (prevents silently overwriting an existing
+  animal's history via a typo'd tag). New repository method `findByTagNumber`. Backend
+  30/30 (3 new tests: reuse-on-match, reject-on-farm-mismatch, reject-on-species-mismatch).
+  Live-verified: two diagnoses submitted for the same tag both landed on the same `animalId`,
+  and a farm/species mismatch on a reused tag still cleanly rejects.
 
 ## In Progress
 
-- Multi-photo upload + species preview + visual redesign — implementation done, not yet
-  committed.
+- Multi-photo upload + species preview + visual redesign, plus the animal find-or-create fix
+  — all committed on `feat/multi-photo-diagnosis-ui`, not yet pushed/PR'd.
 
 ## Not Started
 

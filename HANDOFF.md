@@ -39,13 +39,21 @@ End-of-session notes. Overwrite this each session — it's a handoff to "next se
   correctly and the photo tray's 5 slots have correct accessible labels — could not literally
   drive the file picker in the built-in browser (same limitation noted for M9's manual
   verification), covered instead by the passing Vitest `user.upload()` tests.
+- While explaining the app's fields to you (why tag number/farm ID exist), found a real bug:
+  `POST /api/animals` always inserted a new row, so a second diagnosis for the same real
+  animal (same tag) permanently failed with `ANIMAL_TAG_DUPLICATE` — no way to ever revisit an
+  animal after its first diagnosis. Fixed: `AnimalService.findOrCreate` looks up by tag first,
+  reuses the existing record when `farmId`/`species` match, still rejects as a real conflict
+  if either doesn't (so a typo'd tag can't silently overwrite someone else's animal). Backend
+  30/30 (3 new tests). Live-verified: two diagnoses for the same tag both landed on the same
+  `animalId`; a farm/species mismatch on a reused tag still cleanly rejects with `409`.
 
 ## Next session
 
-- **Commit and (if asked) push/PR the multi-photo/UI work** — stopped after verification to
-  hand off cleanly. This PR's diff will include PR #32's changes until #32 merges (it's
-  stacked on that branch) — mention that in the new PR's description so it's not a surprise
-  in review.
+- **Commit and (if asked) push/PR the multi-photo/UI + animal find-or-create work** — stopped
+  after verification to hand off cleanly. This PR's diff will include PR #32's changes until
+  #32 merges (it's stacked on that branch) — mention that in the new PR's description so it's
+  not a surprise in review.
 - Merge PR #32 (and then this new one, once opened) when ready.
 - Buffalo/Sheep still have zero real data of any kind — unchanged by anything recent.
 - Dog's image model quality (52.6% accuracy) is still a real, standing concern, now made more
