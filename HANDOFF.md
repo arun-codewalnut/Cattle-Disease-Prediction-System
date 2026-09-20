@@ -7,7 +7,7 @@ End-of-session notes. Overwrite this each session — it's a handoff to "next se
 
 ## This session (2026-09-20, continued)
 
-- Pushed M14's branch and opened [PR #30](https://github.com/arun-codewalnut/Cattle-Disease-Prediction-System/pull/30) against `main`.
+- Pushed M14's branch and opened [PR #30](https://github.com/arun-codewalnut/Cattle-Disease-Prediction-System/pull/30) against `main` — you merged it shortly after, confirmed before branching for M9.
 - You gave `kagglehub`/`datasets` download snippets for all 4 previously-flagged candidate
   datasets and asked me to use them all. Downloaded and evaluated all 4 for real:
   - **Cattle images (`devang03mgr/cattle-diseases-datasets`)**: solid, real, 3,244 images —
@@ -48,7 +48,6 @@ End-of-session notes. Overwrite this each session — it's a handoff to "next se
   found** candidates — worth discussing whether to look for a better/larger canine or feline-
   specific dataset (search terms used so far: generic "animal disease/symptom dataset" —
   a more targeted search might turn up something with better per-species sample counts).
-- Review/merge [PR #30](https://github.com/arun-codewalnut/Cattle-Disease-Prediction-System/pull/30) (M14).
 - `requirements.txt` now pins `torch==2.14.0`/`torchvision==0.29.0` without the
   `--index-url https://download.pytorch.org/whl/cpu` flag baked in (pip doesn't support an
   index URL inside requirements.txt per-package) — CI's plain `pip install -r requirements.txt`

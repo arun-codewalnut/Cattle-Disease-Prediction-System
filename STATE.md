@@ -271,7 +271,7 @@ _Last updated: 2026-09-20 (session 9)_
   reject it with a clean `400 DIAGNOSIS_NOT_SUPPORTED_FOR_SPECIES`, confirmed a Cow diagnosis
   still succeeds normally, and in the real browser confirmed selecting Dog hides the
   symptom/photo forms entirely (switching back to Cow correctly restores them).
-- **M14 PR opened** ([#30](https://github.com/arun-codewalnut/Cattle-Disease-Prediction-System/pull/30)), pushed to `origin`.
+- **M14 PR merged to `main`** ([#30](https://github.com/arun-codewalnut/Cattle-Disease-Prediction-System/pull/30)) — confirmed before branching for M9.
 - **M9 done** (issue #18): the long-standing Kaggle blocker resolved itself — `kagglehub`
   downloaded the 3,244-image cattle-diseases-datasets anonymously, no account/API token
   needed after all (the earlier assumption that one was required was wrong). Trained a real
