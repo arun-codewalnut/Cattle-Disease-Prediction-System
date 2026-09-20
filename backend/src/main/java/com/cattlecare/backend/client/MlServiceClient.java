@@ -36,17 +36,22 @@ public class MlServiceClient {
     }
 
     public DiagnosisResult diagnose(Map<String, Object> symptoms, String imageUrl) {
-        return diagnose(symptoms, imageUrl, null);
+        return diagnose(symptoms, imageUrl, null, null);
     }
 
     public DiagnosisResult diagnose(Map<String, Object> symptoms, String imageUrl, String imageBase64) {
+        return diagnose(symptoms, imageUrl, imageBase64, null);
+    }
+
+    public DiagnosisResult diagnose(
+            Map<String, Object> symptoms, String imageUrl, String imageBase64, String species) {
         String correlationId = MDC.get(CorrelationIdFilter.MDC_KEY);
 
         try {
             return restClient.post()
                     .uri("/agent/diagnose")
                     .header(CorrelationIdFilter.HEADER, correlationId)
-                    .body(new DiagnoseRequestBody(symptoms, imageUrl, imageBase64))
+                    .body(new DiagnoseRequestBody(symptoms, imageUrl, imageBase64, species))
                     .retrieve()
                     .body(DiagnosisResult.class);
         } catch (ResourceAccessException ex) {

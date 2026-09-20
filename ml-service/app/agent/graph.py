@@ -17,6 +17,15 @@ Disease image data exists). It flows through `recommend` exactly like the sympto
 the REPORTABLE_DISEASES escalation rule applies identically regardless of which path produced
 the diagnosis.
 
+`predict_image` is species-aware (M13/M14 follow-up, real Cat/Dog models): `species` in the
+request picks which trained model runs — Cat and Dog get their own models
+(`app/models/cat_image_model.py`/`dog_image_model.py`), everything else (Cow/Buffalo/Sheep, or
+no species given) falls back to the cattle model above, unchanged. The Cat model is solid
+(83% accuracy). **The Dog model is genuinely weak (52.6% accuracy, 0.25 F1 for Canine
+Distemper specifically)** — shipped anyway per an explicit decision to disclose loudly rather
+than withhold, not silently trusted. Nothing here softens that; the caveat lives in the
+frontend and `docs/DISCLAIMER.md`, not swept into a confidence number alone.
+
 `precautions` (M10) is a deterministic lookup, not LLM-generated — unlike `explanation`, its
 content is reviewed, static text returned verbatim by diagnosis, so it can never soften the
 REPORTABLE_DISEASES escalation rule. See docs/specs/M10-precautions-next-steps.md.
@@ -34,7 +43,8 @@ from langgraph.graph import END, StateGraph
 
 from app.agent.llm import get_llm
 from app.errors import ApiError
-from app.models.image_model import predict as predict_image_bytes
+from app.models import cat_image_model, dog_image_model
+from app.models import image_model as cattle_image_model
 from app.models.symptom_model import predict
 from app.rag.retrieval import get_precautions, retrieve
 
@@ -42,6 +52,11 @@ from app.rag.retrieval import get_precautions, retrieve
 # Deliberately a fixed, auditable list here rather than anything the model (or the LLM)
 # could drift on.
 REPORTABLE_DISEASES = {"Foot and Mouth Disease", "Lumpy Skin Disease"}
+
+# Which trained image model handles which species — anything not listed (Cow/Buffalo/Sheep,
+# or no species given) falls back to the cattle model, same as before species-aware routing
+# existed. See the module docstring above for each model's real accuracy.
+_IMAGE_MODEL_BY_SPECIES = {"CAT": cat_image_model, "DOG": dog_image_model}
 
 EXPLAIN_SYSTEM_PROMPT = (
     "You are explaining a machine-learning cattle disease prediction to a farmer. Only use "
@@ -55,6 +70,7 @@ class DiagnosisState(TypedDict, total=False):
     symptoms: dict[str, Any]
     image_url: str | None
     image_base64: str | None
+    species: str | None
     model_path: Path | None
     diagnosis: str
     confidence: float
@@ -143,12 +159,14 @@ def predict_image_node(state: DiagnosisState) -> dict[str, Any]:
         # than failing the request, same "never blocks a diagnosis" pattern as explain_node.
         return {"diagnosis": "uncertain", "confidence": 0.0, "top_features": []}
 
+    model_module = _IMAGE_MODEL_BY_SPECIES.get(state.get("species") or "", cattle_image_model)
+
     try:
-        result = predict_image_bytes(image_bytes, model_path=state.get("model_path"))
+        result = model_module.predict(image_bytes, model_path=state.get("model_path"))
     except FileNotFoundError as exc:
         raise ApiError(
             code="MODEL_NOT_TRAINED",
-            message="The image model hasn't been trained yet — run training.image_model_train.",
+            message=f"The {model_module.__name__.rsplit('.', 1)[-1]} hasn't been trained yet.",
             status_code=503,
         ) from exc
 
@@ -247,6 +265,7 @@ def run_diagnosis(
     symptoms: dict[str, Any],
     image_url: str | None = None,
     image_base64: str | None = None,
+    species: str | None = None,
     model_path: Path | None = None,
 ) -> dict[str, Any]:
     final_state = _compiled_graph.invoke(
@@ -254,6 +273,7 @@ def run_diagnosis(
             "symptoms": symptoms,
             "image_url": image_url,
             "image_base64": image_base64,
+            "species": species,
             "model_path": model_path,
         }
     )

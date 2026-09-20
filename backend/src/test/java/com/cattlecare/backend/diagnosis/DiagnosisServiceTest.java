@@ -102,14 +102,14 @@ class DiagnosisServiceTest {
         DiagnosisResult mlResult = new DiagnosisResult(
                 "Lumpy Skin Disease", 0.5, "This is a placeholder image-based prediction...",
                 "escalate_to_vet", List.of(), List.of(), List.of());
-        when(mlServiceClient.diagnose(eq(Map.of()), isNull(), anyString())).thenReturn(mlResult);
+        when(mlServiceClient.diagnose(eq(Map.of()), isNull(), anyString(), eq("COW"))).thenReturn(mlResult);
 
         MultipartFile image = new MockMultipartFile("image", "cow.jpg", "image/jpeg", new byte[] {1, 2, 3});
         DiagnosisCaseResponse response = diagnosisService.submitImage(1L, image);
 
         assertEquals("Lumpy Skin Disease", response.diagnosis());
         assertEquals("escalate_to_vet", response.recommendedAction());
-        verify(mlServiceClient).diagnose(eq(Map.of()), isNull(), eq("AQID")); // base64("\x01\x02\x03")
+        verify(mlServiceClient).diagnose(eq(Map.of()), isNull(), eq("AQID"), eq("COW")); // base64("\x01\x02\x03")
         verify(diagnosisCaseRepository).save(any(DiagnosisCase.class));
     }
 
@@ -121,7 +121,7 @@ class DiagnosisServiceTest {
 
         assertEquals("UNSUPPORTED_IMAGE_TYPE", ex.getCode());
         verify(animalService, never()).getOrThrow(any());
-        verify(mlServiceClient, never()).diagnose(anyMap(), any(), any());
+        verify(mlServiceClient, never()).diagnose(anyMap(), any(), any(), any());
     }
 
     @Test
@@ -133,7 +133,7 @@ class DiagnosisServiceTest {
 
         assertEquals("IMAGE_TOO_LARGE", ex.getCode());
         verify(animalService, never()).getOrThrow(any());
-        verify(mlServiceClient, never()).diagnose(anyMap(), any(), any());
+        verify(mlServiceClient, never()).diagnose(anyMap(), any(), any(), any());
     }
 
     @Test
@@ -153,14 +153,14 @@ class DiagnosisServiceTest {
 
         assertThrows(ApiException.class, () -> diagnosisService.submitImage(999L, image));
 
-        verify(mlServiceClient, never()).diagnose(anyMap(), any(), any());
+        verify(mlServiceClient, never()).diagnose(anyMap(), any(), any(), any());
         verify(diagnosisCaseRepository, never()).save(any());
     }
 
     // M13/M14 (docs/specs/M13-cat-disease-detection.md,
     // docs/specs/M14-dog-disease-detection.md): the cattle model's disease list and symptom
-    // vocabulary don't apply to a cat or dog at all, unlike Buffalo/Sheep - diagnosis must be
-    // rejected outright, not silently run through the cattle model.
+    // vocabulary don't apply to a cat or dog at all, unlike Buffalo/Sheep - SYMPTOM diagnosis
+    // must be rejected outright, not silently run through the cattle model.
 
     @Test
     void submitSymptoms_catSpecies_rejectedBeforeMlServiceCall() {
@@ -171,19 +171,6 @@ class DiagnosisServiceTest {
 
         assertEquals("DIAGNOSIS_NOT_SUPPORTED_FOR_SPECIES", ex.getCode());
         verify(mlServiceClient, never()).diagnose(anyMap(), any());
-        verify(diagnosisCaseRepository, never()).save(any());
-    }
-
-    @Test
-    void submitImage_catSpecies_rejectedBeforeMlServiceCall() {
-        Animal cat = new Animal("CAT-001", 5L, Species.CAT);
-        when(animalService.getOrThrow(1L)).thenReturn(cat);
-        MultipartFile image = new MockMultipartFile("image", "cat.jpg", "image/jpeg", new byte[] {1});
-
-        ApiException ex = assertThrows(ApiException.class, () -> diagnosisService.submitImage(1L, image));
-
-        assertEquals("DIAGNOSIS_NOT_SUPPORTED_FOR_SPECIES", ex.getCode());
-        verify(mlServiceClient, never()).diagnose(anyMap(), any(), any());
         verify(diagnosisCaseRepository, never()).save(any());
     }
 
@@ -199,16 +186,41 @@ class DiagnosisServiceTest {
         verify(diagnosisCaseRepository, never()).save(any());
     }
 
+    // M13/M14 follow-up: Cat/Dog now have their own real, trained IMAGE models (not symptom
+    // models) — image diagnosis succeeds for them and forwards species so ml-service can pick
+    // the right model. Symptom diagnosis (above) stays rejected — no symptom model exists.
+
     @Test
-    void submitImage_dogSpecies_rejectedBeforeMlServiceCall() {
+    void submitImage_catSpecies_succeedsAndForwardsSpecies() {
+        Animal cat = new Animal("CAT-001", 5L, Species.CAT);
+        when(animalService.getOrThrow(1L)).thenReturn(cat);
+        DiagnosisResult mlResult = new DiagnosisResult(
+                "Ringworm", 0.91, "Predicted Ringworm with 91% confidence.", "consult_vet",
+                List.of(), List.of(), List.of());
+        when(mlServiceClient.diagnose(eq(Map.of()), isNull(), anyString(), eq("CAT"))).thenReturn(mlResult);
+        MultipartFile image = new MockMultipartFile("image", "cat.jpg", "image/jpeg", new byte[] {1});
+
+        DiagnosisCaseResponse response = diagnosisService.submitImage(1L, image);
+
+        assertEquals("Ringworm", response.diagnosis());
+        verify(mlServiceClient).diagnose(eq(Map.of()), isNull(), anyString(), eq("CAT"));
+        verify(diagnosisCaseRepository).save(any(DiagnosisCase.class));
+    }
+
+    @Test
+    void submitImage_dogSpecies_succeedsAndForwardsSpecies() {
         Animal dog = new Animal("DOG-001", 5L, Species.DOG);
         when(animalService.getOrThrow(1L)).thenReturn(dog);
+        DiagnosisResult mlResult = new DiagnosisResult(
+                "Mange", 0.99, "Predicted Mange with 99% confidence.", "consult_vet",
+                List.of(), List.of(), List.of());
+        when(mlServiceClient.diagnose(eq(Map.of()), isNull(), anyString(), eq("DOG"))).thenReturn(mlResult);
         MultipartFile image = new MockMultipartFile("image", "dog.jpg", "image/jpeg", new byte[] {1});
 
-        ApiException ex = assertThrows(ApiException.class, () -> diagnosisService.submitImage(1L, image));
+        DiagnosisCaseResponse response = diagnosisService.submitImage(1L, image);
 
-        assertEquals("DIAGNOSIS_NOT_SUPPORTED_FOR_SPECIES", ex.getCode());
-        verify(mlServiceClient, never()).diagnose(anyMap(), any(), any());
-        verify(diagnosisCaseRepository, never()).save(any());
+        assertEquals("Mange", response.diagnosis());
+        verify(mlServiceClient).diagnose(eq(Map.of()), isNull(), anyString(), eq("DOG"));
+        verify(diagnosisCaseRepository).save(any(DiagnosisCase.class));
     }
 }

@@ -242,31 +242,66 @@ describe('DiagnosisIntake', () => {
     expect(JSON.parse(animalCall[1].body)).toMatchObject({ species: 'SHEEP' })
   })
 
-  it('blocks diagnosis entirely for Cat instead of reusing the cattle model', async () => {
+  it('shows image-only diagnosis for Cat — no symptom form, but a real photo model', async () => {
     const user = userEvent.setup()
 
     render(<DiagnosisIntake />)
     await user.selectOptions(screen.getByLabelText(/species/i), 'CAT')
 
-    expect(screen.getByText(/diagnosis isn't available yet for cat/i)).toBeInTheDocument()
+    expect(screen.getByText(/symptom-based diagnosis isn't available for cat/i)).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /get diagnosis/i })).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: /diagnose from photo/i })).not.toBeInTheDocument()
     expect(screen.queryByLabelText(/fever/i)).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /diagnose from photo/i })).toBeInTheDocument()
 
     expect(fetchMock).not.toHaveBeenCalled()
   })
 
-  it('blocks diagnosis entirely for Dog instead of reusing the cattle model', async () => {
+  it('shows image-only diagnosis for Dog, with a loud low-confidence caveat', async () => {
     const user = userEvent.setup()
 
     render(<DiagnosisIntake />)
     await user.selectOptions(screen.getByLabelText(/species/i), 'DOG')
 
-    expect(screen.getByText(/diagnosis isn't available yet for dog/i)).toBeInTheDocument()
+    expect(screen.getByText(/symptom-based diagnosis isn't available for dog/i)).toBeInTheDocument()
+    expect(screen.getByText(/barely better than guessing/i)).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /get diagnosis/i })).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: /diagnose from photo/i })).not.toBeInTheDocument()
     expect(screen.queryByLabelText(/fever/i)).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /diagnose from photo/i })).toBeInTheDocument()
 
     expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('submits a Cat photo diagnosis end to end', async () => {
+    const user = userEvent.setup()
+    fetchMock
+      .mockResolvedValueOnce(
+        jsonResponse(true, { id: 9, tagNumber: 'CAT-001', farmId: 42, species: 'CAT', createdAt: '2026-01-01T00:00:00Z' })
+      )
+      .mockResolvedValueOnce(
+        jsonResponse(true, {
+          id: 20,
+          animalId: 9,
+          diagnosis: 'Ringworm',
+          confidence: 0.91,
+          explanation: 'Predicted Ringworm with 91% confidence.',
+          recommendedAction: 'consult_vet',
+          precautions: [],
+          nextSteps: [],
+          createdAt: '2026-01-01T00:00:00Z',
+        })
+      )
+
+    render(<DiagnosisIntake />)
+    await user.selectOptions(screen.getByLabelText(/species/i), 'CAT')
+    await user.type(screen.getByLabelText(/animal tag number/i), 'CAT-001')
+    await user.type(screen.getByLabelText(/farm id/i), '42')
+    const file = new File(['fake-image-bytes'], 'cat.jpg', { type: 'image/jpeg' })
+    await user.upload(screen.getByLabelText(/or upload a photo instead/i), file)
+    await user.click(screen.getByRole('button', { name: /diagnose from photo/i }))
+
+    await screen.findByText(/likely: ringworm/i)
+
+    const [animalCall] = fetchMock.mock.calls
+    expect(JSON.parse(animalCall[1].body)).toMatchObject({ species: 'CAT' })
   })
 })

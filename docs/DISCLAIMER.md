@@ -29,15 +29,32 @@ mandatory-reporting obligation for suspected or confirmed rabies in cats and dog
 public-health authorities — a real, non-optional equivalent to `REPORTABLE_DISEASES`, with
 even higher stakes (rabies is a fatal zoonotic disease).
 
-**Whenever a real companion-animal diagnosis model is built** (none exists yet — see
-`docs/specs/M13-cat-disease-detection.md`), rabies/suspected rabies exposure must be added
-to a companion-animal equivalent of `REPORTABLE_DISEASES` from the first version of that
-model, not retrofitted after. Until then, diagnosis is deliberately blocked entirely for
-species without a real model (`DIAGNOSIS_NOT_SUPPORTED_FOR_SPECIES`) — reusing the
-cattle-trained model's output for a cat or dog would present a livestock disease as if it
-were a real finding for a companion animal, which is worse than no answer at all.
+**Cat and Dog now have real, trained IMAGE diagnosis models** (M13/M14 follow-up) —
+`docs/specs/M13-cat-disease-detection.md` and `M14-dog-disease-detection.md`'s "Follow-up"
+sections have the full detail. **Rabies escalation is still not implemented as code** —
+neither trained model has a Rabies class (no rabies image data exists), so there is nothing
+for an escalation rule to attach to yet. This is the same "not yet" this document already
+said, unchanged by a real model now existing for other diseases.
+
+**SYMPTOM-based diagnosis stays deliberately blocked for Cat/Dog**
+(`DIAGNOSIS_NOT_SUPPORTED_FOR_SPECIES`) — no symptom model or data exists for either, and
+reusing the cattle-trained symptom model's output for a cat or dog would present a livestock
+disease as if it were a real finding for a companion animal, which is worse than no answer
+at all.
+
+**Real accuracy, stated plainly, not softened**:
+- **Cat's image model is solid**: 83.0% validation accuracy across Flea Allergy, Healthy,
+  Ringworm, Scabies.
+- **Dog's image model is real but meaningfully weak**: 52.6% validation accuracy, and only
+  0.25 F1 for Canine Distemper specifically — wrong more often than right for that disease.
+  Mange is the one class it's actually decent at (0.75 F1). **It has no Healthy class at
+  all** — a Dog image diagnosis always names one of Canine Distemper, Canine Parvovirus,
+  Kennel Cough, or Mange, even for a perfectly healthy dog. Shipped anyway, per an explicit
+  decision to disclose loudly rather than withhold — the frontend states this before a photo
+  is even uploaded, not just here.
 
 The rest of this document's guarantees (probabilistic estimate, not a diagnosis; never the
 sole basis for a real decision) apply identically regardless of audience — a pet owner needs
 the same honesty a farmer/vet does, just framed for a different context and different stakes
-(an individual companion animal, not herd economics).
+(an individual companion animal, not herd economics). That honesty is exactly what makes the
+Dog caveat above non-negotiable to state clearly, not just technically true somewhere.

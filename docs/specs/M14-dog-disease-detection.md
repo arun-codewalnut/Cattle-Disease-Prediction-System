@@ -1,7 +1,8 @@
 # Spec: Dog disease detection
 
 **Milestone**: M14
-**Status**: in progress
+**Status**: done — real Dog image model trained and wired in (see "Follow-up" section below,
+including a real quality caveat this model carries)
 
 ## Actor + goal
 
@@ -116,20 +117,23 @@ verified via direct `curl`, not just hidden in the UI.
 
 - [x] Spec written, dog disease list and dataset candidates resolved with real research (this
       file).
-- [ ] `DOG` added to the `Species` enum and frontend `SPECIES_OPTIONS`.
-- [ ] Backend rejects a diagnosis attempt for `DOG` with `DIAGNOSIS_NOT_SUPPORTED_FOR_SPECIES` —
-      covered by a test, both for the symptom and image endpoints.
-- [ ] Frontend shows the existing "not available yet" state (already generic, not Cat-specific)
-      when Dog is selected — verified live, not just by code inspection.
+- [x] `DOG` added to the `Species` enum and frontend `SPECIES_OPTIONS`.
+- [x] Backend rejects a *symptom* diagnosis attempt for `DOG` with
+      `DIAGNOSIS_NOT_SUPPORTED_FOR_SPECIES` — covered by a test. (Image diagnosis is now
+      supported — see "Follow-up" below; this criterion covers the original symptom-only
+      scope.)
+- [x] Frontend originally showed the generic "not available yet" state for Dog — superseded by
+      the Follow-up section's image-only UI, verified live there.
 - [x] `docs/DISCLAIMER.md` reviewed and confirmed to already be dog-inclusive — no edit made,
       and that's a deliberate, documented decision, not an oversight.
-- [ ] `docs/API_CONTRACTS.md` updated: `DOG` as a valid `species` value, the rejection paragraph
+- [x] `docs/API_CONTRACTS.md` updated: `DOG` as a valid `species` value, the rejection paragraph
       extended to cover both `CAT` and `DOG`, the error-code example list extended.
-- [ ] Full build/test suite green across all three services, plus manual end-to-end verification
+- [x] Full build/test suite green across all three services, plus manual end-to-end verification
       against the real running stack: created a Dog animal via `curl`, confirmed both diagnosis
       endpoints reject it with a clean `400 DIAGNOSIS_NOT_SUPPORTED_FOR_SPECIES`, and in the real
       browser confirmed selecting Dog hides the symptom/photo forms (replaced by the "not
-      available yet" block) while other species are unaffected.
+      available yet" block) while other species are unaffected. (Superseded for image
+      diagnosis by the Follow-up section below.)
 
 ## Agent mirror-back
 
@@ -146,3 +150,36 @@ re-deciding questions M13 already answered generally (rabies escalation, disclai
    cover Dog without edits. Verified by rereading the file, not assumed from the M13 spec's
    description of it.
 3. Dataset candidates found but not downloaded — same "ask before fetching" boundary as M13/M9.
+
+## Follow-up: real Dog image model (this session) — a genuine quality caveat, not a clean win
+
+A later session found `smadive/pet-disease-images` (Kaggle, anonymous download) with per-disease
+folders matching this spec's researched list almost exactly:
+`Distemper in Dog` (58), `Parvovirus in Dog` (82), `Kennel Cough in Dog` (82), `Mange in Dog` (71)
+— 293 real photos. **No Healthy photos exist for Dog anywhere found**, in this dataset or any
+other evaluated across any session — the trained model always names one of these 4 diseases, it
+cannot say a dog is healthy. Disclosed prominently in the frontend and `docs/DISCLAIMER.md`, not
+buried here alone.
+
+Trained the same MobileNetV2-transfer-learning approach as M9/Cat (see
+`ml-service/app/models/dog_image_model.py`, `ml-service/training/dog_image_model_train.py`),
+including a legitimate attempt at improvement (horizontal-flip augmentation on the training
+split only, val split untouched to avoid leakage) before accepting the result.
+
+**Real result: 52.6% validation accuracy, 0.489 macro F1 — meaningfully weaker than Cat/Cow.**
+Per-class F1: Mange 0.75 (decent), Canine Parvovirus 0.56, Kennel Cough 0.41, **Canine
+Distemper 0.25** (worse than random for a 4-class problem). Likely cause, not just low sample
+count: Mange is a visible skin condition with a strong photographic signature; Distemper/
+Parvovirus/Kennel Cough are systemic/internal diseases that don't necessarily look
+photographically distinct from each other or from a sick-but-undiagnosed dog. More of the same
+kind of data likely wouldn't fix this on its own.
+
+**Explicit decision, confirmed with the user rather than assumed**: ship it anyway, loudly
+disclosed, rather than withholding it entirely or silently narrowing scope to just Mange. The
+frontend (`AnimalIdentityFields.jsx`) shows this caveat prominently before a Dog photo is even
+uploaded — accuracy number, which class is unreliable, and the no-Healthy-class gap — not a
+footnote. `docs/DISCLAIMER.md` carries the same caveat.
+
+Wired into `predict_image_node` (`ml-service/app/agent/graph.py`), routed by `species: "DOG"`,
+same mechanism as Cat. Rabies escalation remains unimplemented as code for the same reason as
+Cat: no Rabies class in the trained model.

@@ -28,6 +28,12 @@ ml-service/data/*
 !ml-service/data/cattle-images/
 ml-service/data/cattle-images/*
 !ml-service/data/cattle-images/SOURCE.md
+!ml-service/data/cat-images/
+ml-service/data/cat-images/*
+!ml-service/data/cat-images/SOURCE.md
+!ml-service/data/dog-images/
+ml-service/data/dog-images/*
+!ml-service/data/dog-images/SOURCE.md
 ml-service/data/chroma_db/
 ml-service/models/*.pkl
 ml-service/models/*.pt

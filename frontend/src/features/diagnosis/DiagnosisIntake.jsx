@@ -6,7 +6,7 @@ import SymptomForm from './SymptomForm'
 import ImageUploadForm from './ImageUploadForm'
 import DiagnosisResult from './DiagnosisResult'
 import { emptySymptoms } from './symptomFields'
-import { DIAGNOSIS_SUPPORTED_SPECIES, SPECIES_OPTIONS } from './species'
+import { DIAGNOSIS_SUPPORTED_SPECIES, IMAGE_ONLY_SUPPORTED_SPECIES, SPECIES_OPTIONS } from './species'
 
 export default function DiagnosisIntake() {
   const [tagNumber, setTagNumber] = useState('')
@@ -87,6 +87,7 @@ export default function DiagnosisIntake() {
 
   const disabled = status === 'submitting'
   const diagnosisSupported = DIAGNOSIS_SUPPORTED_SPECIES.includes(species)
+  const imageOnlySupported = IMAGE_ONLY_SUPPORTED_SPECIES.includes(species)
 
   return (
     <div className="app-shell">
@@ -109,7 +110,7 @@ export default function DiagnosisIntake() {
           disabled={disabled}
         />
 
-        {diagnosisSupported ? (
+        {diagnosisSupported && (
           <>
             <SymptomForm
               symptoms={symptoms}
@@ -121,15 +122,19 @@ export default function DiagnosisIntake() {
             <div className="form-divider" role="separator">
               <span>or</span>
             </div>
-
-            <ImageUploadForm
-              image={image}
-              onImageChange={setImage}
-              onSubmit={handleImageSubmit}
-              disabled={disabled}
-            />
           </>
-        ) : (
+        )}
+
+        {(diagnosisSupported || imageOnlySupported) && (
+          <ImageUploadForm
+            image={image}
+            onImageChange={setImage}
+            onSubmit={handleImageSubmit}
+            disabled={disabled}
+          />
+        )}
+
+        {!diagnosisSupported && !imageOnlySupported && (
           <div className="species-unavailable">
             <span className="species-unavailable__icon" aria-hidden="true">
               🚧

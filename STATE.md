@@ -3,7 +3,7 @@
 Living snapshot of project state. Update this whenever you finish a meaningful chunk of work —
 this is what an agent (or you) reads first when resuming.
 
-_Last updated: 2026-09-20 (session 9)_
+_Last updated: 2026-09-20 (session 10)_
 
 ## Known gaps
 
@@ -302,11 +302,65 @@ _Last updated: 2026-09-20 (session 9)_
   live end-to-end verification**: called the real `ml-service` `/agent/diagnose` endpoint and
   the real backend `POST /api/animals/{id}/diagnoses/image` multipart endpoint with one real
   photo per class, all three correctly diagnosed with correct escalation
-  (Lumpy/FMD → `escalate_to_vet`, Healthy → `monitor`). Not yet committed/pushed — pending.
+  (Lumpy/FMD → `escalate_to_vet`, Healthy → `monitor`).
+- **M9 PR merged to `main`** ([#31](https://github.com/arun-codewalnut/Cattle-Disease-Prediction-System/pull/31))
+  — first CI run failed (`ml-service` job: `pip install -r requirements.txt` resolved
+  `torch`/`torchvision` to PyPI's default CUDA build, exhausting the runner's disk); fixed by
+  pinning `torch==2.14.0+cpu`/`torchvision==0.29.0+cpu` plus a `--extra-index-url` directive
+  in `requirements.txt`, verified in a disposable local venv against a plain
+  `pip install -r requirements.txt` before pushing the fix — CI went green after.
+- **Real Cat and Dog image models trained and wired in** (M13/M14 follow-up, branch
+  `feat/m13-m14-real-cat-dog-image-models`): you asked to train all 5 species; Roboflow
+  (the candidates M13 flagged) turned out to need a login/API key (confirmed by testing), so
+  a fresh Kaggle search found better, anonymously-downloadable data instead —
+  `nofalrafif/cat-skin-disease` (1,000 images, 4 balanced classes incl. a real Healthy class)
+  and `smadive/pet-disease-images` (293 Dog images across the same 4 diseases M14 already
+  researched). Also downloaded and evaluated 2 more Kaggle sets
+  (`fahimsarker/ringworm-dataset-for-classification`, single-class, not independently
+  useful) — documented, not used.
+  - **Cat**: real, solid — 83.0% accuracy, 0.829 macro F1 across Flea Allergy/Healthy/
+    Ringworm/Scabies. **This disease list replaces M13's original URI/Ringworm/FIV research**
+    — no image data exists for URI or FIV; you confirmed using the real available classes and
+    updating the spec, per the same "swap in real data over the original research when they
+    conflict" precedent M9 itself set.
+  - **Dog**: real but genuinely weak — 52.6% accuracy, 0.489 macro F1, only 0.25 F1 for
+    Canine Distemper specifically (worse than random). Tried horizontal-flip augmentation
+    (split before augmenting, to avoid leaking into validation) as a legitimate fix — didn't
+    move the number; likely a signal problem (systemic diseases don't have Mange's strong
+    visual signature), not a volume problem. **No Healthy class exists for Dog at all** in
+    anything found. **Shipped anyway, loudly disclosed** — confirmed with you explicitly
+    rather than silently choosing either "hide it" or "ship it quietly." The frontend shows
+    the real accuracy number and the no-Healthy-class gap prominently before any photo is
+    uploaded, and `docs/DISCLAIMER.md` carries the same caveat.
+  - **Architecture**: species is now forwarded from backend to `ml-service` for the IMAGE
+    endpoint only (never for symptoms — that stays exactly as before, no per-species symptom
+    model exists). `DiagnosisService.requireDiagnosisSupported` split into
+    `requireSymptomDiagnosisSupported` (unchanged) and `requireImageDiagnosisSupported` (now
+    covers Cat/Dog too, via new `IMAGE_ONLY_SUPPORTED_SPECIES`). `ml-service/app/agent/graph.py`
+    picks the model by species (`_IMAGE_MODEL_BY_SPECIES`), defaulting to the cattle model
+    for Cow/Buffalo/Sheep/unset — unchanged behavior there, confirmed via a regression test.
+    Frontend's binary "full vs. blocked" UI became 3-way (full / image-only / blocked) —
+    Cat/Dog now show only the photo-upload form, no symptom checklist, with their own
+    disclosure text (Cat: informational; Dog: a loud ⚠️ warning).
+  - Rabies escalation remains **not implemented as code** for either species — neither
+    trained model has a Rabies class, so there's nothing for an escalation rule to attach to;
+    same honest "not yet" M13 already stated, unchanged by real models now existing for other
+    diseases.
+  - Specs updated: `docs/specs/M13-cat-disease-detection.md` and
+    `M14-dog-disease-detection.md` each gained a "Follow-up" section with the real numbers.
+  - **Validated**: ml-service 45/2 (skipped, including new Cat/Dog routing/escalation/
+    missing-model tests — made statistically robust with random-sampled multi-image checks
+    after an initial flaky single-sample version), backend 24/24 (2 rejection tests →
+    2 success-and-forwards-species tests), frontend lint + 13/13 + build all green, **plus
+    live end-to-end verification**: real Cat/Dog photos through the actual backend multipart
+    endpoint (correct diagnoses), confirmed symptom submission still rejects for both,
+    confirmed Cow regression-free, and confirmed in the real browser that Cat/Dog show the
+    image-only form with the correct disclosure text (Cow's full form unaffected). Not yet
+    committed/pushed — pending.
 
 ## In Progress
 
-- M9 (issue #18) — implementation done, not yet committed.
+- Real Cat/Dog image models (M13/M14 follow-up) — implementation done, not yet committed.
 
 ## Not Started
 
