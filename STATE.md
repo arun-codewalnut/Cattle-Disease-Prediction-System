@@ -3,7 +3,7 @@
 Living snapshot of project state. Update this whenever you finish a meaningful chunk of work —
 this is what an agent (or you) reads first when resuming.
 
-_Last updated: 2026-09-19 (session 6)_
+_Last updated: 2026-09-19 (session 7)_
 
 ## Known gaps
 
@@ -216,19 +216,46 @@ _Last updated: 2026-09-19 (session 6)_
   strengthened disclosure rendered, submitted FMD-indicative symptoms, and confirmed the
   diagnosis correctly escalated (`Foot and Mouth Disease`, `escalate_to_vet`) via the shared
   model.
+- **M12 PR merged to `main`** (issue #21) — confirmed via `git pull` before branching for
+  M13.
+- **M13 done, not yet merged** (issue #22, branch `feat/m13-cat-disease-detection`, branched
+  from synced `main`): Cat added as a fourth species — the real pivot in the M11–M14
+  sequence. **Key judgment call: diagnosis is NOT reused from the cattle model for Cat**,
+  unlike Buffalo/Sheep. Buffalo/Sheep share the livestock disease family closely enough
+  (FMD, LSD) that reuse is a disclosed approximation; a cat doesn't get any of the 5 modeled
+  diseases, and the symptom vocabulary (`milk_yield_drop`, `udder_swelling`, etc.) is
+  nonsensical for a cat — predicting "Foot and Mouth Disease" for a cat would be actively
+  wrong, not just imprecise. **Diagnosis is blocked entirely for Cat, enforced at both
+  layers**: `DiagnosisService` rejects with a new `400 DIAGNOSIS_NOT_SUPPORTED_FOR_SPECIES`
+  (works even via a direct API call, not just hidden in the UI), and the frontend replaces
+  the symptom/photo forms with an explicit "not available yet" block when Cat is selected
+  (not a disabled-but-visible form). Resolved issue #22's three open questions with real
+  research: (1) initial cat disease list — Feline Upper Respiratory Infection, ringworm,
+  FIV — documented for future use, not wired into any model; (2) escalation-equivalent for
+  companion animals — **rabies**, a legally mandatory reportable disease for cats/dogs,
+  confirmed via research, now documented; (3) `docs/DISCLAIMER.md` updated with a new
+  companion-animal section covering both of the above. Also found (not downloaded) real
+  candidate cat-disease datasets — a Hugging Face-mirrored symptom dataset and Roboflow
+  image sets — flagged as follow-up, needs the user's go-ahead before fetching. Spec:
+  [docs/specs/M13-cat-disease-detection.md](docs/specs/M13-cat-disease-detection.md).
+  **Validated**: backend 21/21, ml-service unaffected (36/2 skipped), frontend lint +
+  11/11 + build all green, **plus live end-to-end verification**: created a Cat animal via
+  `curl`, directly confirmed both the symptom and image diagnosis endpoints reject it
+  cleanly, and in the real browser confirmed selecting Cat hides the symptom/photo forms
+  entirely (switching back to Cow correctly restores them).
 
 ## In Progress
 
-- M12 (issue #21) — implementation done, PR not yet opened/merged.
+- M13 (issue #22) — implementation done, PR not yet opened/merged.
 
 ## Not Started
 
 - M7: Notifications (email/WhatsApp free tier)
 - M9 real implementation (issue #18 still open — only the spec landed; training itself is
   blocked on the Kaggle dataset, see HANDOFF.md's Blockers)
-- M13–M14: Cat, Dog (issues #22–#23) — M13 is a bigger pivot to companion-animal diseases,
-  flagged for its own `DISCLAIMER.md` review; M14 should be light like M12 once M13 settles
-  the companion-animal framing
+- M14: Dog (issue #23) — should be much lighter now that M13 settled the companion-animal
+  framing (rabies escalation-equivalent, disclaimer section, the "block rather than
+  approximate" pattern for species without a real model)
 
 Deployment (formerly M8 in the original numbering) was dropped from scope — see
 `docs/DECISIONS.md`. The M8 number was reused for image-based disease recognition, a

@@ -2,7 +2,7 @@
 // ImageUploadForm.jsx) — a diagnosis of either kind needs an animal record to attach to.
 // Renamed from CattleIdentityFields in M11 when species support was added — see
 // docs/specs/M11-buffalo-disease-detection.md.
-import { SPECIES_OPTIONS } from './species'
+import { SPECIES_OPTIONS, DIAGNOSIS_SUPPORTED_SPECIES } from './species'
 
 export default function AnimalIdentityFields({
   tagNumber,
@@ -32,13 +32,21 @@ export default function AnimalIdentityFields({
             </option>
           ))}
         </select>
-        {species !== 'COW' && (
+        {species !== 'COW' && DIAGNOSIS_SUPPORTED_SPECIES.includes(species) && (
           <p className="species-disclaimer">
             <span aria-hidden="true">ℹ️</span> The diagnosis model isn't trained on{' '}
             {SPECIES_OPTIONS.find((option) => option.value === species)?.label.toLowerCase()}-specific
             data yet, and some {SPECIES_OPTIONS.find((option) => option.value === species)?.label.toLowerCase()}
             -only diseases aren't represented by it at all — results use the cattle model as
             an approximation and may miss species-specific conditions.
+          </p>
+        )}
+        {!DIAGNOSIS_SUPPORTED_SPECIES.includes(species) && (
+          <p className="species-disclaimer species-disclaimer--blocked">
+            <span aria-hidden="true">🚧</span> Diagnosis isn't available yet for{' '}
+            {SPECIES_OPTIONS.find((option) => option.value === species)?.label.toLowerCase()} —
+            the cattle model's diseases don't apply to this species. This is tracked as
+            future work.
           </p>
         )}
       </div>

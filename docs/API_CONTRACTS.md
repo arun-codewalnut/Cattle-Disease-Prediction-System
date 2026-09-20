@@ -106,8 +106,8 @@ standing position that this is a local/learning project with no external consume
 `POST /api/animals` — create an animal record.
 
 Request: `{"tagNumber": "COW-001", "farmId": 42, "species": "COW"}` — `species` is
-`"COW"`, `"BUFFALO"`, or `"SHEEP"` (M11/M12; grows one value per species milestone, see
-`docs/ROADMAP.md` M13–M14), required.
+`"COW"`, `"BUFFALO"`, `"SHEEP"`, or `"CAT"` (M11/M12/M13; grows one value per species
+milestone, see `docs/ROADMAP.md` M14), required.
 Response (`201`): `{"id": 1, "tagNumber": "COW-001", "farmId": 42, "species": "COW", "createdAt": "..."}`
 
 `POST /api/animals/{animalId}/diagnoses` — submit symptoms for an animal, calls
@@ -118,6 +118,15 @@ specifically, this is a bigger gap than for `BUFFALO` — real sheep-specific di
 rot, sheep pox) aren't represented by the model at all, not just "untrained on this
 species" — see
 [docs/specs/M12-sheep-disease-detection.md](specs/M12-sheep-disease-detection.md).
+
+**`CAT` is different: diagnosis is rejected outright** (`400
+DIAGNOSIS_NOT_SUPPORTED_FOR_SPECIES`), not routed through the cattle model at all — a
+companion animal doesn't share the livestock disease family the way Buffalo/Sheep do, so
+reusing that model would produce an actively wrong result (e.g. "Foot and Mouth Disease" for
+a cat), not just an imprecise one. See
+[docs/specs/M13-cat-disease-detection.md](specs/M13-cat-disease-detection.md) and
+[docs/DISCLAIMER.md](DISCLAIMER.md)'s companion-animal section. The same rejection applies
+to `POST /api/animals/{animalId}/diagnoses/image`.
 
 Request: `{"symptoms": {"fever": true, "...": "..."}}`
 Response (`201`):
@@ -152,4 +161,5 @@ ml-service), `ML_SERVICE_ERROR` (`502`, ml-service returned an error response),
 uploaded bytes), `VALIDATION_FAILED` (`400`, a `@Valid` field failed, e.g. a blank
 `tagNumber` — `details` has one entry per rejected field), `INVALID_REQUEST_BODY` (`400`,
 malformed JSON or a value that doesn't fit the target type, e.g. an invalid `species`
-string — M11).
+string — M11), `DIAGNOSIS_NOT_SUPPORTED_FOR_SPECIES` (`400`, M13 — the animal's species
+doesn't have a real diagnosis model yet, e.g. `CAT`).

@@ -103,6 +103,27 @@ select:focus-visible {
   font-size: 0.85em;
 }
 
+.species-disclaimer--blocked {
+  background: var(--urgency-escalate-bg);
+  border: 1px solid var(--urgency-escalate);
+  font-weight: 600;
+}
+
+.species-unavailable {
+  margin-top: 18px;
+  padding: 20px;
+  border: 2px dashed var(--border);
+  border-radius: 14px;
+  text-align: center;
+  color: var(--text);
+}
+
+.species-unavailable__icon {
+  font-size: 2em;
+  display: block;
+  margin-bottom: 8px;
+}
+
 fieldset {
   border: 1px solid var(--border);
   border-radius: 14px;

@@ -156,4 +156,33 @@ class DiagnosisServiceTest {
         verify(mlServiceClient, never()).diagnose(anyMap(), any(), any());
         verify(diagnosisCaseRepository, never()).save(any());
     }
+
+    // M13 (docs/specs/M13-cat-disease-detection.md): the cattle model's disease list and
+    // symptom vocabulary don't apply to a cat at all, unlike Buffalo/Sheep - diagnosis must
+    // be rejected outright, not silently run through the cattle model.
+
+    @Test
+    void submitSymptoms_catSpecies_rejectedBeforeMlServiceCall() {
+        Animal cat = new Animal("CAT-001", 5L, Species.CAT);
+        when(animalService.getOrThrow(1L)).thenReturn(cat);
+
+        ApiException ex = assertThrows(ApiException.class, () -> diagnosisService.submitSymptoms(1L, Map.of()));
+
+        assertEquals("DIAGNOSIS_NOT_SUPPORTED_FOR_SPECIES", ex.getCode());
+        verify(mlServiceClient, never()).diagnose(anyMap(), any());
+        verify(diagnosisCaseRepository, never()).save(any());
+    }
+
+    @Test
+    void submitImage_catSpecies_rejectedBeforeMlServiceCall() {
+        Animal cat = new Animal("CAT-001", 5L, Species.CAT);
+        when(animalService.getOrThrow(1L)).thenReturn(cat);
+        MultipartFile image = new MockMultipartFile("image", "cat.jpg", "image/jpeg", new byte[] {1});
+
+        ApiException ex = assertThrows(ApiException.class, () -> diagnosisService.submitImage(1L, image));
+
+        assertEquals("DIAGNOSIS_NOT_SUPPORTED_FOR_SPECIES", ex.getCode());
+        verify(mlServiceClient, never()).diagnose(anyMap(), any(), any());
+        verify(diagnosisCaseRepository, never()).save(any());
+    }
 }

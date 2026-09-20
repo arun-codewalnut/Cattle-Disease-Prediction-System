@@ -52,6 +52,16 @@ class AnimalServiceTest {
     }
 
     @Test
+    void create_cat_savesAndReturnsAnimalWithCatSpecies() {
+        Animal saved = new Animal("CAT-001", 5L, Species.CAT);
+        when(animalRepository.save(any())).thenReturn(saved);
+
+        Animal result = animalService.create("CAT-001", 5L, Species.CAT);
+
+        assertEquals(Species.CAT, result.getSpecies());
+    }
+
+    @Test
     void create_duplicateTag_throwsApiExceptionWithConflict() {
         when(animalRepository.save(any())).thenThrow(new DataIntegrityViolationException("duplicate"));
 
