@@ -41,13 +41,15 @@ PREPROCESS = transforms.Compose(
 _artifact_cache: dict[str, nn.Module] = {}
 
 
-def build_model() -> nn.Module:
+def build_model(num_classes: int = len(DISEASES)) -> nn.Module:
     """Same architecture used at train and inference time: MobileNetV2 backbone, classifier
-    head replaced for len(DISEASES) outputs. Not loading pretrained weights here — inference
+    head replaced for `num_classes` outputs. Not loading pretrained weights here — inference
     always loads a fine-tuned state_dict on top, and training loads pretrained weights itself
-    before fine-tuning (see training/image_model_train.py)."""
+    before fine-tuning (see training/image_model_train.py). Shared by cat_image_model.py and
+    dog_image_model.py too — same architecture, different head size and weights, not worth a
+    second copy of this function for two extra callers."""
     model = mobilenet_v2(weights=None)
-    model.classifier[1] = nn.Linear(model.last_channel, len(DISEASES))
+    model.classifier[1] = nn.Linear(model.last_channel, num_classes)
     return model
 
 
