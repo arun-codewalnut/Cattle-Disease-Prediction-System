@@ -92,7 +92,7 @@ describe('DiagnosisIntake', () => {
     expect(fetchMock).toHaveBeenCalledTimes(2)
   })
 
-  it('submits animal + an uploaded photo and renders the placeholder diagnosis result', async () => {
+  it('submits animal + an uploaded photo and renders the diagnosis result', async () => {
     const user = userEvent.setup()
     fetchMock
       .mockResolvedValueOnce(
@@ -100,13 +100,20 @@ describe('DiagnosisIntake', () => {
       )
       .mockResolvedValueOnce(
         jsonResponse(true, {
-          id: 9,
-          animalId: 1,
-          diagnosis: 'Healthy',
-          confidence: 0.5,
-          explanation: 'This is a placeholder image-based prediction (Healthy, 50% confidence).',
-          recommendedAction: 'monitor',
-          createdAt: '2026-01-01T00:00:00Z',
+          results: [
+            {
+              id: 9,
+              animalId: 1,
+              diagnosis: 'Healthy',
+              confidence: 0.5,
+              explanation: 'Predicted Healthy with 50% confidence.',
+              recommendedAction: 'monitor',
+              precautions: [],
+              nextSteps: [],
+              createdAt: '2026-01-01T00:00:00Z',
+            },
+          ],
+          diagnosesAgree: true,
         })
       )
 
@@ -115,20 +122,65 @@ describe('DiagnosisIntake', () => {
     render(<DiagnosisIntake />)
     await user.type(screen.getByLabelText(/animal tag number/i), 'COW-001')
     await user.type(screen.getByLabelText(/farm id/i), '42')
-    await user.upload(screen.getByLabelText(/upload a photo/i), image)
+    await user.upload(screen.getByLabelText(/add photo 1/i), image)
     await user.click(screen.getByRole('button', { name: /diagnose from photo/i }))
 
     expect(await screen.findByText(/likely: healthy \(50% confidence\)/i)).toBeInTheDocument()
+    expect(screen.queryByText(/didn't all get the same diagnosis/i)).not.toBeInTheDocument()
     expect(fetchMock).toHaveBeenCalledTimes(2)
 
     const [animalCall, imageCall] = fetchMock.mock.calls
     expect(animalCall[0]).toMatch(/\/api\/animals$/)
     expect(imageCall[0]).toMatch(/\/api\/animals\/1\/diagnoses\/image$/)
     expect(imageCall[1].body).toBeInstanceOf(FormData)
-    expect(imageCall[1].body.get('image')).toBe(image)
+    expect(imageCall[1].body.get('images')).toBe(image)
     expect(imageCall[1].headers['X-Correlation-Id']).toBeTruthy()
     // No Content-Type set manually — the browser must supply the multipart boundary itself.
     expect(imageCall[1].headers['Content-Type']).toBeUndefined()
+  })
+
+  it('submits up to 5 photos and shows a warning when their diagnoses disagree', async () => {
+    const user = userEvent.setup()
+    fetchMock
+      .mockResolvedValueOnce(
+        jsonResponse(true, { id: 1, tagNumber: 'CAT-001', farmId: 42, species: 'CAT', createdAt: '2026-01-01T00:00:00Z' })
+      )
+      .mockResolvedValueOnce(
+        jsonResponse(true, {
+          results: [
+            {
+              id: 1, animalId: 1, diagnosis: 'Ringworm', confidence: 0.9,
+              explanation: 'Predicted Ringworm.', recommendedAction: 'consult_vet',
+              precautions: [], nextSteps: [], createdAt: '2026-01-01T00:00:00Z',
+            },
+            {
+              id: 2, animalId: 1, diagnosis: 'Scabies', confidence: 0.8,
+              explanation: 'Predicted Scabies.', recommendedAction: 'consult_vet',
+              precautions: [], nextSteps: [], createdAt: '2026-01-01T00:00:00Z',
+            },
+          ],
+          diagnosesAgree: false,
+        })
+      )
+
+    const photo1 = new File(['a'], 'a.jpg', { type: 'image/jpeg' })
+    const photo2 = new File(['b'], 'b.jpg', { type: 'image/jpeg' })
+
+    render(<DiagnosisIntake />)
+    await user.selectOptions(screen.getByLabelText(/species/i), 'CAT')
+    await user.type(screen.getByLabelText(/animal tag number/i), 'CAT-001')
+    await user.type(screen.getByLabelText(/farm id/i), '42')
+    await user.upload(screen.getByLabelText(/add photo 1/i), photo1)
+    await user.upload(screen.getByLabelText(/add photo 2/i), photo2)
+    expect(screen.getByText(/2 of 5 selected/i)).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: /diagnose from photos/i }))
+
+    expect(await screen.findByText(/didn't all get the same diagnosis/i)).toBeInTheDocument()
+    expect(screen.getByText(/likely: ringworm/i)).toBeInTheDocument()
+    expect(screen.getByText(/likely: scabies/i)).toBeInTheDocument()
+
+    const [, imageCall] = fetchMock.mock.calls
+    expect(imageCall[1].body.getAll('images')).toEqual([photo1, photo2])
   })
 
   it('disables the photo submit button until a file is chosen', () => {
@@ -155,7 +207,7 @@ describe('DiagnosisIntake', () => {
 
     render(<DiagnosisIntake />)
     await user.type(screen.getByLabelText(/farm id/i), '42')
-    await user.upload(screen.getByLabelText(/upload a photo/i), image)
+    await user.upload(screen.getByLabelText(/add photo 1/i), image)
     await user.click(screen.getByRole('button', { name: /diagnose from photo/i }))
 
     expect(await screen.findByRole('alert')).toHaveTextContent('Please enter an animal tag number.')
@@ -279,15 +331,20 @@ describe('DiagnosisIntake', () => {
       )
       .mockResolvedValueOnce(
         jsonResponse(true, {
-          id: 20,
-          animalId: 9,
-          diagnosis: 'Ringworm',
-          confidence: 0.91,
-          explanation: 'Predicted Ringworm with 91% confidence.',
-          recommendedAction: 'consult_vet',
-          precautions: [],
-          nextSteps: [],
-          createdAt: '2026-01-01T00:00:00Z',
+          results: [
+            {
+              id: 20,
+              animalId: 9,
+              diagnosis: 'Ringworm',
+              confidence: 0.91,
+              explanation: 'Predicted Ringworm with 91% confidence.',
+              recommendedAction: 'consult_vet',
+              precautions: [],
+              nextSteps: [],
+              createdAt: '2026-01-01T00:00:00Z',
+            },
+          ],
+          diagnosesAgree: true,
         })
       )
 
@@ -296,7 +353,7 @@ describe('DiagnosisIntake', () => {
     await user.type(screen.getByLabelText(/animal tag number/i), 'CAT-001')
     await user.type(screen.getByLabelText(/farm id/i), '42')
     const file = new File(['fake-image-bytes'], 'cat.jpg', { type: 'image/jpeg' })
-    await user.upload(screen.getByLabelText(/or upload a photo instead/i), file)
+    await user.upload(screen.getByLabelText(/add photo 1/i), file)
     await user.click(screen.getByRole('button', { name: /diagnose from photo/i }))
 
     await screen.findByText(/likely: ringworm/i)

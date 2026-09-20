@@ -107,12 +107,15 @@ static lookup was chosen over LLM generation for this specific field. `[]` on lo
 is a breaking change with no versioning ceremony, acceptable per `docs/DECISIONS.md`'s
 standing position that this is a local/learning project with no external consumers.
 
-`POST /api/animals` — create an animal record.
+`POST /api/animals` — find-or-create an animal record by tag number (multi-photo follow-up;
+see the note near the bottom of this file for the full behavior).
 
 Request: `{"tagNumber": "COW-001", "farmId": 42, "species": "COW"}` — `species` is
 `"COW"`, `"BUFFALO"`, `"SHEEP"`, `"CAT"`, or `"DOG"` (M11/M12/M13/M14 — Dog is the last of the
 five species from the original request, see `docs/ROADMAP.md`), required.
 Response (`201`): `{"id": 1, "tagNumber": "COW-001", "farmId": 42, "species": "COW", "createdAt": "..."}`
+— the same shape (and same `id`) whether this call created a new animal or found and reused
+an existing one with a matching `tagNumber`/`farmId`/`species`.
 
 `POST /api/animals/{animalId}/diagnoses` — submit symptoms for an animal, calls
 `ml-service`, persists the result. **`species` is not forwarded to `ml-service`** — no
@@ -161,23 +164,49 @@ Note: `explanation`, `precautions`, and `nextSteps` are all returned live from `
 but not persisted — `diagnosis_case` has no columns for them (see `docs/DECISIONS.md`).
 
 `POST /api/animals/{animalId}/diagnoses/image` (M8 phase 1; real models as of M9/Cat/Dog
-follow-ups) — multipart/form-data, one part named `image` (JPEG or PNG, ≤ 5MB).
-Base64-encodes the file and calls `ml-service` with `image_base64` **and `species`**
-(`symptoms: {}`); persists and responds with the same `DiagnosisCaseResponse` shape as the
-symptom endpoint above. `species` picks which trained model `ml-service` uses (Cat/Dog get
-their own; Cow/Buffalo/Sheep share the cattle model, unchanged). **The image itself is never
-persisted to disk** — see
-[docs/specs/M8-image-diagnosis-phase1.md](specs/M8-image-diagnosis-phase1.md) for why.
+follow-ups; **1-5 photos as of the multi-photo follow-up**) — multipart/form-data, 1-5 parts
+all named `images` (JPEG or PNG, ≤ 5MB each). Each photo is base64-encoded and diagnosed
+independently via its own call to `ml-service` (`image_base64` **and `species`**, `symptoms:
+{}`) — `species` picks which trained model `ml-service` uses (Cat/Dog get their own; Cow/
+Buffalo/Sheep share the cattle model, unchanged). **The image itself is never persisted to
+disk** — see [docs/specs/M8-image-diagnosis-phase1.md](specs/M8-image-diagnosis-phase1.md)
+for why.
+
+Response (`201`) — **not** the same shape as the symptom endpoint above:
+```json
+{
+  "results": [
+    { "id": 41, "animalId": 50, "diagnosis": "Ringworm", "confidence": 0.91, "...": "..." },
+    { "id": 42, "animalId": 50, "diagnosis": "Scabies", "confidence": 0.80, "...": "..." }
+  ],
+  "diagnosesAgree": false
+}
+```
+Each entry in `results` has the exact same shape as the symptom endpoint's response (one
+`DiagnosisCase` row persisted per photo). `diagnosesAgree` is `true` when every photo's
+`diagnosis` string matches (a single photo always agrees with itself); it compares the
+photos' own model outputs against each other — it does **not** verify the photos are actually
+of the selected species, since no such model exists. A frontend showing this response should
+warn the user when `diagnosesAgree` is `false` rather than picking one result to display.
 
 **New error codes** (backend, via `ApiException`): `ANIMAL_NOT_FOUND` (`404`),
-`ANIMAL_TAG_DUPLICATE` (`409`), `ML_SERVICE_UNAVAILABLE` (`503`, connection failure to
+`ANIMAL_TAG_DUPLICATE` (`409` — also returned by `POST /api/animals` itself when an existing
+tag's `farmId`/`species` don't match what's submitted; a matching resubmission instead reuses
+the existing animal record, see below), `ML_SERVICE_UNAVAILABLE` (`503`, connection failure to
 ml-service), `ML_SERVICE_ERROR` (`502`, ml-service returned an error response),
 `UNSUPPORTED_IMAGE_TYPE` (`400`, not JPEG/PNG), `IMAGE_TOO_LARGE` (`400`, over 5MB),
-`IMAGE_REQUIRED` (`400`, no file part), `IMAGE_READ_FAILED` (`400`, couldn't read the
-uploaded bytes), `VALIDATION_FAILED` (`400`, a `@Valid` field failed, e.g. a blank
-`tagNumber` — `details` has one entry per rejected field), `INVALID_REQUEST_BODY` (`400`,
-malformed JSON or a value that doesn't fit the target type, e.g. an invalid `species`
-string — M11), `DIAGNOSIS_NOT_SUPPORTED_FOR_SPECIES` (`400`, M13 — the animal's species
-doesn't have a real diagnosis model yet for that endpoint; `CAT`/`DOG` on the symptom
-endpoint specifically, since neither has a symptom model — see above for how the image
-endpoint differs for these two species as of the M13/M14 follow-up).
+`IMAGE_REQUIRED` (`400`, no file part), `TOO_MANY_IMAGES` (`400`, more than 5 photos in one
+submission), `IMAGE_READ_FAILED` (`400`, couldn't read the uploaded bytes), `VALIDATION_FAILED`
+(`400`, a `@Valid` field failed, e.g. a blank `tagNumber` — `details` has one entry per
+rejected field), `INVALID_REQUEST_BODY` (`400`, malformed JSON or a value that doesn't fit the
+target type, e.g. an invalid `species` string — M11), `DIAGNOSIS_NOT_SUPPORTED_FOR_SPECIES`
+(`400`, M13 — the animal's species doesn't have a real diagnosis model yet for that endpoint;
+`CAT`/`DOG` on the symptom endpoint specifically, since neither has a symptom model — see
+above for how the image endpoint differs for these two species as of the M13/M14 follow-up).
+
+**`POST /api/animals` is find-or-create by tag number** (multi-photo follow-up) — a second
+request for a tag number that already exists reuses that animal record (so a follow-up
+diagnosis attaches to the same animal's history) *if* `farmId` and `species` both match what's
+already on file; if either doesn't match, it's rejected as `ANIMAL_TAG_DUPLICATE` rather than
+silently overwriting the existing record. `tagNumber` is globally unique (not scoped per
+farm) — see `V1__init.sql`.

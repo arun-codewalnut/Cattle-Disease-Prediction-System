@@ -17,3 +17,14 @@ export const DIAGNOSIS_SUPPORTED_SPECIES = ['COW', 'BUFFALO', 'SHEEP']
 // ml-service/app/models/cat_image_model.py, dog_image_model.py) — image-based diagnosis works
 // for them even though symptom-based diagnosis (above) doesn't. Backend enforces this too.
 export const IMAGE_ONLY_SUPPORTED_SPECIES = ['CAT', 'DOG']
+
+// One-line capability summary per species, for the species-preview card — the full detail
+// (and the caveats that matter for safety) still lives in AnimalIdentityFields' disclosure
+// text below the preview; this is just the at-a-glance version.
+export const SPECIES_SUMMARIES = {
+  COW: 'Symptoms or photo — both real, trained models.',
+  BUFFALO: 'Symptoms or photo, using the cow model as an approximation.',
+  SHEEP: 'Symptoms or photo, using the cow model as an approximation.',
+  CAT: 'Photo only — a real cat-specific model, 83% accurate.',
+  DOG: 'Photo only — real, but only 53% accurate. Treat with caution.',
+}

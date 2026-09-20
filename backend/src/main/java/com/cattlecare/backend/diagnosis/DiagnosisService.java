@@ -1,7 +1,9 @@
 package com.cattlecare.backend.diagnosis;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Base64;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
@@ -18,6 +20,7 @@ import com.cattlecare.backend.client.MlServiceClient;
 import com.cattlecare.backend.config.ApiException;
 import com.cattlecare.backend.config.CorrelationIdFilter;
 import com.cattlecare.backend.diagnosis.dto.DiagnosisCaseResponse;
+import com.cattlecare.backend.diagnosis.dto.ImageDiagnosisBatchResponse;
 
 @Service
 public class DiagnosisService {
@@ -33,6 +36,12 @@ public class DiagnosisService {
     // below — see submitImage().
     private static final Set<String> ALLOWED_IMAGE_TYPES = Set.of("image/jpeg", "image/png");
     private static final long MAX_IMAGE_SIZE_BYTES = 5L * 1024 * 1024;
+
+    // Multi-photo follow-up: up to 5 photos per diagnosis attempt, each diagnosed
+    // independently against the same trained model (no new ml-service call shape — this is
+    // just the existing single-image call, looped) — see ImageDiagnosisBatchResponse for how
+    // the 5 results get reconciled into one thing the frontend renders.
+    private static final int MAX_IMAGES = 5;
 
     // M13/M14 (docs/specs/M13-cat-disease-detection.md,
     // docs/specs/M14-dog-disease-detection.md): SYMPTOM diagnosis stays blocked for Cat/Dog —
@@ -80,37 +89,55 @@ public class DiagnosisService {
         return DiagnosisCaseResponse.from(entity, result.explanation(), result.precautions(), result.nextSteps());
     }
 
-    public DiagnosisCaseResponse submitImage(Long animalId, MultipartFile image) {
-        validateImage(image);
+    public ImageDiagnosisBatchResponse submitImage(Long animalId, List<MultipartFile> images) {
+        if (images == null || images.isEmpty()) {
+            throw new ApiException("IMAGE_REQUIRED", "At least one image file is required.", HttpStatus.BAD_REQUEST);
+        }
+        if (images.size() > MAX_IMAGES) {
+            throw new ApiException(
+                    "TOO_MANY_IMAGES",
+                    "At most " + MAX_IMAGES + " images are accepted per submission, got " + images.size() + ".",
+                    HttpStatus.BAD_REQUEST);
+        }
+        images.forEach(this::validateImage);
+
         Animal animal = animalService.getOrThrow(animalId);
         requireImageDiagnosisSupported(animal);
+        String correlationId = MDC.get(CorrelationIdFilter.MDC_KEY);
 
-        String imageBase64;
-        try {
-            imageBase64 = Base64.getEncoder().encodeToString(image.getBytes());
-        } catch (IOException ex) {
-            throw new ApiException(
-                    "IMAGE_READ_FAILED", "Could not read the uploaded image.", HttpStatus.BAD_REQUEST);
+        // Nothing gets persisted if any photo fails partway through — same "no partial case"
+        // principle as the rest of this class, just applied to a batch instead of one call.
+        List<DiagnosisCaseResponse> results = new ArrayList<>();
+        for (MultipartFile image : images) {
+            String imageBase64;
+            try {
+                imageBase64 = Base64.getEncoder().encodeToString(image.getBytes());
+            } catch (IOException ex) {
+                throw new ApiException(
+                        "IMAGE_READ_FAILED", "Could not read the uploaded image.", HttpStatus.BAD_REQUEST);
+            }
+
+            // No symptoms for an image-based diagnosis — an empty map, not null, so the
+            // ml-service request/DB column contracts (both require a non-null object) hold.
+            // species IS forwarded here (unlike the symptom path) so Cat/Dog route to their
+            // own trained image models in ml-service — see DiagnosisService's class comment.
+            DiagnosisResult result =
+                    mlServiceClient.diagnose(Map.of(), null, imageBase64, animal.getSpecies().name());
+
+            DiagnosisCase entity = new DiagnosisCase(
+                    animal.getId(),
+                    correlationId,
+                    Map.of(),
+                    result.diagnosis(),
+                    result.confidence(),
+                    result.recommendedAction());
+            diagnosisCaseRepository.save(entity);
+
+            results.add(DiagnosisCaseResponse.from(
+                    entity, result.explanation(), result.precautions(), result.nextSteps()));
         }
 
-        // No symptoms for an image-based diagnosis — an empty map, not null, so the
-        // ml-service request/DB column contracts (both require a non-null object) hold.
-        // species IS forwarded here (unlike the symptom path) so Cat/Dog route to their own
-        // trained image models in ml-service — see DiagnosisService's class-level comment.
-        DiagnosisResult result =
-                mlServiceClient.diagnose(Map.of(), null, imageBase64, animal.getSpecies().name());
-
-        String correlationId = MDC.get(CorrelationIdFilter.MDC_KEY);
-        DiagnosisCase entity = new DiagnosisCase(
-                animal.getId(),
-                correlationId,
-                Map.of(),
-                result.diagnosis(),
-                result.confidence(),
-                result.recommendedAction());
-        diagnosisCaseRepository.save(entity);
-
-        return DiagnosisCaseResponse.from(entity, result.explanation(), result.precautions(), result.nextSteps());
+        return ImageDiagnosisBatchResponse.from(results);
     }
 
     private void requireSymptomDiagnosisSupported(Animal animal) {

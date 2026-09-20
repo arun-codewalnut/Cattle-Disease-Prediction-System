@@ -10,7 +10,7 @@ const ACTION_ICONS = {
   monitor: '👀',
 }
 
-export default function DiagnosisResult({ result }) {
+function DiagnosisResultCard({ result }) {
   const confidencePercent = Math.round(result.confidence * 100)
   const isUrgent = result.recommendedAction === 'escalate_to_vet'
   const urgencyIcon = ACTION_ICONS[result.recommendedAction] ?? 'ℹ️'
@@ -70,5 +70,28 @@ export default function DiagnosisResult({ result }) {
         </p>
       </div>
     </section>
+  )
+}
+
+// Multi-photo follow-up: an image submission returns { results: [...], diagnosesAgree } —
+// one card per photo, plus a warning banner when the photos didn't all get the same
+// diagnosis. A symptom submission still returns a single result object, rendered as one card.
+export default function DiagnosisResult({ result }) {
+  if (!Array.isArray(result?.results)) {
+    return <DiagnosisResultCard result={result} />
+  }
+
+  return (
+    <div className="diagnosis-result-list">
+      {!result.diagnosesAgree && (
+        <p role="alert" className="diagnosis-disagreement-banner">
+          <span aria-hidden="true">⚠️</span> These photos didn't all get the same diagnosis —
+          see each result below rather than trusting just one.
+        </p>
+      )}
+      {result.results.map((item, index) => (
+        <DiagnosisResultCard key={item.id ?? index} result={item} />
+      ))}
+    </div>
   )
 }

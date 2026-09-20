@@ -3,7 +3,7 @@
 Living snapshot of project state. Update this whenever you finish a meaningful chunk of work —
 this is what an agent (or you) reads first when resuming.
 
-_Last updated: 2026-09-20 (session 10)_
+_Last updated: 2026-09-20 (session 11)_
 
 ## Known gaps
 
@@ -355,12 +355,62 @@ _Last updated: 2026-09-20 (session 10)_
     live end-to-end verification**: real Cat/Dog photos through the actual backend multipart
     endpoint (correct diagnoses), confirmed symptom submission still rejects for both,
     confirmed Cow regression-free, and confirmed in the real browser that Cat/Dog show the
-    image-only form with the correct disclosure text (Cow's full form unaffected). Not yet
-    committed/pushed — pending.
+    image-only form with the correct disclosure text (Cow's full form unaffected).
+- **PR opened** ([#32](https://github.com/arun-codewalnut/Cattle-Disease-Prediction-System/pull/32)), stacked on the merged M9 PR. CI passed (`frontend`/`backend`/`ml-service`) after
+  fixing a duplicate `dog_image_model.pt` row in `REGISTRY.md` (the training script appends,
+  doesn't replace — caught while answering "how much data is each model trained on"). Also
+  added a `README.md` section on testing diagnosis manually and retraining any model from
+  scratch. `mergemitra-analysis`, an org-level check unrelated to this repo's own CI, fails
+  the same way it did on PR #31 — not something in scope here.
+- **Multi-photo upload + species preview + visual redesign** (new branch
+  `feat/multi-photo-diagnosis-ui`, stacked on the Cat/Dog branch per your explicit choice
+  rather than waiting for #32 to merge first): you asked for three things —
+  1. **Species preview**: a card showing the species' icon + a one-line capability summary,
+     swapping instantly on selection (`SpeciesPreview.jsx`, new). Inline emoji only, matching
+     the original farm-themed redesign's "no downloaded imagery" convention.
+  2. **Up to 5 photos per diagnosis, with a disagreement warning**: confirmed with you this
+     means comparing the 5 photos' own diagnosis results against each other (not verifying
+     "is this actually a cat" — that would need a whole new species-detection model, flagged
+     as out of scope, not started). `POST /api/animals/{id}/diagnoses/image` now takes 1-5
+     files (`@RequestParam("images") List<MultipartFile>`, was one `image`) and returns
+     `ImageDiagnosisBatchResponse { results: [...], diagnosesAgree }` — a breaking API change,
+     acceptable per `docs/DECISIONS.md`'s standing local-project position (same precedent as
+     M11's rename). Backend loops the existing single-image `ml-service` call once per photo —
+     **no ml-service changes**. Frontend: `ImageUploadForm.jsx` reworked into a 5-slot photo
+     tray (add/remove per slot); `DiagnosisResult.jsx` split into `DiagnosisResultCard` +
+     `DiagnosisResultList`, the latter shows a warning banner when `diagnosesAgree === false`.
+     Symptom-based diagnosis (Cow/Buffalo/Sheep) is untouched — still returns/renders a single
+     result.
+  3. **Visual polish**: real card styling for the species preview and photo tray, an animated
+     spinner replacing the plain "⏳ Submitting…" text, entrance animation on the species
+     preview and result cards. Kept the existing gradient-sky/farm background — confirmed via
+     screenshot it was already good, the flatness was in the form chrome, not the backdrop.
+  **Validated**: `mvn -q test` 16/16 (3 new: agree-case, disagree-case, >5-images rejection),
+  `npm test` 14/14 (1 new: multi-photo disagreement banner) + build green. Live end-to-end via
+  `curl`: 2 Ringworm-ish Cat photos correctly flagged `diagnosesAgree: false` when one came
+  back a different diagnosis, 3 Dog Mange photos correctly flagged disagreement when one came
+  back `uncertain`, 6-photo submission correctly rejected with `TOO_MANY_IMAGES`. Confirmed
+  live in the browser (desktop + mobile 375px) that the species preview swaps correctly for
+  all 5 species and the photo tray's 5 slots render with correct accessible labels — could
+  not literally drive the file picker in the built-in browser (same tooling limitation as
+  M9), covered instead by the passing Vitest suite's `user.upload()` simulation.
+- **Found and fixed a real bug while explaining the app to the user**: `POST /api/animals`
+  always inserted a new row, so a second diagnosis for the same real animal (same tag number)
+  permanently failed with `ANIMAL_TAG_DUPLICATE` — there was no way to ever revisit an animal
+  after its first diagnosis, which defeats the point of `tagNumber`/`farmId` existing at all
+  (case history, per `AGENTS.md`'s stated backend responsibility). `AnimalService.create` →
+  `findOrCreate`: looks up by tag first (globally unique, confirmed via
+  `V1__init.sql`), reuses the existing record when `farmId`/`species` both match, still
+  rejects as a real conflict if either doesn't (prevents silently overwriting an existing
+  animal's history via a typo'd tag). New repository method `findByTagNumber`. Backend
+  30/30 (3 new tests: reuse-on-match, reject-on-farm-mismatch, reject-on-species-mismatch).
+  Live-verified: two diagnoses submitted for the same tag both landed on the same `animalId`,
+  and a farm/species mismatch on a reused tag still cleanly rejects.
 
 ## In Progress
 
-- Real Cat/Dog image models (M13/M14 follow-up) — implementation done, not yet committed.
+- Multi-photo upload + species preview + visual redesign, plus the animal find-or-create fix
+  — all committed on `feat/multi-photo-diagnosis-ui`, not yet pushed/PR'd.
 
 ## Not Started
 

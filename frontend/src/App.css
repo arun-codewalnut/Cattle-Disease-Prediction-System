@@ -94,6 +94,48 @@ select:focus-visible {
   border-color: var(--accent);
 }
 
+.species-preview {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin: 10px 0 0;
+  padding: 12px 16px;
+  border-radius: 14px;
+  background: var(--accent-bg);
+  border: 1px solid var(--border);
+  animation: species-preview-in 0.25s ease;
+}
+
+@keyframes species-preview-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.species-preview__icon {
+  font-size: 40px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.species-preview__name {
+  margin: 0;
+  font-weight: 700;
+  color: var(--text-h);
+}
+
+.species-preview__summary {
+  margin: 2px 0 0;
+  font-size: 0.85em;
+  color: var(--text);
+  opacity: 0.85;
+}
+
 .species-disclaimer {
   margin: 8px 0 0;
   padding: 8px 12px;
@@ -218,6 +260,24 @@ button[type='submit']:disabled {
   box-shadow: none;
 }
 
+.btn-spinner {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  margin-right: 6px;
+  vertical-align: -2px;
+  border: 2px solid rgba(255, 255, 255, 0.4);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: btn-spinner-spin 0.7s linear infinite;
+}
+
+@keyframes btn-spinner-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 .form-divider {
   display: flex;
   align-items: center;
@@ -238,33 +298,109 @@ button[type='submit']:disabled {
   background: var(--border);
 }
 
-.image-upload-form input[type='file'] {
-  display: block;
-  width: 100%;
-  box-sizing: border-box;
-  padding: 10px 14px;
-  border: 2px dashed var(--border);
-  border-radius: 10px;
-  background: var(--accent-bg);
+.image-upload-form__label {
+  margin: 0 0 8px;
+  font-weight: 600;
   color: var(--text-h);
-  cursor: pointer;
-  transition: border-color 0.15s ease, background 0.15s ease, transform 0.15s ease;
 }
 
-.image-upload-form input[type='file']:hover {
+.photo-tray {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(72px, 1fr));
+  gap: 8px;
+}
+
+.photo-tray__slot {
+  position: relative;
+  aspect-ratio: 1;
+  border-radius: 10px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.photo-tray__slot--empty {
+  border: 2px dashed var(--border);
+  background: var(--accent-bg);
+  font-size: 24px;
+  color: var(--text);
+  opacity: 0.7;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease, transform 0.15s ease, opacity 0.15s ease;
+}
+
+.photo-tray__slot--empty:hover {
   border-color: var(--accent);
   transform: translateY(-1px);
+  opacity: 1;
 }
 
-.image-upload-form input[type='file']:focus-visible {
+.photo-tray__slot--empty:has(.photo-tray__input:focus-visible) {
   outline: 3px solid var(--accent-border);
-  outline-offset: 1px;
+  outline-offset: 2px;
 }
 
-.image-upload-form__filename {
-  margin: 8px 0 0;
-  font-size: 0.9em;
+.photo-tray__slot--empty:has(.photo-tray__input:disabled) {
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+
+.photo-tray__input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.photo-tray__slot--filled {
+  border: 2px solid var(--accent);
+  background: var(--card-bg);
+  padding: 4px;
+  gap: 2px;
+}
+
+.photo-tray__icon {
+  font-size: 20px;
+}
+
+.photo-tray__filename {
+  font-size: 0.62em;
+  text-align: center;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  width: 100%;
+  padding: 0 2px;
   opacity: 0.8;
+}
+
+.photo-tray__remove {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 18px;
+  height: 18px;
+  line-height: 1;
+  border: none;
+  border-radius: 50%;
+  background: var(--urgency-escalate);
+  color: #fff;
+  cursor: pointer;
+  font-size: 13px;
+  padding: 0;
+}
+
+.image-upload-form__count {
+  margin: 8px 0 0;
+  font-size: 0.85em;
+  opacity: 0.75;
 }
 
 .image-upload-form button[type='submit'] {
@@ -295,6 +431,21 @@ section[data-urgent='true'] [role='alert'] {
   color: #c0392b;
 }
 
+.diagnosis-result-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.diagnosis-disagreement-banner {
+  margin-top: 24px;
+  padding: 12px 16px;
+  border-radius: 12px;
+  border: 2px solid var(--urgency-escalate);
+  background: var(--urgency-escalate-bg);
+  font-weight: 600;
+}
+
 .diagnosis-result {
   margin-top: 24px;
   padding: 18px 20px;
@@ -304,6 +455,7 @@ section[data-urgent='true'] [role='alert'] {
   display: flex;
   gap: 14px;
   align-items: flex-start;
+  animation: species-preview-in 0.25s ease;
 }
 
 .diagnosis-result.urgency-consult_vet {

@@ -1,5 +1,7 @@
 package com.cattlecare.backend.diagnosis;
 
+import java.util.List;
+
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -11,6 +13,7 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
 import com.cattlecare.backend.diagnosis.dto.DiagnosisCaseResponse;
+import com.cattlecare.backend.diagnosis.dto.ImageDiagnosisBatchResponse;
 import com.cattlecare.backend.diagnosis.dto.SubmitSymptomsRequest;
 import jakarta.validation.Valid;
 
@@ -30,12 +33,13 @@ public class DiagnosisController {
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
-    // M8 phase 1 (docs/specs/M8-image-diagnosis-phase1.md) — image-based diagnosis, backed
-    // by a placeholder classifier in ml-service, not a trained model yet.
+    // M8 phase 1 (docs/specs/M8-image-diagnosis-phase1.md) — image-based diagnosis. Accepts
+    // 1-5 photos (multi-photo follow-up); each is diagnosed independently and the response
+    // says whether they all agreed — see ImageDiagnosisBatchResponse.
     @PostMapping(value = "/api/animals/{animalId}/diagnoses/image", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    public ResponseEntity<DiagnosisCaseResponse> submitImage(
-            @PathVariable Long animalId, @RequestParam("image") MultipartFile image) {
-        DiagnosisCaseResponse response = diagnosisService.submitImage(animalId, image);
+    public ResponseEntity<ImageDiagnosisBatchResponse> submitImage(
+            @PathVariable Long animalId, @RequestParam("images") List<MultipartFile> images) {
+        ImageDiagnosisBatchResponse response = diagnosisService.submitImage(animalId, images);
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 }

@@ -8,8 +8,8 @@ export function submitSymptoms(animalId, symptoms, correlationId) {
   return apiPost(`/api/animals/${animalId}/diagnoses`, { symptoms }, correlationId)
 }
 
-export function submitImage(animalId, imageFile, correlationId) {
+export function submitImage(animalId, imageFiles, correlationId) {
   const formData = new FormData()
-  formData.append('image', imageFile)
+  imageFiles.forEach((file) => formData.append('images', file))
   return apiPostMultipart(`/api/animals/${animalId}/diagnoses/image`, formData, correlationId)
 }
