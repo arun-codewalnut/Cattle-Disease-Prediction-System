@@ -14,6 +14,11 @@ Any feature that adds real-world action (notifications, escalation, reporting to
 authority) must preserve this behavior. See
 [docs/API_CONTRACTS.md](API_CONTRACTS.md) for the `recommended_action` field this maps to.
 
+**Image-based prediction (M9)** covers only 3 of the 5 symptom-model diseases — `Healthy`,
+`Lumpy Skin Disease`, `Foot and Mouth Disease` — since no image dataset exists for
+`Mastitis`/`Bovine Respiratory Disease`. Don't present an image-based diagnosis as having the
+same disease coverage as a symptom-based one.
+
 ## Companion animals (M13+)
 
 This project started as livestock-only (cattle/buffalo/sheep), where "reportable disease"

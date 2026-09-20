@@ -5,46 +5,60 @@ End-of-session notes. Overwrite this each session — it's a handoff to "next se
 
 ---
 
-## This session (2026-09-20)
+## This session (2026-09-20, continued)
 
-- Confirmed M13's PR (#22) had already been merged to `main` — synced before branching for M14.
-- **Implemented M14** (issue #23): Dog added as a fifth species. See STATE.md for the full
-  detail list.
-- **Central decision, confirmed with the user before coding, not assumed**: mirror M13's
-  conservative "block diagnosis entirely, don't source data/train a model this session" call
-  rather than issue #23's literal wording. Asked via `AskUserQuestion` (M13-style block vs.
-  full scope with real dataset sourcing + training); the user picked the conservative option.
-- Did real web research (AVMA, VCA, AKC) for the dog disease list required by issue #23 —
-  canine distemper, canine parvovirus, kennel cough (CIRDC), sarcoptic/demodectic mange — and
-  re-confirmed the same Hugging Face/Kaggle dataset candidates M13 found, still not downloaded.
-- Reread `docs/DISCLAIMER.md` before touching it and found it already dog-inclusive from M13
-  ("companion animals (cat, dog)", "cats and dogs") — made **no edit** to it this session,
-  documented as a deliberate decision in the spec rather than silently skipping a step M13 did.
-- Confirmed `DiagnosisIntake.jsx`/`AnimalIdentityFields.jsx` needed no code changes — both
-  already gate generically on `DIAGNOSIS_SUPPORTED_SPECIES`, no Cat-specific hardcoding to
-  generalize.
-- **Validated, then committed**: backend 23/23, ml-service confirmed unaffected (no
-  ml-service files touched), frontend lint + 12/12 + build, plus a live end-to-end run: `curl`
-  confirmed a Dog animal's symptom and image diagnosis both reject with a clean `400
-  DIAGNOSIS_NOT_SUPPORTED_FOR_SPECIES`, a Cow diagnosis still succeeded normally, and a real
-  browser run confirmed selecting Dog hides the diagnosis forms entirely (Cow still works after
-  switching back).
+- Pushed M14's branch and opened [PR #30](https://github.com/arun-codewalnut/Cattle-Disease-Prediction-System/pull/30) against `main`.
+- You gave `kagglehub`/`datasets` download snippets for all 4 previously-flagged candidate
+  datasets and asked me to use them all. Downloaded and evaluated all 4 for real:
+  - **Cattle images (`devang03mgr/cattle-diseases-datasets`)**: solid, real, 3,244 images —
+    downloaded **anonymously, no Kaggle token needed** (the M9 spec's own "blocked, needs a
+    Kaggle account" assumption turned out to be wrong).
+  - **3 companion-animal datasets** (HF `pet-health-symptoms-dataset`, Kaggle
+    `shijo96john/animal-disease-prediction`, Kaggle `gracehephzibahm/animal-disease`):
+    inspected all 3 in detail — none good enough to train a trustworthy Cat/Dog model. Flagged
+    this to you explicitly (`AskUserQuestion`) rather than silently training on thin data; you
+    confirmed proceeding with the cattle image classifier only for now.
+- **Implemented M9 for real** (issue #18): trained a MobileNetV2-transfer-learning cattle
+  image classifier — 86.1% val accuracy / 0.857 macro F1 across `Healthy`/`Lumpy Skin
+  Disease`/`Foot and Mouth Disease`. Replaced M8 phase 1's hash-based placeholder in
+  `ml-service/app/agent/graph.py`'s `predict_image_node` with a real model call; removed the
+  now-obsolete `image_placeholder` branch in `explain_node` so image diagnoses get real
+  LLM/RAG explanations like symptom diagnoses do. See STATE.md for the full detail list.
+- **Real architectural deviation, flagged deliberately**: the symptom model's tests retrain a
+  fresh model every session from committed synthetic data (cheap, CI-safe) — the real image
+  dataset can't follow that pattern (257MB, real photos, unverified redistribution license,
+  so it's gitignored and CI won't have it). Real-model image tests skip gracefully via
+  `@pytest.mark.skipif` when the local trained artifact is absent; a new test asserting the
+  clean `MODEL_NOT_TRAINED` 503 always runs, since that's the actual behavior CI will see.
+- **Validated, not yet committed**: ml-service 40 passed/2 skipped, backend 23/23 unaffected,
+  frontend unaffected (no files touched in either service — species was never threaded to the
+  image endpoint and still isn't). Live end-to-end: called both the real `ml-service`
+  `/agent/diagnose` and the real backend `POST /api/animals/{id}/diagnoses/image` with one
+  real photo per class — all 3 correctly diagnosed with correct escalation. **Could not**
+  verify through the actual browser `<input type=file>` control — the built-in Browser pane
+  has no file-upload tool — so browser verification stopped at the API layer, not the literal
+  click-and-upload UI interaction; flagged rather than silently skipped.
 
 ## Next session
 
-- Open a PR for M14 (issue #23) once the user confirms — not opened yet this session.
-- M14 is the last of the five originally-requested species (`docs/ROADMAP.md`'s "Target
-  species" note) — no more species milestones queued after this.
-- **Real cat/dog models are still blocked on data** — candidates are known (Hugging Face
-  `karenwky/pet-health-symptoms-dataset`, two Kaggle multi-species datasets) but nothing has
-  been downloaded across M13 or M14. Worth asking the user directly: should a follow-up issue
-  be opened to evaluate/download one of these?
-- **Still waiting on the user for M9's cattle-image dataset** (issue #18 stays open,
-  spec-only) — see Blockers.
+- **Commit and (if asked) push/PR the M9 work** — not done yet this session, stopped after
+  verification to hand off cleanly. Suggested split: data+deps, model+training script, graph
+  wiring, docs+tests (mirrors how M13/M14 split their commits).
+- Companion-animal (Cat/Dog) real model: still blocked on data, now with **evaluated, not just
+  found** candidates — worth discussing whether to look for a better/larger canine or feline-
+  specific dataset (search terms used so far: generic "animal disease/symptom dataset" —
+  a more targeted search might turn up something with better per-species sample counts).
+- Review/merge [PR #30](https://github.com/arun-codewalnut/Cattle-Disease-Prediction-System/pull/30) (M14).
+- `requirements.txt` now pins `torch==2.14.0`/`torchvision==0.29.0` without the
+  `--index-url https://download.pytorch.org/whl/cpu` flag baked in (pip doesn't support an
+  index URL inside requirements.txt per-package) — CI's plain `pip install -r requirements.txt`
+  may pull a much larger CUDA-enabled wheel instead of the CPU one used locally. Worth
+  checking CI logs/timing once this is pushed; if it's a problem, a `constraints.txt` or a
+  CI-specific install step pointing at the CPU index is the fix.
 - Decide on a `LICENSE` (still open, carried over from several sessions back).
 - Fix `GITHUB_TOKEN` for GitHub MCP so the `gh` CLI workaround (`env -u GITHUB_TOKEN gh ...`)
   isn't needed every session.
-- M7 (notifications, issue #7) is still open and unstarted, independent of the species work.
+- M7 (notifications, issue #7) is still open and unstarted, independent of everything above.
 - `npx playwright install --with-deps chromium` in `tests/e2e/` — still not done.
 - Consider a future cleanup pass: `docker-compose.yml`'s `chroma` service and
   `CHROMA_HOST`/`CHROMA_PORT` in `.env.example` are still unused (M6 uses embedded Chroma) —
@@ -52,16 +66,12 @@ End-of-session notes. Overwrite this each session — it's a handoff to "next se
 
 ## Blockers
 
-- **M9 needs a Kaggle account/API token to download the candidate cattle-image dataset**
-  ([devang03mgr/cattle-diseases-datasets](https://www.kaggle.com/datasets/devang03mgr/cattle-diseases-datasets)) —
-  the user hasn't provided one yet. Two ways to unblock: (a) the user downloads it manually
-  and gives the local folder path, or (b) the user places a Kaggle API token at
-  `~/.kaggle/kaggle.json` or via `KAGGLE_USERNAME`/`KAGGLE_KEY` env vars (never pasted in
-  chat) and confirms it's there. Carried over six sessions now, still blocking.
-- **M13/M14 found real cat/dog-disease dataset candidates but didn't fetch them** — not
-  strictly a blocker (both shipped without needing them, by design), but real follow-up work
-  needs the user's decision on which candidate (if any) to pursue, and possibly a Hugging Face
-  token or a review of the Kaggle datasets' licensing.
+- **Companion-animal (Cat/Dog) real model**: no longer "no data found" — now "data found,
+  downloaded, evaluated, still insufficient." The best candidate (Kaggle
+  `shijo96john/animal-disease-prediction`) has the right shape (species + structured symptoms
+  + real disease names matching M13/M14's researched disease lists) but only ~75 Dog / ~72
+  Cat rows spread across 20+ near-duplicate disease labels — needs either a bigger dataset or
+  an explicit decision to ship something low-confidence with real, prominent caveats.
 - `GITHUB_TOKEN` used by the GitHub MCP server is invalid ("Bad credentials" on every MCP
   call, multiple sessions running now) — not blocking, since `gh` CLI has a separate working
   keyring login (`env -u GITHUB_TOKEN gh ...` per call), but MCP itself needs a real token
