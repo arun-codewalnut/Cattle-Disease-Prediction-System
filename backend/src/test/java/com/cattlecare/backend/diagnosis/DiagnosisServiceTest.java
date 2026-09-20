@@ -1,7 +1,9 @@
 package com.cattlecare.backend.diagnosis;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -27,6 +29,7 @@ import com.cattlecare.backend.client.DiagnosisResult;
 import com.cattlecare.backend.client.MlServiceClient;
 import com.cattlecare.backend.config.ApiException;
 import com.cattlecare.backend.diagnosis.dto.DiagnosisCaseResponse;
+import com.cattlecare.backend.diagnosis.dto.ImageDiagnosisBatchResponse;
 
 class DiagnosisServiceTest {
 
@@ -105,19 +108,78 @@ class DiagnosisServiceTest {
         when(mlServiceClient.diagnose(eq(Map.of()), isNull(), anyString(), eq("COW"))).thenReturn(mlResult);
 
         MultipartFile image = new MockMultipartFile("image", "cow.jpg", "image/jpeg", new byte[] {1, 2, 3});
-        DiagnosisCaseResponse response = diagnosisService.submitImage(1L, image);
+        ImageDiagnosisBatchResponse response = diagnosisService.submitImage(1L, List.of(image));
 
-        assertEquals("Lumpy Skin Disease", response.diagnosis());
-        assertEquals("escalate_to_vet", response.recommendedAction());
+        assertEquals(1, response.results().size());
+        assertEquals("Lumpy Skin Disease", response.results().get(0).diagnosis());
+        assertEquals("escalate_to_vet", response.results().get(0).recommendedAction());
+        assertTrue(response.diagnosesAgree()); // a single photo always agrees with itself
         verify(mlServiceClient).diagnose(eq(Map.of()), isNull(), eq("AQID"), eq("COW")); // base64("\x01\x02\x03")
         verify(diagnosisCaseRepository).save(any(DiagnosisCase.class));
+    }
+
+    // Multi-photo follow-up: up to 5 photos per submission, each diagnosed independently.
+
+    @Test
+    void submitImage_multiplePhotosAllSameDiagnosis_agrees() {
+        Animal animal = new Animal("COW-001", 42L, Species.COW);
+        when(animalService.getOrThrow(1L)).thenReturn(animal);
+        DiagnosisResult mlResult = new DiagnosisResult(
+                "Healthy", 0.9, "Predicted Healthy.", "monitor", List.of(), List.of(), List.of());
+        when(mlServiceClient.diagnose(eq(Map.of()), isNull(), anyString(), eq("COW"))).thenReturn(mlResult);
+
+        MultipartFile a = new MockMultipartFile("images", "a.jpg", "image/jpeg", new byte[] {1});
+        MultipartFile b = new MockMultipartFile("images", "b.jpg", "image/jpeg", new byte[] {2});
+        MultipartFile c = new MockMultipartFile("images", "c.jpg", "image/jpeg", new byte[] {3});
+
+        ImageDiagnosisBatchResponse response = diagnosisService.submitImage(1L, List.of(a, b, c));
+
+        assertEquals(3, response.results().size());
+        assertTrue(response.diagnosesAgree());
+        verify(diagnosisCaseRepository, org.mockito.Mockito.times(3)).save(any(DiagnosisCase.class));
+    }
+
+    @Test
+    void submitImage_multiplePhotosDisagreeingDiagnoses_flagsDisagreement() {
+        Animal animal = new Animal("CAT-001", 42L, Species.CAT);
+        when(animalService.getOrThrow(1L)).thenReturn(animal);
+        DiagnosisResult ringworm = new DiagnosisResult(
+                "Ringworm", 0.9, "Predicted Ringworm.", "consult_vet", List.of(), List.of(), List.of());
+        DiagnosisResult scabies = new DiagnosisResult(
+                "Scabies", 0.85, "Predicted Scabies.", "consult_vet", List.of(), List.of(), List.of());
+        when(mlServiceClient.diagnose(eq(Map.of()), isNull(), eq("AQ=="), eq("CAT"))).thenReturn(ringworm); // "\x01"
+        when(mlServiceClient.diagnose(eq(Map.of()), isNull(), eq("Ag=="), eq("CAT"))).thenReturn(ringworm); // "\x02"
+        when(mlServiceClient.diagnose(eq(Map.of()), isNull(), eq("Aw=="), eq("CAT"))).thenReturn(scabies); // "\x03"
+
+        MultipartFile a = new MockMultipartFile("images", "a.jpg", "image/jpeg", new byte[] {1});
+        MultipartFile b = new MockMultipartFile("images", "b.jpg", "image/jpeg", new byte[] {2});
+        MultipartFile c = new MockMultipartFile("images", "c.jpg", "image/jpeg", new byte[] {3});
+
+        ImageDiagnosisBatchResponse response = diagnosisService.submitImage(1L, List.of(a, b, c));
+
+        assertEquals(3, response.results().size());
+        assertFalse(response.diagnosesAgree());
+    }
+
+    @Test
+    void submitImage_moreThanFivePhotos_rejectedBeforeAnimalLookupOrMlServiceCall() {
+        List<MultipartFile> sixImages = java.util.stream.IntStream.range(0, 6)
+                .mapToObj(i -> (MultipartFile) new MockMultipartFile(
+                        "images", "img" + i + ".jpg", "image/jpeg", new byte[] {(byte) i}))
+                .toList();
+
+        ApiException ex = assertThrows(ApiException.class, () -> diagnosisService.submitImage(1L, sixImages));
+
+        assertEquals("TOO_MANY_IMAGES", ex.getCode());
+        verify(animalService, never()).getOrThrow(any());
+        verify(mlServiceClient, never()).diagnose(anyMap(), any(), any(), any());
     }
 
     @Test
     void submitImage_unsupportedType_rejectedBeforeAnimalLookupOrMlServiceCall() {
         MultipartFile image = new MockMultipartFile("image", "cow.gif", "image/gif", new byte[] {1});
 
-        ApiException ex = assertThrows(ApiException.class, () -> diagnosisService.submitImage(1L, image));
+        ApiException ex = assertThrows(ApiException.class, () -> diagnosisService.submitImage(1L, List.of(image)));
 
         assertEquals("UNSUPPORTED_IMAGE_TYPE", ex.getCode());
         verify(animalService, never()).getOrThrow(any());
@@ -129,7 +191,7 @@ class DiagnosisServiceTest {
         byte[] oversized = new byte[6 * 1024 * 1024];
         MultipartFile image = new MockMultipartFile("image", "cow.jpg", "image/jpeg", oversized);
 
-        ApiException ex = assertThrows(ApiException.class, () -> diagnosisService.submitImage(1L, image));
+        ApiException ex = assertThrows(ApiException.class, () -> diagnosisService.submitImage(1L, List.of(image)));
 
         assertEquals("IMAGE_TOO_LARGE", ex.getCode());
         verify(animalService, never()).getOrThrow(any());
@@ -138,9 +200,7 @@ class DiagnosisServiceTest {
 
     @Test
     void submitImage_missingFile_rejected() {
-        MultipartFile empty = new MockMultipartFile("image", "empty.jpg", "image/jpeg", new byte[0]);
-
-        ApiException ex = assertThrows(ApiException.class, () -> diagnosisService.submitImage(1L, empty));
+        ApiException ex = assertThrows(ApiException.class, () -> diagnosisService.submitImage(1L, List.of()));
 
         assertEquals("IMAGE_REQUIRED", ex.getCode());
     }
@@ -151,7 +211,7 @@ class DiagnosisServiceTest {
         when(animalService.getOrThrow(999L))
                 .thenThrow(new ApiException("ANIMAL_NOT_FOUND", "not found", HttpStatus.NOT_FOUND));
 
-        assertThrows(ApiException.class, () -> diagnosisService.submitImage(999L, image));
+        assertThrows(ApiException.class, () -> diagnosisService.submitImage(999L, List.of(image)));
 
         verify(mlServiceClient, never()).diagnose(anyMap(), any(), any(), any());
         verify(diagnosisCaseRepository, never()).save(any());
@@ -200,9 +260,9 @@ class DiagnosisServiceTest {
         when(mlServiceClient.diagnose(eq(Map.of()), isNull(), anyString(), eq("CAT"))).thenReturn(mlResult);
         MultipartFile image = new MockMultipartFile("image", "cat.jpg", "image/jpeg", new byte[] {1});
 
-        DiagnosisCaseResponse response = diagnosisService.submitImage(1L, image);
+        ImageDiagnosisBatchResponse response = diagnosisService.submitImage(1L, List.of(image));
 
-        assertEquals("Ringworm", response.diagnosis());
+        assertEquals("Ringworm", response.results().get(0).diagnosis());
         verify(mlServiceClient).diagnose(eq(Map.of()), isNull(), anyString(), eq("CAT"));
         verify(diagnosisCaseRepository).save(any(DiagnosisCase.class));
     }
@@ -217,9 +277,9 @@ class DiagnosisServiceTest {
         when(mlServiceClient.diagnose(eq(Map.of()), isNull(), anyString(), eq("DOG"))).thenReturn(mlResult);
         MultipartFile image = new MockMultipartFile("image", "dog.jpg", "image/jpeg", new byte[] {1});
 
-        DiagnosisCaseResponse response = diagnosisService.submitImage(1L, image);
+        ImageDiagnosisBatchResponse response = diagnosisService.submitImage(1L, List.of(image));
 
-        assertEquals("Mange", response.diagnosis());
+        assertEquals("Mange", response.results().get(0).diagnosis());
         verify(mlServiceClient).diagnose(eq(Map.of()), isNull(), anyString(), eq("DOG"));
         verify(diagnosisCaseRepository).save(any(DiagnosisCase.class));
     }
