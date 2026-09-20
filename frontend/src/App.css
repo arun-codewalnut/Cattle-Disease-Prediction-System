@@ -109,6 +109,12 @@ select:focus-visible {
   font-weight: 600;
 }
 
+.species-disclaimer--low-confidence {
+  background: var(--urgency-escalate-bg);
+  border: 1px solid var(--urgency-escalate);
+  font-weight: 600;
+}
+
 .species-unavailable {
   margin-top: 18px;
   padding: 20px;
