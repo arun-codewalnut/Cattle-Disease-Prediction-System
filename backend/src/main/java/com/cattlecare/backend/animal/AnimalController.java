@@ -19,9 +19,12 @@ public class AnimalController {
         this.animalService = animalService;
     }
 
+    // find-or-create by tag number (AnimalService.findOrCreate) — always 201 here regardless
+    // of whether this call created a new record or reused an existing one, same "don't add
+    // ceremony beyond what's needed" precedent the rest of this API already follows.
     @PostMapping("/api/animals")
     public ResponseEntity<AnimalResponse> create(@Valid @RequestBody CreateAnimalRequest request) {
-        Animal animal = animalService.create(request.tagNumber(), request.farmId(), request.species());
+        Animal animal = animalService.findOrCreate(request.tagNumber(), request.farmId(), request.species());
         return ResponseEntity.status(HttpStatus.CREATED).body(AnimalResponse.from(animal));
     }
 }
