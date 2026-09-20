@@ -10,9 +10,11 @@ generates real LLM text (falling back to a template if the LLM is unavailable), 
 the model's own output plus (M6) retrieved reference passages — never facts invented beyond
 what it's given.
 
-`predict_image` (M8 phase 1) is a deterministic placeholder, not a trained model — see
-docs/specs/M8-image-diagnosis-phase1.md. It still flows through `recommend`, so the
-REPORTABLE_DISEASES escalation rule applies identically regardless of which path produced
+`predict_image` (M9) is a real, trained MobileNetV2-transfer-learning classifier — see
+docs/specs/M9-cattle-image-classifier.md. It covers only 3 of the symptom model's 5 diseases
+(Healthy / Lumpy Skin Disease / Foot and Mouth Disease — no Mastitis/Bovine Respiratory
+Disease image data exists). It flows through `recommend` exactly like the symptom path, so
+the REPORTABLE_DISEASES escalation rule applies identically regardless of which path produced
 the diagnosis.
 
 `precautions` (M10) is a deterministic lookup, not LLM-generated — unlike `explanation`, its
@@ -23,7 +25,6 @@ from __future__ import annotations
 
 import base64
 import binascii
-import hashlib
 from pathlib import Path
 from typing import Any, TypedDict
 
@@ -33,6 +34,7 @@ from langgraph.graph import END, StateGraph
 
 from app.agent.llm import get_llm
 from app.errors import ApiError
+from app.models.image_model import predict as predict_image_bytes
 from app.models.symptom_model import predict
 from app.rag.retrieval import get_precautions, retrieve
 
@@ -40,14 +42,6 @@ from app.rag.retrieval import get_precautions, retrieve
 # Deliberately a fixed, auditable list here rather than anything the model (or the LLM)
 # could drift on.
 REPORTABLE_DISEASES = {"Foot and Mouth Disease", "Lumpy Skin Disease"}
-
-# M8 phase 1: no trained image model exists yet (see docs/specs/M8-image-diagnosis-phase1.md).
-# This is a deterministic hash of the image bytes, not a classifier — it exists only to
-# exercise the upload -> diagnosis -> escalation pipeline end to end. One reportable disease
-# is deliberately included so the escalation rule gets exercised by the image path too, not
-# just the symptom path.
-_PLACEHOLDER_DIAGNOSES = ("Healthy", "Lumpy Skin Disease", "Mastitis")
-_PLACEHOLDER_CONFIDENCE = 0.5
 
 EXPLAIN_SYSTEM_PROMPT = (
     "You are explaining a machine-learning cattle disease prediction to a farmer. Only use "
@@ -65,7 +59,6 @@ class DiagnosisState(TypedDict, total=False):
     diagnosis: str
     confidence: float
     top_features: list[dict[str, Any]]
-    image_placeholder: bool
     explanation: str
     precautions: list[str]
     next_steps: list[str]
@@ -148,39 +141,25 @@ def predict_image_node(state: DiagnosisState) -> dict[str, Any]:
     if image_bytes is None:
         # Undecodable base64 or an unreachable image_url — degrade to "uncertain" rather
         # than failing the request, same "never blocks a diagnosis" pattern as explain_node.
-        return {
-            "diagnosis": "uncertain",
-            "confidence": 0.0,
-            "top_features": [],
-            "image_placeholder": True,
-        }
+        return {"diagnosis": "uncertain", "confidence": 0.0, "top_features": []}
 
-    digest = hashlib.sha256(image_bytes).digest()
-    diagnosis = _PLACEHOLDER_DIAGNOSES[digest[0] % len(_PLACEHOLDER_DIAGNOSES)]
+    try:
+        result = predict_image_bytes(image_bytes, model_path=state.get("model_path"))
+    except FileNotFoundError as exc:
+        raise ApiError(
+            code="MODEL_NOT_TRAINED",
+            message="The image model hasn't been trained yet — run training.image_model_train.",
+            status_code=503,
+        ) from exc
 
     return {
-        "diagnosis": diagnosis,
-        "confidence": _PLACEHOLDER_CONFIDENCE,
-        "top_features": [],
-        "image_placeholder": True,
+        "diagnosis": result["diagnosis"],
+        "confidence": result["confidence"],
+        "top_features": result["top_features"],
     }
 
 
 def explain_node(state: DiagnosisState) -> dict[str, Any]:
-    if state.get("image_placeholder"):
-        # Deliberately skips the LLM/RAG path entirely (unlike the symptom flow) so a
-        # placeholder result can never be phrased indistinguishably from a real, grounded
-        # explanation — see docs/specs/M8-image-diagnosis-phase1.md.
-        return {
-            "explanation": (
-                f"This is a placeholder image-based prediction ({state['diagnosis']}, "
-                f"{state['confidence']:.0%} confidence). No trained image-recognition model "
-                "exists yet — this result only demonstrates the upload-to-response pipeline "
-                "and must not be used for any real decision."
-            ),
-            "sources": [],
-        }
-
     if state["diagnosis"] == "uncertain":
         return {"explanation": _template_explanation(state), "sources": []}
 

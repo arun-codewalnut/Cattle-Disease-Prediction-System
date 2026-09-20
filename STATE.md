@@ -3,7 +3,7 @@
 Living snapshot of project state. Update this whenever you finish a meaningful chunk of work —
 this is what an agent (or you) reads first when resuming.
 
-_Last updated: 2026-09-20 (session 8)_
+_Last updated: 2026-09-20 (session 9)_
 
 ## Known gaps
 
@@ -271,16 +271,46 @@ _Last updated: 2026-09-20 (session 8)_
   reject it with a clean `400 DIAGNOSIS_NOT_SUPPORTED_FOR_SPECIES`, confirmed a Cow diagnosis
   still succeeds normally, and in the real browser confirmed selecting Dog hides the
   symptom/photo forms entirely (switching back to Cow correctly restores them).
+- **M14 PR merged to `main`** ([#30](https://github.com/arun-codewalnut/Cattle-Disease-Prediction-System/pull/30)) — confirmed before branching for M9.
+- **M9 done** (issue #18): the long-standing Kaggle blocker resolved itself — `kagglehub`
+  downloaded the 3,244-image cattle-diseases-datasets anonymously, no account/API token
+  needed after all (the earlier assumption that one was required was wrong). Trained a real
+  image classifier: MobileNetV2 backbone (ImageNet-pretrained, frozen) with a fine-tuned
+  linear head over cached backbone features — CPU-feasible, ~86% validation accuracy / 0.857
+  macro F1 across all 3 classes (`Healthy`/`Lumpy Skin Disease`/`Foot and Mouth Disease` —
+  `Mastitis`/`Bovine Respiratory Disease` still not covered, no image data exists for them).
+  Replaced M8 phase 1's SHA256-hash placeholder in `predict_image_node`
+  (`ml-service/app/agent/graph.py`) with a real call to the trained model, and removed the
+  `image_placeholder` branch in `explain_node` — image diagnoses now go through the same
+  real LLM/RAG explanation path as symptom diagnoses. New:
+  `ml-service/app/models/image_model.py` (inference wrapper, same `predict()` shape as
+  `symptom_model.py`), `ml-service/training/image_model_train.py` (mirrors
+  `symptom_model_train.py`'s structure). Also downloaded and evaluated 3 companion-animal
+  datasets this session (Hugging Face pet-symptoms, 2 Kaggle multi-species) — **not used**:
+  none had enough real Dog/Cat-specific, correctly-labeled rows to train something
+  trustworthy (best one had ~75 Dog / ~72 Cat rows spread across 20+ near-duplicate disease
+  labels); documented as a follow-up blocker rather than shipped as a low-confidence model,
+  confirmed with the user before proceeding this way. Key architectural note: unlike the
+  symptom model, the real image dataset/artifact are gitignored (large, unverified
+  redistribution license) so CI can't retrain or test against them — real-model image tests
+  (`test_image_base64_produces_a_real_diagnosis_per_class` etc.) skip gracefully there via
+  `@pytest.mark.skipif`, while a new always-runs test confirms the clean `MODEL_NOT_TRAINED`
+  503 CI will actually see. Spec:
+  [docs/specs/M9-cattle-image-classifier.md](docs/specs/M9-cattle-image-classifier.md).
+  **Validated**: ml-service 40/2 (skipped), backend 23/23 and frontend unaffected (confirmed
+  no files touched in either — species was never threaded to the image endpoint), **plus
+  live end-to-end verification**: called the real `ml-service` `/agent/diagnose` endpoint and
+  the real backend `POST /api/animals/{id}/diagnoses/image` multipart endpoint with one real
+  photo per class, all three correctly diagnosed with correct escalation
+  (Lumpy/FMD → `escalate_to_vet`, Healthy → `monitor`). Not yet committed/pushed — pending.
 
 ## In Progress
 
-- M14 (issue #23) — implementation done, PR not yet opened.
+- M9 (issue #18) — implementation done, not yet committed.
 
 ## Not Started
 
 - M7: Notifications (email/WhatsApp free tier)
-- M9 real implementation (issue #18 still open — only the spec landed; training itself is
-  blocked on the Kaggle dataset, see HANDOFF.md's Blockers)
 
 Deployment (formerly M8 in the original numbering) was dropped from scope — see
 `docs/DECISIONS.md`. The M8 number was reused for image-based disease recognition, a

@@ -1,8 +1,9 @@
 # Spec: Real cattle image classifier
 
 **Milestone**: M9
-**Status**: blocked — see "Blocker" below; everything else in this spec is agreed and ready
-to implement the moment the dataset is available.
+**Status**: done — dataset downloaded (no Kaggle token needed for this public dataset, unlike
+the "Blocker" section below assumed), model trained and wired in. See STATE.md for the full
+session detail.
 
 ## Actor + goal
 
@@ -11,7 +12,13 @@ byte-hash placeholder, M8 phase 1) returns a real disease prediction from the im
 in the same `{diagnosis, confidence, top_features}` shape `predict_symptoms_node` already
 produces, so `explain`/`recommend` don't need to change.
 
-## Blocker (read first)
+## Blocker (read first, resolved 2026-09-20)
+
+**Resolved**: `kagglehub.dataset_download(...)` downloaded this dataset anonymously — no
+Kaggle account/API token was actually required for this public dataset, contrary to what the
+section below assumed. See `ml-service/data/cattle-images/SOURCE.md`.
+
+
 
 Training needs real images. The candidate dataset —
 [Cattle Diseases Datasets (Kaggle, devang03mgr)](https://www.kaggle.com/datasets/devang03mgr/cattle-diseases-datasets),
@@ -80,19 +87,19 @@ threshold, same as the existing `_fetch_image_bytes` failure path in M8.
 
 ## Acceptance criteria
 
-- [ ] Dataset downloaded and documented in a `SOURCE.md` (source URL, license, class
+- [x] Dataset downloaded and documented in a `SOURCE.md` (source URL, license, class
       counts) under `ml-service/data/`, same convention as the existing `SOURCE.md` files.
-- [ ] Training script `ml-service/training/image_model_train.py`, mirroring
+- [x] Training script `ml-service/training/image_model_train.py`, mirroring
       `symptom_model_train.py`'s structure (documented, reproducible, writes to
       `ml-service/models/REGISTRY.md`).
-- [ ] Real evaluation metrics recorded (accuracy/F1 per class, confusion matrix) — not just
-      "it works."
-- [ ] `predict_image_node` (`ml-service/app/agent/graph.py`) uses the trained model in place
+- [x] Real evaluation metrics recorded (accuracy/F1 per class, confusion matrix) — not just
+      "it works." 86.1% accuracy / 0.857 macro F1 on a held-out validation split.
+- [x] `predict_image_node` (`ml-service/app/agent/graph.py`) uses the trained model in place
       of `_placeholder_diagnosis_from_bytes`.
-- [ ] The `image_placeholder` branch in `explain_node` is removed — image-based
+- [x] The `image_placeholder` branch in `explain_node` is removed — image-based
       explanations go through the same LLM/RAG path as symptom-based ones now that there's a
       real model behind them.
-- [ ] `docs/API_CONTRACTS.md` and `docs/DISCLAIMER.md` updated: image prediction covers 3
+- [x] `docs/API_CONTRACTS.md` and `docs/DISCLAIMER.md` updated: image prediction covers 3
       classes, not the symptom model's full 5.
 - [ ] Tests updated: the M8 placeholder-specific tests in `test_agent_graph.py`/
       `test_diagnose_endpoint.py` (determinism-of-a-hash, "placeholder" wording assertions)

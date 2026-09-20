@@ -76,15 +76,19 @@ text that isn't actually reflected in `explanation`.
 **Known error codes**: `MODEL_NOT_TRAINED` (`503`) — the model artifact isn't present;
 train it via `python -m training.symptom_model_train` in `ml-service/`.
 
-**Image-based prediction (M8 phase 1)**: `predict_image` is a **deterministic placeholder**
-(a hash of the image bytes), not a trained model — see
-[docs/specs/M8-image-diagnosis-phase1.md](specs/M8-image-diagnosis-phase1.md). Its
-`explanation` always states this explicitly and never goes through the LLM/RAG path, so it
-can't be phrased indistinguishably from a real, grounded symptom-based explanation.
-`recommended_action` (including `escalate_to_vet`) still fires exactly as it would for a
-real diagnosis — the `REPORTABLE_DISEASES` rule doesn't know or care that the diagnosis came
-from a placeholder. An undecodable `image_base64` or an unreachable `image_url` degrades to
-`"uncertain"` (never a hard failure).
+**Image-based prediction (M9)**: `predict_image` is a **real, trained model** — transfer
+learning on a pretrained MobileNetV2 backbone (frozen), fine-tuned classifier head — see
+[docs/specs/M9-cattle-image-classifier.md](specs/M9-cattle-image-classifier.md). It covers
+**only 3 of the symptom model's 5 diseases**: `Healthy`, `Lumpy Skin Disease`, `Foot and
+Mouth Disease` — no dataset exists yet for `Mastitis`/`Bovine Respiratory Disease` via image,
+so those two are never returned from this path. Its `explanation` goes through the same
+LLM/RAG-grounded path as symptom-based diagnoses now that there's a real model behind it — no
+placeholder wording. `recommended_action` (including `escalate_to_vet`) fires exactly as it
+would for a symptom-based diagnosis — the `REPORTABLE_DISEASES` rule doesn't know or care
+which path produced the diagnosis. An undecodable `image_base64`, an unreachable `image_url`,
+or bytes that aren't a real image all degrade to `"uncertain"` (never a hard failure).
+Validation: 3,244 real photos, 86.1% accuracy / 0.857 macro F1 on a held-out split — see
+`ml-service/models/REGISTRY.md`.
 
 **`precautions` / `next_steps` (M10)**: unlike `explanation`, these are **never LLM-generated**
 — looked up verbatim from hand-authored reference content (`ml-service/data/veterinary-reference/`,

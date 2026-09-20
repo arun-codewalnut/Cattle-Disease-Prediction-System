@@ -1,9 +1,12 @@
 import base64
+from pathlib import Path
 from types import SimpleNamespace
 
 import app.agent.graph as graph_module
+import app.models.image_model as image_model_module
 import pytest
 from app.agent.graph import run_diagnosis
+from app.errors import ApiError
 
 CONFIDENT_SYMPTOMS = {
     "fever": True,
@@ -61,40 +64,86 @@ def test_uncertain_diagnosis_never_calls_the_llm(monkeypatch):
     assert calls == []
 
 
-def test_image_base64_produces_a_deterministic_placeholder_diagnosis():
-    image_bytes = b"not a real image, just deterministic bytes for the placeholder hash"
-    image_base64 = base64.b64encode(image_bytes).decode()
-
-    first = run_diagnosis({}, image_base64=image_base64)
-    second = run_diagnosis({}, image_base64=image_base64)
-
-    assert first["diagnosis"] == second["diagnosis"]
-    assert first["confidence"] == second["confidence"] == 0.5
-    assert "placeholder" in first["explanation"].lower()
-    assert first["sources"] == []
+# M9: the real image_model.pt artifact and cattle-images dataset are both gitignored (large,
+# unverified-license real photos), so CI won't have them — tests needing a real confident
+# image prediction skip gracefully there. See docs/specs/M9-cattle-image-classifier.md.
+_IMAGE_MODEL_PATH = image_model_module.DEFAULT_MODEL_PATH
+_CATTLE_IMAGES_DIR = Path(__file__).resolve().parents[1] / "data" / "cattle-images"
+_HAS_TRAINED_IMAGE_MODEL = _IMAGE_MODEL_PATH.exists()
 
 
-def test_image_placeholder_never_calls_the_llm(monkeypatch):
+def _sample_image_base64(folder: str) -> str:
+    sample = next((_CATTLE_IMAGES_DIR / folder).glob("*.jpg"))
+    return base64.b64encode(sample.read_bytes()).decode()
+
+
+@pytest.mark.skipif(not _HAS_TRAINED_IMAGE_MODEL, reason="no local ml-service/models/image_model.pt")
+def test_image_base64_produces_a_real_diagnosis_per_class():
+    for folder, expected in [
+        ("healthy", "Healthy"),
+        ("lumpy", "Lumpy Skin Disease"),
+        ("foot-and-mouth", "Foot and Mouth Disease"),
+    ]:
+        result = run_diagnosis({}, image_base64=_sample_image_base64(folder))
+        assert result["diagnosis"] == expected
+        assert result["sources"] == [] or isinstance(result["sources"], list)
+
+
+@pytest.mark.skipif(not _HAS_TRAINED_IMAGE_MODEL, reason="no local ml-service/models/image_model.pt")
+def test_image_diagnosis_uses_the_real_llm_rag_explain_path(monkeypatch):
+    # Unlike the M8 placeholder, a real image diagnosis now goes through the same explain
+    # path as symptoms — get_llm() gets called, not skipped.
     calls = []
-    monkeypatch.setattr(graph_module, "get_llm", lambda: calls.append("called"))
-    image_base64 = base64.b64encode(b"some bytes").decode()
 
-    run_diagnosis({}, image_base64=image_base64)
+    class FakeLLM:
+        def invoke(self, messages):
+            calls.append("called")
+            return SimpleNamespace(content="Grounded explanation.")
 
-    assert calls == []
+    monkeypatch.setattr(graph_module, "get_llm", lambda: FakeLLM())
+
+    result = run_diagnosis({}, image_base64=_sample_image_base64("lumpy"))
+
+    assert calls == ["called"]
+    assert result["explanation"] == "Grounded explanation."
 
 
-def test_image_placeholder_still_escalates_for_reportable_disease():
-    # Bytes whose sha256 first byte lands on "Lumpy Skin Disease" in
-    # _PLACEHOLDER_DIAGNOSES = ("Healthy", "Lumpy Skin Disease", "Mastitis") — found by
-    # brute-force search over small inputs, pinned here so the escalation assertion below is
-    # deterministic rather than probabilistic.
-    image_base64 = base64.b64encode(b"\x04").decode()
-
-    result = run_diagnosis({}, image_base64=image_base64)
+@pytest.mark.skipif(not _HAS_TRAINED_IMAGE_MODEL, reason="no local ml-service/models/image_model.pt")
+def test_image_diagnosis_still_escalates_for_reportable_disease():
+    result = run_diagnosis({}, image_base64=_sample_image_base64("lumpy"))
 
     assert result["diagnosis"] == "Lumpy Skin Disease"
     assert result["recommended_action"] == "escalate_to_vet"
+
+
+def test_image_bytes_that_arent_a_real_image_degrade_to_uncertain():
+    # Valid base64, but not a decodable image — app/models/image_model.py's own PIL-decode
+    # failure path, distinct from _fetch_image_bytes's "couldn't even get bytes" cases below.
+    image_base64 = base64.b64encode(b"not a real image, just arbitrary bytes").decode()
+
+    result = run_diagnosis({}, image_base64=image_base64)
+
+    assert result["diagnosis"] == "uncertain"
+    assert result["recommended_action"] == "consult_vet"
+
+
+# A tiny real 1x1 PNG, already base64-encoded — genuinely decodable, so tests using it
+# exercise the "model missing" path specifically, not the "not a real image" decode-failure
+# path tested above.
+_VALID_1X1_PNG_BASE64 = (
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII="
+)
+
+
+def test_missing_image_model_returns_structured_error(monkeypatch, tmp_path):
+    # Always runs, everywhere — the actual behavior CI sees, since image_model.pt is
+    # gitignored and not committed.
+    monkeypatch.setattr(image_model_module, "DEFAULT_MODEL_PATH", tmp_path / "does-not-exist.pt")
+
+    with pytest.raises(ApiError) as exc_info:
+        run_diagnosis({}, image_base64=_VALID_1X1_PNG_BASE64)
+
+    assert exc_info.value.code == "MODEL_NOT_TRAINED"
 
 
 def test_invalid_image_base64_degrades_to_uncertain_instead_of_failing():
@@ -102,7 +151,6 @@ def test_invalid_image_base64_degrades_to_uncertain_instead_of_failing():
 
     assert result["diagnosis"] == "uncertain"
     assert result["recommended_action"] == "consult_vet"
-    assert "placeholder" in result["explanation"].lower()
 
 
 def test_unreachable_image_url_degrades_to_uncertain_instead_of_failing():

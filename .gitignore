@@ -25,6 +25,9 @@ ml-service/data/*
 !ml-service/data/synthetic-symptom-dataset/
 !ml-service/data/synthetic-symptom-dataset/SOURCE.md
 !ml-service/data/veterinary-reference/
+!ml-service/data/cattle-images/
+ml-service/data/cattle-images/*
+!ml-service/data/cattle-images/SOURCE.md
 ml-service/data/chroma_db/
 ml-service/models/*.pkl
 ml-service/models/*.pt
