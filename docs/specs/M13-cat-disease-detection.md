@@ -1,7 +1,7 @@
 # Spec: Cat disease detection
 
 **Milestone**: M13
-**Status**: in progress
+**Status**: done — real Cat image model trained and wired in (see "Follow-up" section below)
 
 ## Actor + goal
 
@@ -134,3 +134,32 @@ for Buffalo/Sheep.
 3. `docs/DISCLAIMER.md` updated now even though no cat model exists yet — the document
    should describe the intended companion-animal policy (rabies escalation) before it's
    needed, not scramble to catch up once a model exists.
+
+## Follow-up: real Cat image model (this session)
+
+A later session downloaded and evaluated the Roboflow candidates above — both require an
+account/API key to actually download (confirmed by testing, not the anonymous access Kaggle
+turned out to have), so a fresh Kaggle search was done instead. Found
+[Cat Skin Disease](https://www.kaggle.com/datasets/nofalrafif/cat-skin-disease): 1,000 real
+images, 4 balanced classes with a genuine Healthy class — downloadable anonymously, same as
+M9's cattle dataset.
+
+**The disease list above (URI/Ringworm/FIV) is superseded** — no image data exists for URI or
+FIV in anything found across any session. The real, trained model instead covers:
+
+- **Flea Allergy**
+- **Healthy**
+- **Ringworm** (carries over from the original list)
+- **Scabies**
+
+Trained via the same MobileNetV2-transfer-learning approach as M9's cattle classifier (see
+`ml-service/app/models/cat_image_model.py`, `ml-service/training/cat_image_model_train.py`).
+**Real result: 83.0% validation accuracy, 0.829 macro F1** — a solid model, comparable to M9's
+cattle classifier. Wired into `predict_image_node` (`ml-service/app/agent/graph.py`), routed
+by `species: "CAT"`. Image-based diagnosis now works for Cat; symptom-based diagnosis stays
+blocked (still no symptom model/data for Cat) — see `docs/API_CONTRACTS.md`.
+
+Rabies escalation (open question 2 above) is **still not implemented as code** — the trained
+model has no Rabies class, so there's still nothing to attach the escalation rule to. This
+isn't a gap introduced here; it's the same honest "not yet" this spec already stated, now with
+a real model in place that simply doesn't change that answer.

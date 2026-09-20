@@ -123,15 +123,24 @@ rot, sheep pox) aren't represented by the model at all, not just "untrained on t
 species" — see
 [docs/specs/M12-sheep-disease-detection.md](specs/M12-sheep-disease-detection.md).
 
-**`CAT` and `DOG` are different: diagnosis is rejected outright** (`400
+**`CAT` and `DOG` are different: SYMPTOM diagnosis is rejected outright** (`400
 DIAGNOSIS_NOT_SUPPORTED_FOR_SPECIES`), not routed through the cattle model at all — a
 companion animal doesn't share the livestock disease family the way Buffalo/Sheep do, so
 reusing that model would produce an actively wrong result (e.g. "Foot and Mouth Disease" for
 a cat or dog), not just an imprecise one. See
 [docs/specs/M13-cat-disease-detection.md](specs/M13-cat-disease-detection.md),
 [docs/specs/M14-dog-disease-detection.md](specs/M14-dog-disease-detection.md), and
-[docs/DISCLAIMER.md](DISCLAIMER.md)'s companion-animal section. The same rejection applies
-to `POST /api/animals/{animalId}/diagnoses/image`.
+[docs/DISCLAIMER.md](DISCLAIMER.md)'s companion-animal section.
+
+**IMAGE diagnosis is different again, as of a M13/M14 follow-up**: Cat and Dog each have
+their own real, trained image model now (not the cattle model) — `POST
+/api/animals/{animalId}/diagnoses/image` **does** work for them, and **does** forward
+`species` to `ml-service` (unlike the symptom endpoint, which never forwards species for any
+species). Cat's model is solid (83.0% accuracy). **Dog's model is real but meaningfully
+weak** (52.6% accuracy; only 0.25 F1 for Canine Distemper specifically) and has **no Healthy
+class at all** — it always names one of its 4 diseases, even for a healthy dog. Both caveats
+are surfaced prominently in the frontend before upload, not just here. See each spec's
+"Follow-up" section for the full detail and the real, measured numbers.
 
 Request: `{"symptoms": {"fever": true, "...": "..."}}`
 Response (`201`):
@@ -151,10 +160,12 @@ Response (`201`):
 Note: `explanation`, `precautions`, and `nextSteps` are all returned live from `ml-service`
 but not persisted — `diagnosis_case` has no columns for them (see `docs/DECISIONS.md`).
 
-`POST /api/animals/{animalId}/diagnoses/image` (M8 phase 1) — multipart/form-data, one part
-named `image` (JPEG or PNG, ≤ 5MB). Base64-encodes the file and calls `ml-service` with
-`image_base64` (`symptoms: {}`); persists and responds with the same
-`DiagnosisCaseResponse` shape as the symptom endpoint above. **The image itself is never
+`POST /api/animals/{animalId}/diagnoses/image` (M8 phase 1; real models as of M9/Cat/Dog
+follow-ups) — multipart/form-data, one part named `image` (JPEG or PNG, ≤ 5MB).
+Base64-encodes the file and calls `ml-service` with `image_base64` **and `species`**
+(`symptoms: {}`); persists and responds with the same `DiagnosisCaseResponse` shape as the
+symptom endpoint above. `species` picks which trained model `ml-service` uses (Cat/Dog get
+their own; Cow/Buffalo/Sheep share the cattle model, unchanged). **The image itself is never
 persisted to disk** — see
 [docs/specs/M8-image-diagnosis-phase1.md](specs/M8-image-diagnosis-phase1.md) for why.
 
@@ -167,4 +178,6 @@ uploaded bytes), `VALIDATION_FAILED` (`400`, a `@Valid` field failed, e.g. a bla
 `tagNumber` — `details` has one entry per rejected field), `INVALID_REQUEST_BODY` (`400`,
 malformed JSON or a value that doesn't fit the target type, e.g. an invalid `species`
 string — M11), `DIAGNOSIS_NOT_SUPPORTED_FOR_SPECIES` (`400`, M13 — the animal's species
-doesn't have a real diagnosis model yet, e.g. `CAT`, `DOG`).
+doesn't have a real diagnosis model yet for that endpoint; `CAT`/`DOG` on the symptom
+endpoint specifically, since neither has a symptom model — see above for how the image
+endpoint differs for these two species as of the M13/M14 follow-up).
