@@ -1,7 +1,15 @@
 # Spec: Symptom intake UI
 
 **Milestone**: M4
-**Status**: done
+**Status**: partly superseded — identity fields removed from the form (2026-09-22)
+
+> **Partly superseded.** The "Cattle Tag Number" and "Farm ID" inputs this spec specified
+> were removed from the intake form, along with their client-side validation and the
+> two-call submit flow (create animal, then diagnose). The form now collects a species and
+> symptoms/photos only, and submits in one call. Everything else here — the symptom
+> checklist, the result rendering, the shared error path — still stands. Kept as-is per this
+> repo's convention of not editing history — see
+> [remove-animal-identity.md](remove-animal-identity.md).
 
 ## Actor + goal
 

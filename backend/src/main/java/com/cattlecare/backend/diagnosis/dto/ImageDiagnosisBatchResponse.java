@@ -2,7 +2,7 @@ package com.cattlecare.backend.diagnosis.dto;
 
 import java.util.List;
 
-/** Response for POST /api/animals/{animalId}/diagnoses/image — 1-5 photos in, one
+/** Response for POST /api/diagnoses/image — 1-5 photos in, one
  * {@link DiagnosisCaseResponse} per photo out, plus whether they all agree.
  *
  * <p>{@code diagnosesAgree} compares each photo's own model diagnosis against the others' —

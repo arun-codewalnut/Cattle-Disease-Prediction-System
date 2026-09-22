@@ -1,7 +1,7 @@
 import { useState } from 'react'
-import { createAnimal, submitSymptoms, submitImage } from '../../api/diagnosisApi'
+import { submitSymptoms, submitImage } from '../../api/diagnosisApi'
 import { ApiError } from '../../api/client'
-import AnimalIdentityFields from './AnimalIdentityFields'
+import SpeciesField from './SpeciesField'
 import SymptomForm from './SymptomForm'
 import ImageUploadForm from './ImageUploadForm'
 import DiagnosisResult from './DiagnosisResult'
@@ -9,8 +9,6 @@ import { emptySymptoms, getSymptomFields } from './symptomFields'
 import { DIAGNOSIS_SUPPORTED_SPECIES, IMAGE_ONLY_SUPPORTED_SPECIES, SPECIES_OPTIONS } from './species'
 
 export default function DiagnosisIntake() {
-  const [tagNumber, setTagNumber] = useState('')
-  const [farmId, setFarmId] = useState('')
   const [species, setSpecies] = useState('COW')
   const [symptoms, setSymptoms] = useState(emptySymptoms('COW'))
   const [images, setImages] = useState([])
@@ -30,28 +28,7 @@ export default function DiagnosisIntake() {
     setSymptoms(emptySymptoms(nextSpecies))
   }
 
-  // AnimalIdentityFields lives outside both <form> elements below (it's shared by both), so
-  // the inputs' `required` attribute has no effect on either form's native submit validation
-  // — validate explicitly instead of relying on that.
-  function validateIdentityFields() {
-    if (!tagNumber.trim()) {
-      setError(new ApiError('TAG_NUMBER_REQUIRED', 'Please enter an animal tag number.', null))
-      setStatus('error')
-      return false
-    }
-    if (!farmId.toString().trim() || Number.isNaN(Number(farmId))) {
-      setError(new ApiError('FARM_ID_REQUIRED', 'Please enter a valid farm ID.', null))
-      setStatus('error')
-      return false
-    }
-    return true
-  }
-
   async function handleSubmit() {
-    if (!validateIdentityFields()) {
-      return
-    }
-
     setStatus('submitting')
     setError(null)
     setResult(null)
@@ -59,8 +36,7 @@ export default function DiagnosisIntake() {
     const correlationId = crypto.randomUUID()
 
     try {
-      const animal = await createAnimal({ tagNumber, farmId, species }, correlationId)
-      const diagnosis = await submitSymptoms(animal.id, symptoms, correlationId)
+      const diagnosis = await submitSymptoms(species, symptoms, correlationId)
       setResult(diagnosis)
       setStatus('success')
     } catch (err) {
@@ -71,7 +47,7 @@ export default function DiagnosisIntake() {
   }
 
   async function handleImageSubmit() {
-    if (images.length === 0 || !validateIdentityFields()) {
+    if (images.length === 0) {
       return
     }
 
@@ -82,8 +58,7 @@ export default function DiagnosisIntake() {
     const correlationId = crypto.randomUUID()
 
     try {
-      const animal = await createAnimal({ tagNumber, farmId, species }, correlationId)
-      const diagnosis = await submitImage(animal.id, images, correlationId)
+      const diagnosis = await submitImage(species, images, correlationId)
       setResult(diagnosis)
       setStatus('success')
     } catch (err) {
@@ -105,15 +80,7 @@ export default function DiagnosisIntake() {
       </header>
 
       <main className="diagnosis-card">
-        <AnimalIdentityFields
-          tagNumber={tagNumber}
-          farmId={farmId}
-          species={species}
-          onTagNumberChange={setTagNumber}
-          onFarmIdChange={setFarmId}
-          onSpeciesChange={handleSpeciesChange}
-          disabled={disabled}
-        />
+        <SpeciesField species={species} onSpeciesChange={handleSpeciesChange} disabled={disabled} />
 
         {diagnosisSupported && (
           <>

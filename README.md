@@ -182,8 +182,10 @@ Docker): [agents/playbooks/run-stack.md](agents/playbooks/run-stack.md) and
 ## Testing the application
 
 Once all three services are up (either option above), open **http://localhost:5173**. The
-intake form: pick a species, enter an animal tag number + farm ID, then submit symptoms
-and/or up to 5 photos. What's actually supported differs by species — this isn't a bug if a
+intake form: pick a species, then submit symptoms and/or up to 5 photos. There's nothing
+else to fill in — animal tag numbers and farm IDs were removed (see
+[docs/specs/remove-animal-identity.md](docs/specs/remove-animal-identity.md)); species is the
+only field the diagnosis actually needs, because it selects which trained model runs. What's actually supported differs by species — this isn't a bug if a
 species behaves differently, it's how the underlying models were scoped. **Buffalo was
 removed as a supported species** (no usable dataset was ever found for it — see
 `docs/specs/M11-buffalo-disease-detection.md`'s superseded note):
@@ -231,44 +233,22 @@ Ringworm photo.
 - **6th photo**: rejected with `400 TOO_MANY_IMAGES` before anything is sent to `ml-service`
   (limit is enforced in `backend`, see `DiagnosisService.MAX_IMAGES`).
 
-### Repeat visits for the same animal (find-or-create)
-
-Animal records are keyed by tag number and looked up (not always recreated) on every
-diagnosis submission:
-- Same tag number + same farm ID + same species, submitted again later (e.g. a follow-up
-  visit weeks after the first) → reuses the existing animal record, new diagnosis case
-  attached to its history. No error, no duplicate record.
-- Same tag number but a **different** farm ID or species than what's on file → rejected with
-  `409 ANIMAL_TAG_DUPLICATE` ("already exists for a different farm or species"). This is
-  intentional: tag numbers are only unique within one farm+species in real life, so a
-  mismatch is treated as a data-entry error, not silently overwritten or silently created as
-  a second animal.
-
-Try it: submit a diagnosis for tag `COW-001` / farm `1` / species `Cow` twice — the second
-submission succeeds and reuses the animal. Then submit `COW-001` again with a different farm
-ID — expect the `409`.
-
 ### Testing the API directly (skipping the UI)
 
 Useful if you want to see the raw request/response shapes (full contract:
 [docs/API_CONTRACTS.md](docs/API_CONTRACTS.md)):
 
 ```bash
-# 1. Find-or-create the animal (returns "id" — reuses the record if this tag/farm/species
-#    combination already exists, see "Repeat visits" above)
-curl -X POST http://localhost:8080/api/animals \
+# Symptom-based diagnosis (Foot and Mouth Disease profile). One call — species is required
+# and has no default, since it picks which trained model runs.
+curl -X POST http://localhost:8080/api/diagnoses \
   -H "Content-Type: application/json" \
-  -d '{ "tagNumber": "COW-001", "farmId": 1, "species": "COW" }'
+  -d '{ "species": "COW", "symptoms": { "fever": true, "mouthLesions": true, "excessiveSalivation": true, "lameness": true } }'
 
-# 2. Symptom-based diagnosis against that animal id (Foot and Mouth Disease profile)
-curl -X POST http://localhost:8080/api/animals/1/diagnoses \
-  -H "Content-Type: application/json" \
-  -d '{ "symptoms": { "fever": true, "mouthLesions": true, "excessiveSalivation": true, "lameness": true } }'
-
-# 3. Or, multi-photo diagnosis against that same animal id (1-5 photos; response includes
-#    "diagnosesAgree": true|false)
-curl -X POST http://localhost:8080/api/animals/1/diagnoses/image \
-  -F "images=@/path/to/photo1.jpg" -F "images=@/path/to/photo2.jpg"
+# Or, multi-photo diagnosis (1-5 photos; response includes "diagnosesAgree": true|false).
+# species travels as a form field here because the request is multipart.
+curl -X POST http://localhost:8080/api/diagnoses/image \
+  -F "species=COW" -F "images=@/path/to/photo1.jpg" -F "images=@/path/to/photo2.jpg"
 ```
 
 `ml-service` can also be hit directly (bypassing `backend`, e.g. to isolate whether an issue
@@ -280,7 +260,8 @@ is in the ML layer or the gateway) at `POST http://localhost:8000/agent/diagnose
 | Trigger | Response |
 |---|---|
 | More than 5 images in one submission | `400 TOO_MANY_IMAGES` |
-| Existing tag number, different farm ID or species | `409 ANIMAL_TAG_DUPLICATE` |
+| Missing `species` in the request | `400 VALIDATION_FAILED` — never defaulted, since it picks the model |
+| Unrecognized `species` value | `400 INVALID_REQUEST_BODY` |
 | Symptom diagnosis requested for Cat/Dog | blocked client-side (no symptom model exists for them) |
 | A model artifact isn't present locally yet | `503 MODEL_NOT_TRAINED` — see below to train it |
 | Unreadable/corrupt image bytes | ml-service degrades to `diagnosis: "uncertain"` rather than erroring |
