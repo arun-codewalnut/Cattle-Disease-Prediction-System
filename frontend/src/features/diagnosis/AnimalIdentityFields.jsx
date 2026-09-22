@@ -1,9 +1,8 @@
 // Shared by both the symptom-checklist and image-upload flows (SymptomForm.jsx,
 // ImageUploadForm.jsx) — a diagnosis of either kind needs an animal record to attach to.
 // Renamed from CattleIdentityFields in M11 when species support was added — see
-// docs/specs/M11-buffalo-disease-detection.md.
-import { SPECIES_OPTIONS, DIAGNOSIS_SUPPORTED_SPECIES, IMAGE_ONLY_SUPPORTED_SPECIES } from './species'
-import SpeciesPreview from './SpeciesPreview'
+// docs/specs/M11-buffalo-disease-detection.md (superseded — Buffalo was later removed).
+import { SPECIES_OPTIONS, SPECIES_SUMMARIES, DIAGNOSIS_SUPPORTED_SPECIES, IMAGE_ONLY_SUPPORTED_SPECIES } from './species'
 
 export default function AnimalIdentityFields({
   tagNumber,
@@ -33,34 +32,7 @@ export default function AnimalIdentityFields({
             </option>
           ))}
         </select>
-        <SpeciesPreview species={species} />
-        {species !== 'COW' && DIAGNOSIS_SUPPORTED_SPECIES.includes(species) && (
-          <p className="species-disclaimer">
-            <span aria-hidden="true">ℹ️</span> The diagnosis model isn't trained on{' '}
-            {SPECIES_OPTIONS.find((option) => option.value === species)?.label.toLowerCase()}-specific
-            data yet, and some {SPECIES_OPTIONS.find((option) => option.value === species)?.label.toLowerCase()}
-            -only diseases aren't represented by it at all — results use the cattle model as
-            an approximation and may miss species-specific conditions.
-          </p>
-        )}
-        {species === 'CAT' && (
-          <p className="species-disclaimer">
-            <span aria-hidden="true">ℹ️</span> Symptom-based diagnosis isn't available for cat
-            yet — but photo-based diagnosis is, using a real cat-specific model (Flea Allergy,
-            Ringworm, Scabies, or Healthy).
-          </p>
-        )}
-        {species === 'DOG' && (
-          <p className="species-disclaimer species-disclaimer--low-confidence">
-            <span aria-hidden="true">⚠️</span> Symptom-based diagnosis isn't available for dog
-            yet — photo-based diagnosis is, but its real, measured accuracy is only about
-            53%, barely better than guessing for 3 of its 4 diseases (Canine Distemper, Canine
-            Parvovirus, Kennel Cough — only Mange is reliably recognized). It also has no
-            "healthy" option — it will always name one of these 4 diseases, even for a
-            healthy dog. Treat any dog photo result as a rough hint only, never a real
-            diagnosis.
-          </p>
-        )}
+        <p className="species-summary">{SPECIES_SUMMARIES[species]}</p>
         {!DIAGNOSIS_SUPPORTED_SPECIES.includes(species) && !IMAGE_ONLY_SUPPORTED_SPECIES.includes(species) && (
           <p className="species-disclaimer species-disclaimer--blocked">
             <span aria-hidden="true">🚧</span> Diagnosis isn't available yet for{' '}

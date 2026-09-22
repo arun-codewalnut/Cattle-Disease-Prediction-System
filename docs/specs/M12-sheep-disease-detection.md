@@ -78,3 +78,53 @@ purely a data-point addition (enum value, dropdown option, sharper disclosure co
    also say some diseases aren't representable at all — this is a real, larger gap for
    sheep than for buffalo, and glossing over it with the exact same wording would understate
    the limitation.
+
+## Follow-up: a real Sheep symptom model (2026-09-22)
+
+**Buffalo (M11) was removed as a supported species** — see
+`docs/specs/M11-buffalo-disease-detection.md`'s superseded note. No usable buffalo dataset
+was ever found across two searches months apart; it never moved past the cow-model
+approximation this spec's original scope also settled for. Rather than keep carrying a
+species that could never become real, it was dropped.
+
+**Sheep did get a real dataset this time**:
+[PPR disease data from goats and sheep](https://www.kaggle.com/datasets/devothanyambo/ppr-disease-data-from-goats-and-sheep)
+(Kaggle) — real field-collected clinical data from Northern Tanzania, RT-qPCR-confirmed
+ground truth, not self-report. Full detail, including the real data-quality caveats (the
+`animal`/`sex`/`age` columns are undocumented 0/1 encodings that couldn't be verified, so the
+model is trained on the combined goat+sheep file rather than a guessed-at "sheep-only"
+subset), is in `ml-service/data/sheep-symptoms/SOURCE.md`.
+
+This is **not** the M11-pattern "reuse the cattle model" approximation anymore, and it's also
+**not** a fix for the foot-rot/sheep-pox gap identified above — it's a third thing: a real,
+narrowly-scoped model that screens for exactly one disease, **PPR (Peste des Petits
+Ruminants)**, binary positive/negative. Symptom-based diagnosis for Sheep now routes to
+`app/models/sheep_symptom_model.py` (a 6-feature XGBoost classifier, 80.5% CV accuracy, 78.8%
+macro F1 — see `ml-service/models/REGISTRY.md`) instead of the cattle model. Foot rot and
+sheep pox remain entirely unrepresented, same as before — that gap is unchanged, just now
+sitting alongside a real PPR screen instead of a full cross-species approximation.
+
+Photo-based diagnosis for Sheep is **unchanged** — still the cow image model, still a
+disclosed approximation (no sheep-specific image dataset exists, PPR or otherwise).
+
+**Updated acceptance criteria**:
+- [x] Sheep symptom diagnosis routes to a real, trained model (`sheep_symptom_model.pkl`),
+      not the cattle model — species is now forwarded on the symptom path too (it wasn't
+      before this follow-up; only the image path was species-aware).
+- [x] `REPORTABLE_DISEASES` includes the new PPR label (WOAH/OIE-notifiable, same escalation
+      tier as FMD/LSD).
+- [x] Frontend shows Sheep's own symptom checklist (`symptomFields.js`'s
+      `SHEEP_SYMPTOM_FIELDS`), not the cattle checklist — the two models don't share a
+      feature vocabulary at all.
+- [x] Disclosure text rewritten to state the model's real, narrow scope (PPR only, not a
+      "healthy" guarantee) rather than the old "reusing the cow model as an approximation"
+      wording, which no longer applies to the symptom path.
+- [x] `docs/API_CONTRACTS.md`, `docs/DECISIONS.md`, `docs/ROADMAP.md`, `STATE.md`,
+      `HANDOFF.md`, `README.md` updated; Buffalo removed from `Species` (backend enum),
+      `SPECIES_OPTIONS` (frontend), and a Flyway migration added to clean up any existing
+      `species = 'BUFFALO'` rows.
+- [x] Full test suite green: backend 29/29, ml-service 50/2 skipped (RAG, same documented
+      local blocker as always), frontend 13/13 + lint clean — plus manual end-to-end
+      verification against the real running stack (backend + ml-service + browser UI): a real
+      Sheep animal, real PPR-positive symptoms submitted through the actual form, correctly
+      diagnosed and escalated.

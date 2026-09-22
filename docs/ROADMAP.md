@@ -34,9 +34,16 @@ Tracked as GitHub Milestones + Issues on the repo.
       [#19](https://github.com/arun-codewalnut/Cattle-Disease-Prediction-System/issues/19)
 - [ ] **M11** — Buffalo disease detection — first new species; generalizes the domain model
       to support animal type — issue:
-      [#20](https://github.com/arun-codewalnut/Cattle-Disease-Prediction-System/issues/20)
+      [#20](https://github.com/arun-codewalnut/Cattle-Disease-Prediction-System/issues/20).
+      **Buffalo itself was later removed (2026-09-22)** — no usable dataset was ever found;
+      see `docs/specs/M11-buffalo-disease-detection.md`'s superseded note. The domain-model
+      generalization this milestone introduced (the `Animal`/`species` architecture) is
+      unaffected.
 - [ ] **M12** — Sheep disease detection — issue:
-      [#21](https://github.com/arun-codewalnut/Cattle-Disease-Prediction-System/issues/21)
+      [#21](https://github.com/arun-codewalnut/Cattle-Disease-Prediction-System/issues/21).
+      Follow-up (2026-09-22): a real dataset was found for Sheep specifically — symptom
+      diagnosis now uses a real, trained PPR-screen model instead of the cattle-model
+      approximation — see that spec's "Follow-up" section.
 - [ ] **M13** — Cat disease detection — first companion-animal species, a real domain pivot
       from livestock — issue:
       [#22](https://github.com/arun-codewalnut/Cattle-Disease-Prediction-System/issues/22)
@@ -54,6 +61,8 @@ colorful, icon-driven) — issue:
 **Target species** (per user request, 2026-09-18): Cow (done), Buffalo, Sheep, Cat, Dog —
 sequenced M11→M14 above. M11 is where the domain model first generalizes beyond cattle; see
 that issue's "open design question" before assuming the shape of anything downstream.
+**Buffalo was later removed (2026-09-22)** — currently-supported species are Cow, Sheep,
+Cat, Dog.
 
 Stretch (post-MVP): IoT sensor anomaly detection, herd-level risk view, offline-first mobile
 client.

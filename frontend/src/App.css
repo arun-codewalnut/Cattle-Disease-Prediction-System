@@ -3,42 +3,22 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: clamp(16px, 4vw, 40px) 16px 48px;
+  padding: clamp(24px, 5vw, 56px) 16px 48px;
   box-sizing: border-box;
 }
 
 .app-header {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  margin-bottom: 24px;
-  text-align: left;
-  flex-wrap: wrap;
-  justify-content: center;
-}
-
-.app-logo {
-  font-size: clamp(40px, 8vw, 56px);
-  line-height: 1;
-  filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.15));
-}
-
-.app-header h1 {
-  margin: 0;
-  font-size: clamp(28px, 5vw, 44px);
+  width: 100%;
+  max-width: 640px;
+  margin-bottom: 28px;
+  text-align: center;
 }
 
 .app-tagline {
-  margin: 4px 0 0;
+  margin: 6px 0 0;
+  font-size: 15px;
   color: var(--text);
-  opacity: 0.85;
-}
-
-@media (max-width: 480px) {
-  .app-header {
-    flex-direction: column;
-    text-align: center;
-  }
+  opacity: 0.75;
 }
 
 .diagnosis-card {
@@ -48,18 +28,23 @@
   border: 1px solid var(--border);
   border-radius: 20px;
   box-shadow: var(--shadow);
-  padding: clamp(20px, 4vw, 36px);
+  padding: clamp(20px, 4vw, 32px);
   box-sizing: border-box;
   text-align: left;
 }
 
+/* AnimalIdentityFields' fields are direct children of .diagnosis-card (it sits outside both
+   <form>s below it, shared by both) — `form > div` alone would miss them entirely, which is
+   exactly what was happening: those three fields had zero spacing between them. */
+.diagnosis-card > div,
 form > div {
   margin-bottom: 18px;
 }
 
 label {
   display: block;
-  margin-bottom: 8px;
+  margin-bottom: 6px;
+  font-size: 14px;
   font-weight: 600;
   color: var(--text-h);
 }
@@ -70,20 +55,18 @@ select {
   width: 100%;
   box-sizing: border-box;
   padding: 10px 14px;
-  font-size: 16px;
-  border: 2px solid var(--border);
+  font-size: 15px;
+  border: 1.5px solid var(--border);
   border-radius: 10px;
   background: var(--bg);
   color: var(--text-h);
-  transition: border-color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
 input[type='text']:hover,
 input[type='number']:hover,
 select:hover {
   border-color: var(--accent);
-  transform: translateY(-1px);
-  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.06);
 }
 
 input[type='text']:focus-visible,
@@ -94,46 +77,11 @@ select:focus-visible {
   border-color: var(--accent);
 }
 
-.species-preview {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  margin: 10px 0 0;
-  padding: 12px 16px;
-  border-radius: 14px;
-  background: var(--accent-bg);
-  border: 1px solid var(--border);
-  animation: species-preview-in 0.25s ease;
-}
-
-@keyframes species-preview-in {
-  from {
-    opacity: 0;
-    transform: translateY(-4px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-.species-preview__icon {
-  font-size: 40px;
-  line-height: 1;
-  flex-shrink: 0;
-}
-
-.species-preview__name {
-  margin: 0;
-  font-weight: 700;
-  color: var(--text-h);
-}
-
-.species-preview__summary {
-  margin: 2px 0 0;
-  font-size: 0.85em;
+.species-summary {
+  margin: 8px 0 0;
+  font-size: 13px;
   color: var(--text);
-  opacity: 0.85;
+  opacity: 0.75;
 }
 
 .species-disclaimer {
@@ -142,16 +90,10 @@ select:focus-visible {
   border-radius: 8px;
   background: var(--urgency-consult-bg);
   color: var(--text);
-  font-size: 0.85em;
+  font-size: 13px;
 }
 
 .species-disclaimer--blocked {
-  background: var(--urgency-escalate-bg);
-  border: 1px solid var(--urgency-escalate);
-  font-weight: 600;
-}
-
-.species-disclaimer--low-confidence {
   background: var(--urgency-escalate-bg);
   border: 1px solid var(--urgency-escalate);
   font-weight: 600;
@@ -181,6 +123,7 @@ fieldset {
 }
 
 legend {
+  font-size: 14px;
   font-weight: 700;
   color: var(--text-h);
   padding: 0 8px;
@@ -199,18 +142,18 @@ legend {
   gap: 8px;
   margin: 0;
   padding: 10px 12px;
-  border: 2px solid var(--border);
+  border: 1.5px solid var(--border);
   border-radius: 12px;
   background: var(--bg);
   cursor: pointer;
+  font-size: 14px;
   font-weight: 500;
-  transition: border-color 0.15s ease, background 0.15s ease, transform 0.15s ease;
+  transition: border-color 0.15s ease, background 0.15s ease;
 }
 
 .symptom-chip:hover {
   border-color: var(--accent);
   background: var(--accent-bg);
-  transform: translateY(-1px);
 }
 
 .symptom-chip:has(input:checked) {
@@ -232,8 +175,8 @@ legend {
 
 button[type='submit'] {
   width: 100%;
-  padding: 14px 20px;
-  font-size: 17px;
+  padding: 13px 20px;
+  font-size: 16px;
   font-weight: 700;
   color: #fff;
   background: linear-gradient(135deg, var(--accent), #1c6b38);
@@ -446,6 +389,17 @@ section[data-urgent='true'] [role='alert'] {
   font-weight: 600;
 }
 
+@keyframes fade-in-up {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 .diagnosis-result {
   margin-top: 24px;
   padding: 18px 20px;
@@ -455,7 +409,7 @@ section[data-urgent='true'] [role='alert'] {
   display: flex;
   gap: 14px;
   align-items: flex-start;
-  animation: species-preview-in 0.25s ease;
+  animation: fade-in-up 0.25s ease;
 }
 
 .diagnosis-result.urgency-consult_vet {
@@ -466,6 +420,14 @@ section[data-urgent='true'] [role='alert'] {
 .diagnosis-result.urgency-escalate_to_vet {
   border-color: var(--urgency-escalate);
   background: var(--urgency-escalate-bg);
+}
+
+/* No vet-urgency color here on purpose — nothing was actually diagnosed, so the usual
+   monitor/consult/escalate palette doesn't apply. Dashed border matches
+   .species-unavailable's "nothing to show yet" visual language instead. */
+.diagnosis-result--invalid-image {
+  border: 2px dashed var(--border);
+  background: var(--accent-bg);
 }
 
 .diagnosis-result__icon {

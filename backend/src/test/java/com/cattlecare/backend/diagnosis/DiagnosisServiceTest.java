@@ -12,6 +12,7 @@ import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import java.util.List;
@@ -47,7 +48,7 @@ class DiagnosisServiceTest {
         DiagnosisResult mlResult = new DiagnosisResult(
                 "Foot and Mouth Disease", 0.81, "Predicted FMD...", "escalate_to_vet", List.of(),
                 List.of("Isolate the animal."), List.of("Contact your vet immediately."));
-        when(mlServiceClient.diagnose(anyMap(), any())).thenReturn(mlResult);
+        when(mlServiceClient.diagnose(anyMap(), isNull(), isNull(), eq("COW"))).thenReturn(mlResult);
 
         Map<String, Object> symptoms = Map.of("fever", true);
         DiagnosisCaseResponse response = diagnosisService.submitSymptoms(1L, symptoms);
@@ -67,7 +68,7 @@ class DiagnosisServiceTest {
 
         assertThrows(ApiException.class, () -> diagnosisService.submitSymptoms(999L, Map.of()));
 
-        verify(mlServiceClient, never()).diagnose(anyMap(), any());
+        verifyNoInteractions(mlServiceClient);
         verify(diagnosisCaseRepository, never()).save(any());
     }
 
@@ -75,7 +76,7 @@ class DiagnosisServiceTest {
     void submitSymptoms_mlServiceUnavailable_doesNotPersistACase() {
         Animal animal = new Animal("COW-001", 42L, Species.COW);
         when(animalService.getOrThrow(1L)).thenReturn(animal);
-        when(mlServiceClient.diagnose(anyMap(), any()))
+        when(mlServiceClient.diagnose(anyMap(), isNull(), isNull(), eq("COW")))
                 .thenThrow(new ApiException("ML_SERVICE_UNAVAILABLE", "unreachable", HttpStatus.SERVICE_UNAVAILABLE));
 
         ApiException ex = assertThrows(ApiException.class, () -> diagnosisService.submitSymptoms(1L, Map.of()));
@@ -88,7 +89,7 @@ class DiagnosisServiceTest {
     void submitSymptoms_mlServiceErrorResponse_doesNotPersistACase() {
         Animal animal = new Animal("COW-001", 42L, Species.COW);
         when(animalService.getOrThrow(1L)).thenReturn(animal);
-        when(mlServiceClient.diagnose(anyMap(), any()))
+        when(mlServiceClient.diagnose(anyMap(), isNull(), isNull(), eq("COW")))
                 .thenThrow(new ApiException("ML_SERVICE_ERROR", "bad response", HttpStatus.BAD_GATEWAY));
 
         ApiException ex = assertThrows(ApiException.class, () -> diagnosisService.submitSymptoms(1L, Map.of()));
@@ -161,6 +162,33 @@ class DiagnosisServiceTest {
         assertFalse(response.diagnosesAgree());
     }
 
+    // M15 (docs/specs/M15-image-diagnosis-quality-gate.md): a photo ml-service's species
+    // gate rejects as not-an-animal comes back as diagnosis "invalid_image" — not a real
+    // diagnosis to agree or disagree with the others in the batch.
+    @Test
+    void submitImage_matchingDiagnosesPlusOneInvalidImage_stillAgrees() {
+        Animal animal = new Animal("CAT-001", 42L, Species.CAT);
+        when(animalService.getOrThrow(1L)).thenReturn(animal);
+        DiagnosisResult ringworm = new DiagnosisResult(
+                "Ringworm", 0.9, "Predicted Ringworm.", "consult_vet", List.of(), List.of(), List.of());
+        DiagnosisResult invalidImage = new DiagnosisResult(
+                "invalid_image", 0.0, "This doesn't look like a photo of an animal.", "retry_upload",
+                List.of(), List.of(), List.of());
+        when(mlServiceClient.diagnose(eq(Map.of()), isNull(), eq("AQ=="), eq("CAT"))).thenReturn(ringworm); // "\x01"
+        when(mlServiceClient.diagnose(eq(Map.of()), isNull(), eq("Ag=="), eq("CAT"))).thenReturn(ringworm); // "\x02"
+        when(mlServiceClient.diagnose(eq(Map.of()), isNull(), eq("Aw=="), eq("CAT"))).thenReturn(invalidImage); // "\x03"
+
+        MultipartFile a = new MockMultipartFile("images", "a.jpg", "image/jpeg", new byte[] {1});
+        MultipartFile b = new MockMultipartFile("images", "b.jpg", "image/jpeg", new byte[] {2});
+        MultipartFile c = new MockMultipartFile("images", "car.jpg", "image/jpeg", new byte[] {3});
+
+        ImageDiagnosisBatchResponse response = diagnosisService.submitImage(1L, List.of(a, b, c));
+
+        assertEquals(3, response.results().size());
+        assertTrue(response.diagnosesAgree());
+        assertEquals("invalid_image", response.results().get(2).diagnosis());
+    }
+
     @Test
     void submitImage_moreThanFivePhotos_rejectedBeforeAnimalLookupOrMlServiceCall() {
         List<MultipartFile> sixImages = java.util.stream.IntStream.range(0, 6)
@@ -219,7 +247,7 @@ class DiagnosisServiceTest {
 
     // M13/M14 (docs/specs/M13-cat-disease-detection.md,
     // docs/specs/M14-dog-disease-detection.md): the cattle model's disease list and symptom
-    // vocabulary don't apply to a cat or dog at all, unlike Buffalo/Sheep - SYMPTOM diagnosis
+    // vocabulary don't apply to a cat or dog at all, unlike Sheep - SYMPTOM diagnosis
     // must be rejected outright, not silently run through the cattle model.
 
     @Test

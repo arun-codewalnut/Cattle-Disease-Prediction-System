@@ -183,6 +183,52 @@ describe('DiagnosisIntake', () => {
     expect(imageCall[1].body.getAll('images')).toEqual([photo1, photo2])
   })
 
+  it('renders an invalid-image photo distinctly, without a confidence or vet-action badge, and skips the disagreement banner', async () => {
+    const user = userEvent.setup()
+    fetchMock
+      .mockResolvedValueOnce(
+        jsonResponse(true, { id: 4, tagNumber: 'CAT-002', farmId: 42, species: 'CAT', createdAt: '2026-01-01T00:00:00Z' })
+      )
+      .mockResolvedValueOnce(
+        jsonResponse(true, {
+          results: [
+            {
+              id: 3, animalId: 4, diagnosis: 'Ringworm', confidence: 0.9,
+              explanation: 'Predicted Ringworm.', recommendedAction: 'consult_vet',
+              precautions: [], nextSteps: [], createdAt: '2026-01-01T00:00:00Z',
+            },
+            {
+              id: 4, animalId: 4, diagnosis: 'invalid_image', confidence: 0.0,
+              explanation: "This doesn't look like a photo of an animal — please upload a clear photo of the animal itself.",
+              recommendedAction: 'retry_upload', precautions: [], nextSteps: [], createdAt: '2026-01-01T00:00:00Z',
+            },
+          ],
+          // Backend excludes invalid_image from the comparison — still "agree".
+          diagnosesAgree: true,
+        })
+      )
+
+    const photo1 = new File(['a'], 'a.jpg', { type: 'image/jpeg' })
+    const photo2 = new File(['car'], 'car.jpg', { type: 'image/jpeg' })
+
+    render(<DiagnosisIntake />)
+    await user.selectOptions(screen.getByLabelText(/species/i), 'CAT')
+    await user.type(screen.getByLabelText(/animal tag number/i), 'CAT-002')
+    await user.type(screen.getByLabelText(/farm id/i), '42')
+    await user.upload(screen.getByLabelText(/add photo 1/i), photo1)
+    await user.upload(screen.getByLabelText(/add photo 2/i), photo2)
+    await user.click(screen.getByRole('button', { name: /diagnose from photos/i }))
+
+    expect(await screen.findByText(/likely: ringworm/i)).toBeInTheDocument()
+    expect(screen.getByText(/not a valid photo/i)).toBeInTheDocument()
+    expect(screen.getByText(/doesn't look like a photo of an animal/i)).toBeInTheDocument()
+    expect(screen.queryByText(/didn't all get the same diagnosis/i)).not.toBeInTheDocument()
+    // The invalid-image card must not show a fake confidence percentage or a vet-action badge
+    // — both should appear exactly once each (the real Ringworm card only).
+    expect(screen.getAllByText(/% confidence\)/i)).toHaveLength(1)
+    expect(screen.getAllByText(/recommended action:/i)).toHaveLength(1)
+  })
+
   it('disables the photo submit button until a file is chosen', () => {
     render(<DiagnosisIntake />)
 
@@ -221,43 +267,7 @@ describe('DiagnosisIntake', () => {
     expect(screen.queryByText(/not trained on/i)).not.toBeInTheDocument()
   })
 
-  it('shows the approximation disclosure and sends species when Buffalo is selected', async () => {
-    const user = userEvent.setup()
-    fetchMock
-      .mockResolvedValueOnce(
-        jsonResponse(true, { id: 2, tagNumber: 'BUF-001', farmId: 42, species: 'BUFFALO', createdAt: '2026-01-01T00:00:00Z' })
-      )
-      .mockResolvedValueOnce(
-        jsonResponse(true, {
-          id: 8,
-          animalId: 2,
-          diagnosis: 'Healthy',
-          confidence: 0.9,
-          explanation: 'Predicted Healthy with 90% confidence.',
-          recommendedAction: 'monitor',
-          precautions: [],
-          nextSteps: [],
-          createdAt: '2026-01-01T00:00:00Z',
-        })
-      )
-
-    render(<DiagnosisIntake />)
-    await user.selectOptions(screen.getByLabelText(/species/i), 'BUFFALO')
-
-    expect(screen.getByText(/isn't trained on buffalo-specific data yet/i)).toBeInTheDocument()
-
-    await user.type(screen.getByLabelText(/animal tag number/i), 'BUF-001')
-    await user.type(screen.getByLabelText(/farm id/i), '42')
-    await user.click(screen.getByLabelText(/fever/i))
-    await user.click(screen.getByRole('button', { name: /get diagnosis/i }))
-
-    await screen.findByText(/likely: healthy \(90% confidence\)/i)
-
-    const [animalCall] = fetchMock.mock.calls
-    expect(JSON.parse(animalCall[1].body)).toMatchObject({ species: 'BUFFALO' })
-  })
-
-  it('shows the species-gap disclosure and sends species when Sheep is selected', async () => {
+  it('shows the PPR-screen disclosure, uses sheep symptom fields, and sends species when Sheep is selected', async () => {
     const user = userEvent.setup()
     fetchMock
       .mockResolvedValueOnce(
@@ -267,10 +277,10 @@ describe('DiagnosisIntake', () => {
         jsonResponse(true, {
           id: 10,
           animalId: 3,
-          diagnosis: 'uncertain',
-          confidence: 0.2,
-          explanation: 'Not enough symptom information was provided to make a confident prediction.',
-          recommendedAction: 'consult_vet',
+          diagnosis: 'PPR (Peste des Petits Ruminants)',
+          confidence: 0.93,
+          explanation: 'Predicted PPR (Peste des Petits Ruminants) with 93% confidence.',
+          recommendedAction: 'escalate_to_vet',
           precautions: [],
           nextSteps: [],
           createdAt: '2026-01-01T00:00:00Z',
@@ -280,18 +290,25 @@ describe('DiagnosisIntake', () => {
     render(<DiagnosisIntake />)
     await user.selectOptions(screen.getByLabelText(/species/i), 'SHEEP')
 
-    expect(screen.getByText(/isn't trained on sheep-specific data yet/i)).toBeInTheDocument()
-    expect(screen.getByText(/sheep-only diseases aren't represented by it at all/i)).toBeInTheDocument()
+    expect(screen.getByText(/real ppr-only screen/i)).toBeInTheDocument()
+    // Cattle-only fields must be gone, replaced by sheep's own PPR symptom vocabulary.
+    expect(screen.queryByLabelText(/mouth lesions/i)).not.toBeInTheDocument()
+    expect(screen.getByLabelText(/sores in mouth or nose/i)).toBeInTheDocument()
 
     await user.type(screen.getByLabelText(/animal tag number/i), 'SHE-001')
     await user.type(screen.getByLabelText(/farm id/i), '11')
-    await user.click(screen.getByLabelText(/fever/i))
+    await user.click(screen.getByLabelText(/nasal discharge/i))
+    await user.click(screen.getByLabelText(/sores in mouth or nose/i))
     await user.click(screen.getByRole('button', { name: /get diagnosis/i }))
 
-    await screen.findByText(/not enough symptom information was provided/i)
+    await screen.findByText(/likely: ppr \(peste des petits ruminants\) \(93% confidence\)/i)
+    expect(screen.getByText(/escalate to vet/i)).toBeInTheDocument()
 
-    const [animalCall] = fetchMock.mock.calls
+    const [animalCall, diagnosisCall] = fetchMock.mock.calls
     expect(JSON.parse(animalCall[1].body)).toMatchObject({ species: 'SHEEP' })
+    expect(JSON.parse(diagnosisCall[1].body)).toMatchObject({
+      symptoms: { nasal_discharge: true, oral_nasal_lesion: true, temp: false },
+    })
   })
 
   it('shows image-only diagnosis for Cat — no symptom form, but a real photo model', async () => {
@@ -300,7 +317,7 @@ describe('DiagnosisIntake', () => {
     render(<DiagnosisIntake />)
     await user.selectOptions(screen.getByLabelText(/species/i), 'CAT')
 
-    expect(screen.getByText(/symptom-based diagnosis isn't available for cat/i)).toBeInTheDocument()
+    expect(screen.getByText(/photo only.*cat-specific model/i)).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /get diagnosis/i })).not.toBeInTheDocument()
     expect(screen.queryByLabelText(/fever/i)).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: /diagnose from photo/i })).toBeInTheDocument()
@@ -308,14 +325,13 @@ describe('DiagnosisIntake', () => {
     expect(fetchMock).not.toHaveBeenCalled()
   })
 
-  it('shows image-only diagnosis for Dog, with a loud low-confidence caveat', async () => {
+  it('shows image-only diagnosis for Dog, with the weak-accuracy caveat in its one-line summary', async () => {
     const user = userEvent.setup()
 
     render(<DiagnosisIntake />)
     await user.selectOptions(screen.getByLabelText(/species/i), 'DOG')
 
-    expect(screen.getByText(/symptom-based diagnosis isn't available for dog/i)).toBeInTheDocument()
-    expect(screen.getByText(/barely better than guessing/i)).toBeInTheDocument()
+    expect(screen.getByText(/photo only.*weak.*no healthy option/i)).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /get diagnosis/i })).not.toBeInTheDocument()
     expect(screen.queryByLabelText(/fever/i)).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: /diagnose from photo/i })).toBeInTheDocument()

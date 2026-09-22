@@ -29,11 +29,11 @@ public class DiagnosisService {
     // disk, only validated, base64-encoded, and forwarded to ml-service for one placeholder
     // prediction — see that spec for why.
     //
-    // M11 (docs/specs/M11-buffalo-disease-detection.md): animal.getSpecies() is deliberately
-    // NOT forwarded to ml-service for the symptom path — no buffalo/sheep-specific symptom
-    // model exists, so every species there is diagnosed with the same cattle-trained model.
-    // The frontend discloses this. The image path is different as of the M13/M14 follow-up
-    // below — see submitImage().
+    // M12 follow-up (docs/specs/M12-sheep-disease-detection.md): animal.getSpecies() IS now
+    // forwarded to ml-service for the symptom path too (it wasn't originally — Buffalo/Sheep
+    // both used to silently share the cattle-trained model with no species-aware routing at
+    // all). Sheep now routes to its own real, PPR-trained symptom model; every other
+    // symptom-diagnosable species still falls back to the cattle model, same as before.
     private static final Set<String> ALLOWED_IMAGE_TYPES = Set.of("image/jpeg", "image/png");
     private static final long MAX_IMAGE_SIZE_BYTES = 5L * 1024 * 1024;
 
@@ -46,8 +46,8 @@ public class DiagnosisService {
     // M13/M14 (docs/specs/M13-cat-disease-detection.md,
     // docs/specs/M14-dog-disease-detection.md): SYMPTOM diagnosis stays blocked for Cat/Dog —
     // reusing the cattle model's disease list/symptom vocabulary for a companion animal would
-    // be an actively wrong result, not a disclosed approximation like Buffalo/Sheep.
-    static final Set<Species> DIAGNOSIS_SUPPORTED_SPECIES = Set.of(Species.COW, Species.BUFFALO, Species.SHEEP);
+    // be an actively wrong result, not a disclosed approximation like Sheep gets.
+    static final Set<Species> DIAGNOSIS_SUPPORTED_SPECIES = Set.of(Species.COW, Species.SHEEP);
 
     // M13/M14 follow-up: Cat and Dog now have their own real, trained IMAGE models (not
     // symptom models) — see ml-service/app/models/cat_image_model.py and dog_image_model.py.
@@ -73,8 +73,10 @@ public class DiagnosisService {
         requireSymptomDiagnosisSupported(animal);
 
         // If this throws (unreachable / error response), nothing gets persisted below —
-        // we don't record a case that never actually got a diagnosis.
-        DiagnosisResult result = mlServiceClient.diagnose(symptoms, null);
+        // we don't record a case that never actually got a diagnosis. species is forwarded
+        // so Sheep routes to its own trained symptom model in ml-service — see this class's
+        // header comment.
+        DiagnosisResult result = mlServiceClient.diagnose(symptoms, null, null, animal.getSpecies().name());
 
         String correlationId = MDC.get(CorrelationIdFilter.MDC_KEY);
         DiagnosisCase entity = new DiagnosisCase(
@@ -119,8 +121,8 @@ public class DiagnosisService {
 
             // No symptoms for an image-based diagnosis — an empty map, not null, so the
             // ml-service request/DB column contracts (both require a non-null object) hold.
-            // species IS forwarded here (unlike the symptom path) so Cat/Dog route to their
-            // own trained image models in ml-service — see DiagnosisService's class comment.
+            // species is forwarded so Cat/Dog route to their own trained image models in
+            // ml-service — see DiagnosisService's class comment.
             DiagnosisResult result =
                     mlServiceClient.diagnose(Map.of(), null, imageBase64, animal.getSpecies().name());
 

@@ -35,17 +35,6 @@ class AnimalServiceTest {
     }
 
     @Test
-    void findOrCreate_buffalo_savesAndReturnsAnimalWithBuffaloSpecies() {
-        when(animalRepository.findByTagNumber("BUF-001")).thenReturn(Optional.empty());
-        Animal saved = new Animal("BUF-001", 7L, Species.BUFFALO);
-        when(animalRepository.save(any())).thenReturn(saved);
-
-        Animal result = animalService.findOrCreate("BUF-001", 7L, Species.BUFFALO);
-
-        assertEquals(Species.BUFFALO, result.getSpecies());
-    }
-
-    @Test
     void findOrCreate_sheep_savesAndReturnsAnimalWithSheepSpecies() {
         when(animalRepository.findByTagNumber("SHE-001")).thenReturn(Optional.empty());
         Animal saved = new Animal("SHE-001", 3L, Species.SHEEP);
@@ -124,7 +113,7 @@ class AnimalServiceTest {
         when(animalRepository.findByTagNumber("COW-001")).thenReturn(Optional.of(existing));
 
         ApiException ex = assertThrows(
-                ApiException.class, () -> animalService.findOrCreate("COW-001", 42L, Species.BUFFALO));
+                ApiException.class, () -> animalService.findOrCreate("COW-001", 42L, Species.SHEEP));
 
         assertEquals("ANIMAL_TAG_DUPLICATE", ex.getCode());
         verify(animalRepository, never()).save(any());
