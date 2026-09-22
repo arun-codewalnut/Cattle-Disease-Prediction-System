@@ -535,3 +535,134 @@ section[data-urgent='true'] [role='alert'] {
     text-align: center;
   }
 }
+
+/* ---------------------------------------------------------------------------
+   Live background (LiveBackground.jsx)
+
+   Atmospheric, not illustrative: drifting daylight, a horizon glow, and slow
+   pollen. Everything is built from the existing tokens, so dark mode comes for
+   free, and only transform/opacity animate so the whole thing composites on the
+   GPU. Sits behind the content and never touches its contrast — the card above
+   it is opaque.
+
+   Cycles are deliberately long (35-90s). Anything quicker reads as fidgeting in
+   peripheral vision while someone is reading a diagnosis.
+   --------------------------------------------------------------------------- */
+.live-bg {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.live-bg__glow {
+  position: absolute;
+  border-radius: 50%;
+  will-change: transform;
+}
+
+/* Warm daylight, top-left, the strongest of the three. */
+.live-bg__glow--sun {
+  width: 78vmax;
+  height: 78vmax;
+  top: -34vmax;
+  left: -18vmax;
+  background: radial-gradient(circle, color-mix(in srgb, var(--urgency-consult) 20%, transparent), transparent 66%);
+  animation: bg-drift-sun 78s ease-in-out infinite;
+}
+
+/* Cool counterweight, top-right, so the wash isn't one flat hue. */
+.live-bg__glow--sky {
+  width: 64vmax;
+  height: 64vmax;
+  top: -26vmax;
+  right: -20vmax;
+  background: radial-gradient(circle, color-mix(in srgb, var(--accent) 18%, transparent), transparent 68%);
+  animation: bg-drift-sky 92s ease-in-out infinite;
+}
+
+/* Green rising from below — the "field" the light is falling on. */
+.live-bg__glow--field {
+  width: 96vmax;
+  height: 58vmax;
+  bottom: -34vmax;
+  left: 50%;
+  margin-left: -48vmax;
+  background: radial-gradient(ellipse at center, color-mix(in srgb, var(--accent) 24%, transparent), transparent 62%);
+  animation: bg-drift-field 86s ease-in-out infinite;
+}
+
+/* A soft band where land would meet sky. Breathes rather than moves. */
+.live-bg__horizon {
+  position: absolute;
+  left: -6%;
+  right: -6%;
+  bottom: 0;
+  height: 34vh;
+  background: linear-gradient(to top, color-mix(in srgb, var(--accent) 22%, transparent), transparent 82%);
+  opacity: 0.85;
+  will-change: transform, opacity;
+  animation: bg-horizon 64s ease-in-out infinite;
+}
+
+.live-bg__motes {
+  position: absolute;
+  inset: 0;
+}
+
+/* Pollen/dust caught in sunlight: the layer that actually reads as alive.
+   Negative animation-delay starts them mid-flight so the field isn't empty on load. */
+.live-bg__mote {
+  position: absolute;
+  bottom: -8vh;
+  left: var(--mote-left);
+  width: var(--mote-size);
+  height: var(--mote-size);
+  border-radius: 50%;
+  background: var(--accent);
+  opacity: 0;
+  will-change: transform, opacity;
+  animation: bg-mote-rise var(--mote-duration) linear var(--mote-delay) infinite;
+}
+
+@keyframes bg-drift-sun {
+  0%, 100% { transform: translate3d(0, 0, 0) scale(1); }
+  50% { transform: translate3d(6vw, 4vh, 0) scale(1.12); }
+}
+
+@keyframes bg-drift-sky {
+  0%, 100% { transform: translate3d(0, 0, 0) scale(1.05); }
+  50% { transform: translate3d(-5vw, 6vh, 0) scale(1); }
+}
+
+@keyframes bg-drift-field {
+  0%, 100% { transform: translate3d(0, 0, 0) scale(1); }
+  50% { transform: translate3d(3vw, -3vh, 0) scale(1.08); }
+}
+
+@keyframes bg-horizon {
+  0%, 100% { transform: translate3d(0, 0, 0); opacity: 0.85; }
+  50% { transform: translate3d(0, -2vh, 0); opacity: 1; }
+}
+
+@keyframes bg-mote-rise {
+  0% { transform: translate3d(0, 0, 0); opacity: 0; }
+  12% { opacity: 0.55; }
+  88% { opacity: 0.35; }
+  100% { transform: translate3d(var(--mote-drift), -112vh, 0); opacity: 0; }
+}
+
+/* Non-negotiable for a health-adjacent tool: drifting peripheral motion is a real
+   vestibular trigger. Reduced motion keeps the same composition, completely still,
+   and drops the motes rather than freezing them mid-air. */
+@media (prefers-reduced-motion: reduce) {
+  .live-bg__glow,
+  .live-bg__horizon {
+    animation: none;
+  }
+
+  .live-bg__mote {
+    display: none;
+  }
+}

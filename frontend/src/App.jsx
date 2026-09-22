@@ -1,8 +1,14 @@
 import DiagnosisIntake from './features/diagnosis/DiagnosisIntake'
+import LiveBackground from './features/diagnosis/LiveBackground'
 import './App.css'
 
 function App() {
-  return <DiagnosisIntake />
+  return (
+    <>
+      <LiveBackground />
+      <DiagnosisIntake />
+    </>
+  )
 }
 
 export default App

@@ -87,3 +87,44 @@ affordances. This is a CSS/markup-wrapping pass, not a rewrite.
    changes.
 3. The urgency icon/badge in `DiagnosisResult` is added as a sibling element to the existing
    `role="alert"` span, not inside it, so the alert's accessible text is unchanged.
+
+## Follow-up: live (animated) background — 2026-09-22
+
+The user asked for a "live background related to our application." This extends the spec
+above rather than reversing it, and the reasoning is worth recording because the pull is
+toward something much more literal.
+
+**Atmospheric, not illustrative.** An earlier pass had already replaced illustrated farm
+scenery with a calm accent-tinted gradient, on the grounds that this should read as "a calm,
+professional tool, not a theme" (see the comment on `body` in `index.css`). That still holds:
+the app tells a farmer their animal may have a **reportable disease**, and animated livestock
+would undercut credibility at exactly the moment someone reads "escalate to vet." What moves
+is therefore light and air over a field — three slow daylight washes, a horizon glow, and
+drifting pollen — implemented in `LiveBackground.jsx` + the `.live-bg` rules in `App.css`.
+
+**Boundaries this inherits from the spec above, unchanged:**
+- Original CSS only — no animation library, no canvas, no downloaded imagery. ("Animation
+  libraries" stays out of scope; CSS keyframes are the same no-dependency approach the
+  "CSS transitions only" line already established.)
+- Colors derive from existing tokens (via `color-mix` on the solid tokens, since the `*-bg`
+  tokens sit at 0.10-0.12 alpha — tuned for a chip fill behind text, far too faint for a
+  full-viewport wash), so dark mode flips for free.
+- Decorative: `aria-hidden="true"`, `pointer-events: none`, no text, so no
+  `getByRole`/`getByText`/`getByLabelText` query can reach into it.
+
+**Added constraints specific to motion:**
+- **`prefers-reduced-motion: reduce` disables it entirely** — the composition stays, the
+  motion stops, and the motes are removed rather than frozen mid-air. Drifting peripheral
+  motion is a genuine vestibular trigger, and this is a health-adjacent tool.
+- **Only `transform`/`opacity` animate**, so everything composites on the GPU: no JS loop, no
+  layout/paint thrash, nothing that drains a phone battery in a field.
+- **Cycle lengths stay long** (34-92s). Anything quicker reads as fidgeting in peripheral
+  vision while someone is reading a diagnosis.
+- **Contrast is unaffected.** Body text sits on the opaque card; the header text sits on the
+  washes, so it was checked against the worst case (both top glows overlapping at full
+  strength): heading 9.51:1 and tagline 7.23:1 in light mode, 6.93:1 and 5.39:1 in dark — all
+  above the AA 4.5:1 floor the spec already requires.
+
+**Deliberately not done**: tinting the background by result urgency (red on escalate). The
+result card already carries urgency; making the whole page react would read as alarming
+theatre on a tool whose credibility depends on not overstating things.
