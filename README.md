@@ -34,7 +34,7 @@ There are two ways to run this (Option A / Option B below) and they need differe
 | [Docker Desktop](https://www.docker.com/products/docker-desktop/) | **Option A (all services)**; Postgres in either option; `ml-service`'s RAG feature and RAG tests | the only way to get RAG-grounded explanations — see the native-install note below |
 | [GNU Make](https://www.gnu.org/software/make/) (optional) | the `make` shortcuts | not installed on Windows by default — every target is a one-line `docker compose …` you can run directly instead, see [Makefile](Makefile) |
 | [Node.js](https://nodejs.org/) 20.19+ or 22.12+ | Option B `frontend` | Vite 8 rejects 20.0–20.18, 21.x and 22.0–22.11; the frontend **tests** (Vitest 5) need 22.12+. CI and `frontend/Dockerfile` both use Node 24 |
-| [Java 21](https://adoptium.net/) | Option B `backend` | a system [Maven](https://maven.apache.org/) is optional — `backend/mvnw` (`mvnw.cmd` on Windows) works without one |
+| [Java 21](https://adoptium.net/) + [Maven](https://maven.apache.org/) | Option B `backend` | every Maven command runs **from `backend/`** — there's no root `pom.xml`. `backend/mvnw` (`mvnw.cmd` on Windows) is a fallback if you have no system Maven, but it downloads its own Maven distribution and can fail behind a restricted network — see [backend/AGENTS.md](backend/AGENTS.md) |
 | [Python 3.13](https://www.python.org/) | Option B `ml-service` | Windows: use the `py` launcher. Read the native-install note below before `pip install` |
 | [Ollama](https://ollama.com/download) (optional, either option) | real LLM-generated explanations | without it, explanations use a deterministic template — the app works fully either way, see `docs/DECISIONS.md` |
 
@@ -166,7 +166,7 @@ Then run each service in its own terminal:
 
 ```bash
 cd ml-service && .venv\Scripts\activate && uvicorn app.main:app --reload   # :8000
-cd backend && ./mvnw spring-boot:run                                       # :8080  (mvnw.cmd on Windows)
+cd backend && mvn spring-boot:run                                          # :8080  (must be run from backend/)
 cd frontend && npm run dev                                                 # :5173
 ```
 
@@ -298,7 +298,7 @@ Strategy and per-service conventions: [docs/TESTING.md](docs/TESTING.md).
 | Suite | Command | Also needs |
 |---|---|---|
 | `frontend` (Vitest) | `cd frontend && npm ci && npm test` | Node 22.12+ — Vitest 5 refuses to run on older versions even though Vite itself allows 20.19+ |
-| `backend` (JUnit) | `cd backend && ./mvnw -B verify` | a reachable Postgres — the tests boot the real Spring context against `localhost:5432` (`cattlecare`/`cattlecare`/`cattlecare`). `make up`, or the `docker run` one-liner in Option B, gives you one |
+| `backend` (JUnit) | `cd backend && mvn -B verify` | a reachable Postgres — the tests boot the real Spring context against `localhost:5432` (`cattlecare`/`cattlecare`/`cattlecare`). `make up`, or the `docker run` one-liner in Option B, gives you one |
 | `ml-service` — full suite | `docker build -t ml-service-test ./ml-service` then run `pytest` in it — exact commands in [ml-service/AGENTS.md](ml-service/AGENTS.md) | Docker. This is the only way to exercise the RAG tests on Windows |
 | `ml-service` — native subset | `cd ml-service && pytest` | the venv. Without `chromadb` the RAG tests skip themselves cleanly (`importorskip`) rather than failing — a green run here is *not* full coverage |
 | e2e (Playwright) | `make test-e2e` | all three services running, plus one-time `cd tests/e2e && npm install && npx playwright install --with-deps chromium`. The smoke test posts a real symptom diagnosis, so the Cow symptom model must be trained first |
