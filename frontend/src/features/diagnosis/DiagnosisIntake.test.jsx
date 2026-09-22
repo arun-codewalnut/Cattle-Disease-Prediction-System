@@ -117,7 +117,7 @@ describe('DiagnosisIntake', () => {
     const image = new File(['fake-image-bytes'], 'cow.jpg', { type: 'image/jpeg' })
 
     render(<DiagnosisIntake />)
-    await user.upload(screen.getByLabelText(/add photo 1/i), image)
+    await user.upload(screen.getByLabelText(/add photos/i), image)
     await user.click(screen.getByRole('button', { name: /diagnose from photo/i }))
 
     expect(await screen.findByText(/likely: healthy \(50% confidence\)/i)).toBeInTheDocument()
@@ -159,8 +159,8 @@ describe('DiagnosisIntake', () => {
 
     render(<DiagnosisIntake />)
     await user.selectOptions(screen.getByLabelText(/species/i), 'CAT')
-    await user.upload(screen.getByLabelText(/add photo 1/i), photo1)
-    await user.upload(screen.getByLabelText(/add photo 2/i), photo2)
+    // Both photos in a single pick — the form takes a multi-file selection now.
+    await user.upload(screen.getByLabelText(/add photos/i), [photo1, photo2])
     expect(screen.getByText(/2 of 5 selected/i)).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: /diagnose from photos/i }))
 
@@ -199,8 +199,7 @@ describe('DiagnosisIntake', () => {
 
     render(<DiagnosisIntake />)
     await user.selectOptions(screen.getByLabelText(/species/i), 'CAT')
-    await user.upload(screen.getByLabelText(/add photo 1/i), photo1)
-    await user.upload(screen.getByLabelText(/add photo 2/i), photo2)
+    await user.upload(screen.getByLabelText(/add photos/i), [photo1, photo2])
     await user.click(screen.getByRole('button', { name: /diagnose from photos/i }))
 
     expect(await screen.findByText(/likely: ringworm/i)).toBeInTheDocument()
@@ -211,6 +210,59 @@ describe('DiagnosisIntake', () => {
     // — both should appear exactly once each (the real Ringworm card only).
     expect(screen.getAllByText(/% confidence\)/i)).toHaveLength(1)
     expect(screen.getAllByText(/recommended action:/i)).toHaveLength(1)
+  })
+
+  // The five "Add photo N" slots were replaced by one multi-select input — five affordances
+  // for something the browser's file picker already does in one.
+  it('takes several photos from a single pick, and appends on a second pick', async () => {
+    const user = userEvent.setup()
+    const a = new File(['a'], 'a.jpg', { type: 'image/jpeg' })
+    const b = new File(['b'], 'b.jpg', { type: 'image/jpeg' })
+    const c = new File(['c'], 'c.jpg', { type: 'image/jpeg' })
+
+    render(<DiagnosisIntake />)
+
+    // Only one file input, and it accepts multiple.
+    expect(screen.queryByLabelText(/add photo 1/i)).not.toBeInTheDocument()
+    expect(screen.getByLabelText(/add photos/i)).toHaveAttribute('multiple')
+
+    await user.upload(screen.getByLabelText(/add photos/i), [a, b])
+    expect(screen.getByText(/2 of 5 selected/i)).toBeInTheDocument()
+
+    await user.upload(screen.getByLabelText(/add photos/i), c)
+    expect(screen.getByText(/3 of 5 selected/i)).toBeInTheDocument()
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('keeps what fits and says how many were dropped when more than 5 are picked', async () => {
+    const user = userEvent.setup()
+    const files = Array.from({ length: 7 }, (_, i) =>
+      new File([String(i)], `photo${i}.jpg`, { type: 'image/jpeg' })
+    )
+
+    render(<DiagnosisIntake />)
+    await user.upload(screen.getByLabelText(/add photos/i), files)
+
+    expect(screen.getByText(/5 of 5 selected/i)).toBeInTheDocument()
+    // Silently swallowing the extras would leave the user thinking 7 were attached.
+    expect(await screen.findByRole('status')).toHaveTextContent(/2 photos not added/i)
+    expect(screen.getByText(/maximum 5 photos selected/i)).toBeInTheDocument()
+    expect(screen.getByLabelText(/add photos/i)).toBeDisabled()
+  })
+
+  it('lets a chosen photo be removed, which frees a slot again', async () => {
+    const user = userEvent.setup()
+    const a = new File(['a'], 'a.jpg', { type: 'image/jpeg' })
+    const b = new File(['b'], 'b.jpg', { type: 'image/jpeg' })
+
+    render(<DiagnosisIntake />)
+    await user.upload(screen.getByLabelText(/add photos/i), [a, b])
+    expect(screen.getByText(/2 of 5 selected/i)).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: /remove a\.jpg/i }))
+
+    expect(screen.getByText(/1 of 5 selected/i)).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /remove a\.jpg/i })).not.toBeInTheDocument()
   })
 
   it('disables the photo submit button until a file is chosen', () => {
@@ -316,7 +368,7 @@ describe('DiagnosisIntake', () => {
     render(<DiagnosisIntake />)
     await user.selectOptions(screen.getByLabelText(/species/i), 'CAT')
     const file = new File(['fake-image-bytes'], 'cat.jpg', { type: 'image/jpeg' })
-    await user.upload(screen.getByLabelText(/add photo 1/i), file)
+    await user.upload(screen.getByLabelText(/add photos/i), file)
     await user.click(screen.getByRole('button', { name: /diagnose from photo/i }))
 
     await screen.findByText(/likely: ringworm/i)

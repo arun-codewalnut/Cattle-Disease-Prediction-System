@@ -247,10 +247,56 @@ button[type='submit']:disabled {
   color: var(--text-h);
 }
 
+/* One multi-select picker replaced the five single-file slots. The tray below it now holds
+   only the chosen photos, so it grows with the selection instead of always showing 5 boxes. */
+.photo-picker {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 14px 16px;
+  border: 2px dashed var(--border);
+  border-radius: 10px;
+  background: var(--accent-bg);
+  color: var(--text);
+  cursor: pointer;
+  opacity: 0.85;
+  transition: border-color 0.15s ease, background 0.15s ease, transform 0.15s ease, opacity 0.15s ease;
+}
+
+.photo-picker:hover {
+  border-color: var(--accent);
+  transform: translateY(-1px);
+  opacity: 1;
+}
+
+.photo-picker:has(.photo-tray__input:focus-visible) {
+  outline: 3px solid var(--accent-border);
+  outline-offset: 2px;
+}
+
+.photo-picker--full,
+.photo-picker:has(.photo-tray__input:disabled) {
+  cursor: not-allowed;
+  opacity: 0.55;
+  transform: none;
+  border-color: var(--border);
+}
+
+.photo-picker__icon {
+  font-size: 20px;
+  line-height: 1;
+}
+
+.photo-picker__text {
+  font-weight: 600;
+}
+
 .photo-tray {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(72px, 1fr));
   gap: 8px;
+  margin-top: 10px;
 }
 
 .photo-tray__slot {
@@ -262,32 +308,6 @@ button[type='submit']:disabled {
   align-items: center;
   justify-content: center;
   overflow: hidden;
-}
-
-.photo-tray__slot--empty {
-  border: 2px dashed var(--border);
-  background: var(--accent-bg);
-  font-size: 24px;
-  color: var(--text);
-  opacity: 0.7;
-  cursor: pointer;
-  transition: border-color 0.15s ease, background 0.15s ease, transform 0.15s ease, opacity 0.15s ease;
-}
-
-.photo-tray__slot--empty:hover {
-  border-color: var(--accent);
-  transform: translateY(-1px);
-  opacity: 1;
-}
-
-.photo-tray__slot--empty:has(.photo-tray__input:focus-visible) {
-  outline: 3px solid var(--accent-border);
-  outline-offset: 2px;
-}
-
-.photo-tray__slot--empty:has(.photo-tray__input:disabled) {
-  cursor: not-allowed;
-  opacity: 0.4;
 }
 
 .photo-tray__input {
@@ -344,6 +364,12 @@ button[type='submit']:disabled {
   margin: 8px 0 0;
   font-size: 0.85em;
   opacity: 0.75;
+}
+
+.image-upload-form__notice {
+  margin: 6px 0 0;
+  font-size: 0.85em;
+  color: var(--urgency-escalate);
 }
 
 .image-upload-form button[type='submit'] {

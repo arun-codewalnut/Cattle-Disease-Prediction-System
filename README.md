@@ -215,8 +215,10 @@ checked reliably produces **PPR Negative**.
 
 ### Image-based diagnosis (single or multi-photo)
 
-Upload 1–5 JPEG/PNG photos in one submission (the photo tray shows thumbnails as you add
-them). Real sample photos to test with live under
+Upload 1–5 JPEG/PNG photos in one submission — one file picker takes them all at once
+(ctrl/shift-click, or drag a multi-selection), and each chosen photo is then listed with its
+own remove button. Picking more than 5 keeps the first 5 and says how many it dropped, rather
+than silently trimming the selection. Real sample photos to test with live under
 `ml-service/data/{cattle,cat,dog}-images/<class-name>/` once you've populated them (see
 "Training/retraining a model" below) — e.g. `ml-service/data/cat-images/ringworm/` for a real
 Ringworm photo.
