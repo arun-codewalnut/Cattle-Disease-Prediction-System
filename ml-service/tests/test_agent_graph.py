@@ -6,6 +6,7 @@ import app.agent.graph as graph_module
 import app.models.cat_image_model as cat_image_model_module
 import app.models.dog_image_model as dog_image_model_module
 import app.models.image_model as image_model_module
+import app.models.sheep_symptom_model as sheep_symptom_model_module
 import pytest
 from app.agent.graph import run_diagnosis
 from app.errors import ApiError
@@ -129,6 +130,11 @@ _DOG_IMAGE_MODEL_PATH = dog_image_model_module.DEFAULT_MODEL_PATH
 _DOG_IMAGES_DIR = Path(__file__).resolve().parents[1] / "data" / "dog-images"
 _HAS_TRAINED_DOG_IMAGE_MODEL = _DOG_IMAGE_MODEL_PATH.exists()
 
+# M12 follow-up: Sheep has its own real, trained SYMPTOM model (unlike Cat/Dog above, which
+# are image-only) — see app.agent.graph._SYMPTOM_MODEL_BY_SPECIES.
+_SHEEP_SYMPTOM_MODEL_PATH = sheep_symptom_model_module.DEFAULT_MODEL_PATH
+_HAS_TRAINED_SHEEP_SYMPTOM_MODEL = _SHEEP_SYMPTOM_MODEL_PATH.exists()
+
 
 def _sample_species_image_base64(images_dir: Path, folder: str) -> str:
     sample = next((images_dir / folder).glob("*.jpg"))
@@ -183,10 +189,36 @@ def test_dog_species_routes_to_the_dog_model():
     reason="no local ml-service/models/{cat,dog}_image_model.pt",
 )
 def test_unrecognized_species_falls_back_to_the_cattle_model():
-    # COW/BUFFALO/SHEEP, or no species at all, must keep working exactly as before
-    # species-aware routing existed — this is the regression check for that.
-    result = run_diagnosis({}, image_base64=_sample_image_base64("healthy"), species="BUFFALO")
+    # Sheep isn't in _IMAGE_MODEL_BY_SPECIES (only symptom routing is species-aware for it —
+    # see test_sheep_species_routes_symptoms_to_the_sheep_model below), so COW/SHEEP, or no
+    # species at all, must all still hit the cattle image model unchanged.
+    result = run_diagnosis({}, image_base64=_sample_image_base64("healthy"), species="SHEEP")
     assert result["diagnosis"] == "Healthy"
+
+
+@pytest.mark.skipif(
+    not _HAS_TRAINED_SHEEP_SYMPTOM_MODEL, reason="no local ml-service/models/sheep_symptom_model.pkl"
+)
+def test_sheep_species_routes_symptoms_to_the_sheep_model():
+    # SHEEP on the *symptom* path must hit sheep_symptom_model, not the cattle model — the
+    # two use entirely different feature vocabularies (see data/sheep-symptoms/SOURCE.md), so
+    # this also implicitly checks unknown-to-that-model keys (cattle's "fever" etc.) don't
+    # leak through: an all-PPR-symptoms case should come back positive regardless.
+    all_present = {f: True for f in sheep_symptom_model_module.FEATURES}
+    result = run_diagnosis(all_present, species="SHEEP")
+    assert result["diagnosis"] == "PPR (Peste des Petits Ruminants)"
+    assert result["recommended_action"] == "escalate_to_vet"
+
+
+@pytest.mark.skipif(
+    not _HAS_TRAINED_SHEEP_SYMPTOM_MODEL, reason="no local ml-service/models/sheep_symptom_model.pkl"
+)
+def test_sheep_symptoms_still_use_the_cattle_model_for_other_species():
+    # Same symptom dict, no species — must land on the cattle model, not sheep's, since the
+    # cattle CONFIDENT_SYMPTOMS fixture uses cattle-only feature names sheep_symptom_model
+    # wouldn't even recognize.
+    result = run_diagnosis(CONFIDENT_SYMPTOMS)
+    assert result["diagnosis"] == "Foot and Mouth Disease"
 
 
 def test_image_bytes_that_arent_a_real_image_degrade_to_uncertain():
@@ -198,6 +230,44 @@ def test_image_bytes_that_arent_a_real_image_degrade_to_uncertain():
 
     assert result["diagnosis"] == "uncertain"
     assert result["recommended_action"] == "consult_vet"
+    # M15: the "uncertain" explanation must talk about the photo, not symptoms, when this
+    # came from the image path — it used to always say "not enough symptom information,"
+    # which made no sense for a photo submission.
+    assert "photo" in result["explanation"].lower()
+    assert "symptom" not in result["explanation"].lower()
+
+
+_FIXTURES_DIR = Path(__file__).resolve().parent / "fixtures"
+
+
+def _fixture_image_base64(name: str) -> str:
+    return base64.b64encode((_FIXTURES_DIR / name).read_bytes()).decode()
+
+
+@pytest.mark.parametrize("species", [None, "COW", "SHEEP", "CAT", "DOG"])
+def test_non_animal_photo_is_rejected_as_invalid_image_for_every_species(species):
+    # M15: a real photo that isn't an animal at all must never reach any species-specific
+    # disease model, regardless of which species was selected — the gate runs before the
+    # _IMAGE_MODEL_BY_SPECIES lookup.
+    result = run_diagnosis({}, image_base64=_fixture_image_base64("non-animal-table.jpg"), species=species)
+
+    assert result["diagnosis"] == "invalid_image"
+    assert result["confidence"] == 0.0
+    assert result["recommended_action"] == "retry_upload"
+    assert "animal" in result["explanation"].lower()
+    assert result["precautions"] == []
+    assert result["next_steps"] == []
+
+
+def test_invalid_image_never_calls_the_llm_or_retrieval(monkeypatch):
+    calls = []
+    monkeypatch.setattr(graph_module, "get_llm", lambda: calls.append("llm"))
+    monkeypatch.setattr(graph_module, "retrieve", lambda *a, **k: calls.append("retrieve"))
+
+    result = run_diagnosis({}, image_base64=_fixture_image_base64("non-animal-car.jpg"))
+
+    assert result["diagnosis"] == "invalid_image"
+    assert calls == []
 
 
 # A tiny real 1x1 PNG, already base64-encoded — genuinely decodable, so tests using it
