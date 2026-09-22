@@ -89,15 +89,16 @@ Docker): [agents/playbooks/run-stack.md](agents/playbooks/run-stack.md) and
 ## Testing the application
 
 Once all three services are up (either option above), open **http://localhost:5173**. The
-intake form: pick a species (a preview photo of that species appears immediately — purely
-cosmetic, doesn't affect diagnosis), enter an animal tag number + farm ID, then submit
-symptoms and/or up to 5 photos. What's actually supported differs by species — this isn't a
-bug if a species behaves differently, it's how the underlying models were scoped:
+intake form: pick a species, enter an animal tag number + farm ID, then submit symptoms
+and/or up to 5 photos. What's actually supported differs by species — this isn't a bug if a
+species behaves differently, it's how the underlying models were scoped. **Buffalo was
+removed as a supported species** (no usable dataset was ever found for it — see
+`docs/specs/M11-buffalo-disease-detection.md`'s superseded note):
 
 | Species | Symptom diagnosis | Image diagnosis | Notes |
 |---|---|---|---|
 | Cow | ✅ real model | ✅ real model (86.1% acc) | The only species with a symptom+image model trained specifically on it |
-| Buffalo, Sheep | ✅ Cow's model, as a disclosed approximation | ✅ Cow's model, as a disclosed approximation | No buffalo/sheep-specific dataset exists (searched, none found) — UI shows this |
+| Sheep | ✅ real model — PPR screen only (80.5% acc) | ✅ Cow's model, as a disclosed approximation | Symptoms: a real, trained binary screen for one disease (Peste des Petits Ruminants) — not a broader disease list like Cow's. A negative result means "not PPR," not "healthy." Image: no sheep-specific dataset exists, still an approximation |
 | Cat | ❌ blocked (no symptom model) | ✅ real model (83.0% acc) | Flea Allergy / Healthy / Ringworm / Scabies |
 | Dog | ❌ blocked (no symptom model) | ✅ real, but weak (52.6% acc) | Canine Distemper / Canine Parvovirus / Kennel Cough / Mange — **no Healthy class**, disclosed loudly in the UI |
 
@@ -111,6 +112,11 @@ not guesses):
 - Fever + Udder swelling + Drop in milk yield → **Mastitis**
 - Fever + Nasal discharge + Coughing + Labored breathing → **Bovine Respiratory Disease**
 - Nothing checked → **Healthy**
+
+Switching the species to Sheep swaps the checklist entirely (a completely different, real
+model — see the table above): checking **Nasal discharge + Sores in mouth or nose** reliably
+produces a confident **PPR (Peste des Petits Ruminants)** diagnosis (escalates); nothing
+checked reliably produces **PPR Negative**.
 
 ### Image-based diagnosis (single or multi-photo)
 
@@ -193,15 +199,16 @@ If a diagnosis attempt returns `503 MODEL_NOT_TRAINED`, the corresponding model 
 
 | Model | Train with | Needs real data first? |
 |---|---|---|
-| Symptom model | `python -m training.generate_synthetic_data && python -m training.symptom_model_train` | No — synthetic, generates its own data |
+| Symptom model (Cow) | `python -m training.generate_synthetic_data && python -m training.symptom_model_train` | No — synthetic, generates its own data |
+| Sheep symptom model (PPR screen) | `python -m training.sheep_symptom_model_train` | Yes — see `ml-service/data/sheep-symptoms/SOURCE.md` |
 | Cattle image model | `python -m training.image_model_train` | Yes — see `ml-service/data/cattle-images/SOURCE.md` |
 | Cat image model | `python -m training.cat_image_model_train` | Yes — see `ml-service/data/cat-images/SOURCE.md` |
 | Dog image model | `python -m training.dog_image_model_train` | Yes — see `ml-service/data/dog-images/SOURCE.md` |
 
-Each `SOURCE.md` has the exact `kagglehub.dataset_download(...)` snippet and which subfolders
-to copy where — all three image datasets download anonymously (no Kaggle account needed).
-Run from `ml-service/` with the venv active; each training run prints its real accuracy/F1 and
-appends a row to `ml-service/models/REGISTRY.md`.
+Each `SOURCE.md` has the exact `kagglehub.dataset_download(...)` snippet — all four real
+datasets (the three image ones plus the sheep symptom one) download anonymously, no Kaggle
+account needed. Run from `ml-service/` with the venv active; each training run prints its
+real accuracy/F1 and appends a row to `ml-service/models/REGISTRY.md`.
 
 ## Roadmap
 

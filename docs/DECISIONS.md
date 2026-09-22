@@ -467,3 +467,96 @@ follow-up scope (not yet an issue), same status M9 was in before the Kaggle data
 found. Threading `species` into `ml-service`'s contract is deferred until that follow-up
 has a real model to justify it — don't add the field speculatively.
 `sources` content) genuinely can't be meaningful without a real Chroma collection.
+
+---
+
+### 2026-09-22 — Buffalo removed; Sheep gets a real, narrowly-scoped PPR model instead of the cattle-model approximation
+
+**Decision**: `BUFFALO` is removed from `Species` (backend enum) and `SPECIES_OPTIONS`
+(frontend) — not deprecated, not hidden, gone, with a Flyway migration (`V3`) cleaning up any
+existing `species = 'BUFFALO'` rows. The follow-up scope the previous decision above tracked
+("a real buffalo-specific model") never materialized: a second search months later still
+found nothing usable. At the same time, a real, usable dataset for Sheep specifically *was*
+found — [PPR disease data from goats and sheep](https://www.kaggle.com/datasets/devothanyambo/ppr-disease-data-from-goats-and-sheep)
+(real field-collected clinical data, RT-qPCR-confirmed) — and `SHEEP` symptom diagnosis now
+routes to `app/models/sheep_symptom_model.py`, a real trained binary PPR (Peste des Petits
+Ruminants) screen (80.5% CV accuracy), replacing the cattle-model approximation Sheep used to
+get on the symptom path. `species` is now forwarded to `ml-service` for symptom diagnosis
+too (previously only the image path was species-aware) — the deferral in the decision above
+("don't add the field speculatively... until that follow-up has a real model") is exactly
+what justifies adding it now.
+
+**Why remove Buffalo rather than leave it as a permanent approximation**: an approximation
+disclosed as temporary that never gets a real replacement stops being an honest "interim"
+state and just becomes a permanently wrong answer wearing a disclaimer. Two searches, months
+apart, both came up empty — there's no realistic path to a real buffalo model, so the
+approximation was actively removed rather than left to sit indefinitely. This is a different
+call than the same situation for Buffalo's image path, or for Sheep's own foot-rot/sheep-pox
+gap (still unaddressed) — those remain disclosed approximations/gaps because they're
+genuinely still open follow-up scope, not because "approximation forever" is acceptable in
+general.
+
+**Why Sheep's new model is trained on combined goat+sheep data, not sheep-only**: the
+dataset's `animal` column (presumably encoding goat vs. sheep) is an undocumented 0/1 value
+with no data dictionary anywhere — guessing which value means which would mean silently
+mislabeling real data for a diagnosis tool. PPR is the same disease in both species (same
+virus, same reason the original study grouped them), so training on the full file is a
+disclosed, reasoned choice, not a silent one. Full detail:
+`ml-service/data/sheep-symptoms/SOURCE.md`.
+
+**Consequences**: Sheep's symptom-diagnosis disclosure text changed from "reusing the cow
+model as an approximation" to describing the model's real, narrow scope (PPR only — a
+negative result means "not PPR," not "healthy"). Sheep's *image*-diagnosis path is unchanged
+— still the cattle model, still a disclosed approximation, since no sheep-specific image
+dataset exists either way. `PPR (Peste des Petits Ruminants)` was added to
+`REPORTABLE_DISEASES` (it's WOAH/OIE-notifiable, same escalation tier as FMD/LSD).
+`docs/specs/M11-buffalo-disease-detection.md` is marked superseded rather than deleted or
+rewritten, per this repo's own convention of not editing history in specs; see
+`docs/specs/M12-sheep-disease-detection.md`'s "Follow-up" section for the full change.
+
+---
+
+### 2026-09-22 — Image-mismatch detection uses a free pretrained gate, not a new trained model or species-verification (M15)
+
+**Decision**: every image-diagnosis path (Cow/Sheep/Cat/Dog, one shared implementation) now
+runs a quality gate — `app/models/species_gate.py` — before any species-specific disease
+model. It uses torchvision's pretrained (zero fine-tuning) `MobileNet_V2_Weights.DEFAULT`
+ImageNet-1k classifier, already a project dependency. Standard ImageNet-1k class ordering
+groups every living-creature class contiguously at indices 0–397 (verified directly against
+the weights' own category list, not assumed); a photo whose top-5 predictions are *all*
+outside that range is rejected as `diagnosis: "invalid_image"` before reaching a disease
+model at all. Deliberately **top-5, not top-1** — tested against this repo's own real
+training photos first, and a real dog photo's top-1 prediction was "web site" (a total miss)
+while its top-5 still included 3 correct dog breeds; top-1-only would have false-rejected a
+genuinely valid photo.
+
+**Why not a newly trained "is this species X" classifier**: would need its own dataset and
+training run for a problem a free, off-the-shelf, zero-training model already solves well
+enough — confirmed by testing, not assumed: real cattle/cat/dog photos all pass (3/3), real
+non-animal photos (a Wikimedia table photo, a Wikimedia car photo) are both cleanly rejected
+(0/5 top predictions were animal classes for either). A real finding from that same testing:
+**synthetic test images (solid color, random noise, checkerboard) all incorrectly pass** —
+~40% of ImageNet-1k's 1000 classes are animals, so a degenerate/uninformative image's
+top-5 has a high chance of including one purely by chance. This gate is well-suited to real
+accidental mismatched uploads (the actual product problem), not adversarial/synthetic input
+— an acceptable, disclosed limitation for a learning project, not a security boundary.
+
+**Why this does NOT verify the photo matches the *selected* species**: confirmed with the
+user before building — the ask was "reject photos that aren't an animal at all," not "detect
+a dog photo submitted while diagnosing a cat." The latter is a materially bigger, separate
+problem (a prior session's `HANDOFF.md` already flagged and deferred it) and still isn't
+attempted here; a wrong-species-but-real-animal photo still reaches the disease model and,
+same as before this milestone, most likely comes back `"uncertain"`.
+
+**Consequences**: `"uncertain"` and `"invalid_image"` are now two distinct, real diagnosis
+values with different meanings (real animal photo, low confidence vs. not an animal at all) —
+frontend code checking `diagnosis === 'uncertain'` needed auditing to make sure it wasn't
+accidentally treating `invalid_image` the same way. A pre-existing bug was fixed alongside
+this: the `"uncertain"` explanation text always said "not enough *symptom* information," even
+for an image submission where no symptoms were ever involved — now branches on whether the
+submission was image- or symptom-based. `recommended_action: "retry_upload"` is a new value
+alongside the existing `escalate_to_vet`/`consult_vet`/`monitor` — the frontend renders it
+with its own dedicated, non-diagnosis card style (no confidence percentage, no vet-triage
+badge), not reusing the normal diagnosis-result layout. Multi-photo batches exclude
+`invalid_image` results from the `diagnosesAgree` comparison (backend-side) — it isn't a
+competing diagnosis to agree or disagree with the real ones in the same batch.

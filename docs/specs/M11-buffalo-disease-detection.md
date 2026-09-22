@@ -1,7 +1,20 @@
 # Spec: Buffalo disease detection (species architecture + interim reuse)
 
 **Milestone**: M11
-**Status**: in progress
+**Status**: superseded — Buffalo removed as a supported species (2026-09-22)
+
+> **Superseded.** Buffalo support was removed from the application (backend `Species` enum,
+> frontend `SPECIES_OPTIONS`, and a Flyway migration cleaning up any existing
+> `species = 'BUFFALO'` rows). No usable buffalo symptom or image dataset was ever found
+> across two separate searches months apart — it never moved past the disclosed cow-model
+> approximation this spec originally shipped, and there was no realistic path to a real
+> buffalo-trained model. Rather than keep carrying a species permanently stuck at
+> "approximation," it was dropped. This spec is kept as-is (not rewritten) per this repo's
+> convention of not editing history — see `docs/specs/M12-sheep-disease-detection.md`'s
+> "Follow-up" section for what replaced this pattern for Sheep (a real, narrowly-scoped
+> trained model) and the removal details. The species architecture itself (the `Animal`
+> rename, the `species` field, the whole M11→M14 pattern) is unaffected — only the one
+> species value is gone.
 
 ## Actor + goal
 

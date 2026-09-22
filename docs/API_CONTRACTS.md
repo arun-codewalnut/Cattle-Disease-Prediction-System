@@ -111,35 +111,40 @@ standing position that this is a local/learning project with no external consume
 see the note near the bottom of this file for the full behavior).
 
 Request: `{"tagNumber": "COW-001", "farmId": 42, "species": "COW"}` — `species` is
-`"COW"`, `"BUFFALO"`, `"SHEEP"`, `"CAT"`, or `"DOG"` (M11/M12/M13/M14 — Dog is the last of the
-five species from the original request, see `docs/ROADMAP.md`), required.
+`"COW"`, `"SHEEP"`, `"CAT"`, or `"DOG"` — `"BUFFALO"` (M11) was **removed** (no usable
+buffalo dataset was ever found; see
+[docs/specs/M11-buffalo-disease-detection.md](specs/M11-buffalo-disease-detection.md)'s
+superseded note), required.
 Response (`201`): `{"id": 1, "tagNumber": "COW-001", "farmId": 42, "species": "COW", "createdAt": "..."}`
 — the same shape (and same `id`) whether this call created a new animal or found and reused
 an existing one with a matching `tagNumber`/`farmId`/`species`.
 
 `POST /api/animals/{animalId}/diagnoses` — submit symptoms for an animal, calls
-`ml-service`, persists the result. **`species` is not forwarded to `ml-service`** — no
-per-species model exists yet (M11/M12 scope), so every species is diagnosed with the same
-cattle-trained model; the frontend discloses this for non-`COW` species. For `SHEEP`
-specifically, this is a bigger gap than for `BUFFALO` — real sheep-specific diseases (foot
-rot, sheep pox) aren't represented by the model at all, not just "untrained on this
-species" — see
-[docs/specs/M12-sheep-disease-detection.md](specs/M12-sheep-disease-detection.md).
+`ml-service`, persists the result. **`species` IS forwarded to `ml-service`** (as of the M12
+follow-up — it wasn't originally). `SHEEP` routes to its own real, trained binary PPR (Peste
+des Petits Ruminants) screen; every other symptom-diagnosable species (`COW`) still uses the
+cattle-trained model, unchanged. Sheep's real symptom-diagnosable diseases beyond PPR (foot
+rot, sheep pox) still aren't represented by anything — that part of the original M12 gap is
+unchanged, PPR is just no longer part of it. See
+[docs/specs/M12-sheep-disease-detection.md](specs/M12-sheep-disease-detection.md)'s
+"Follow-up" section.
 
 **`CAT` and `DOG` are different: SYMPTOM diagnosis is rejected outright** (`400
-DIAGNOSIS_NOT_SUPPORTED_FOR_SPECIES`), not routed through the cattle model at all — a
-companion animal doesn't share the livestock disease family the way Buffalo/Sheep do, so
-reusing that model would produce an actively wrong result (e.g. "Foot and Mouth Disease" for
-a cat or dog), not just an imprecise one. See
+DIAGNOSIS_NOT_SUPPORTED_FOR_SPECIES`), not routed through any symptom model at all — a
+companion animal doesn't share the livestock disease family the cattle model was trained on,
+so reusing it would produce an actively wrong result (e.g. "Foot and Mouth Disease" for a cat
+or dog), not just an imprecise one. See
 [docs/specs/M13-cat-disease-detection.md](specs/M13-cat-disease-detection.md),
 [docs/specs/M14-dog-disease-detection.md](specs/M14-dog-disease-detection.md), and
 [docs/DISCLAIMER.md](DISCLAIMER.md)'s companion-animal section.
 
-**IMAGE diagnosis is different again, as of a M13/M14 follow-up**: Cat and Dog each have
-their own real, trained image model now (not the cattle model) — `POST
-/api/animals/{animalId}/diagnoses/image` **does** work for them, and **does** forward
-`species` to `ml-service` (unlike the symptom endpoint, which never forwards species for any
-species). Cat's model is solid (83.0% accuracy). **Dog's model is real but meaningfully
+**IMAGE diagnosis has its own, separate species routing (M13/M14 follow-up)**: Cat and Dog
+each have their own real, trained image model (not the cattle model) — `POST
+/api/animals/{animalId}/diagnoses/image` **does** work for them, forwarding `species` to
+`ml-service` the same way the symptom endpoint now does too. `SHEEP` has **no** image-side
+routing of its own — photo-based diagnosis still falls back to the cattle image model as a
+disclosed approximation (no sheep-specific image dataset exists). Cat's model is solid
+(83.0% accuracy). **Dog's model is real but meaningfully
 weak** (52.6% accuracy; only 0.25 F1 for Canine Distemper specifically) and has **no Healthy
 class at all** — it always names one of its 4 diseases, even for a healthy dog. Both caveats
 are surfaced prominently in the frontend before upload, not just here. See each spec's
@@ -167,8 +172,8 @@ but not persisted — `diagnosis_case` has no columns for them (see `docs/DECISI
 follow-ups; **1-5 photos as of the multi-photo follow-up**) — multipart/form-data, 1-5 parts
 all named `images` (JPEG or PNG, ≤ 5MB each). Each photo is base64-encoded and diagnosed
 independently via its own call to `ml-service` (`image_base64` **and `species`**, `symptoms:
-{}`) — `species` picks which trained model `ml-service` uses (Cat/Dog get their own; Cow/
-Buffalo/Sheep share the cattle model, unchanged). **The image itself is never persisted to
+{}`) — `species` picks which trained model `ml-service` uses (Cat/Dog get their own; Cow and
+Sheep share the cattle model, unchanged). **The image itself is never persisted to
 disk** — see [docs/specs/M8-image-diagnosis-phase1.md](specs/M8-image-diagnosis-phase1.md)
 for why.
 
@@ -188,6 +193,18 @@ Each entry in `results` has the exact same shape as the symptom endpoint's respo
 photos' own model outputs against each other — it does **not** verify the photos are actually
 of the selected species, since no such model exists. A frontend showing this response should
 warn the user when `diagnosesAgree` is `false` rather than picking one result to display.
+
+**`diagnosis: "invalid_image"` (M15 follow-up)**: a photo that isn't of an animal at all
+(car, furniture, ...) — `ml-service` runs every photo through a free, pretrained "is this an
+animal" gate before any species-specific disease model; a photo that fails that gate never
+reaches the disease model, and comes back with `"diagnosis": "invalid_image"`,
+`"confidence": 0.0`, `"recommendedAction": "retry_upload"` (a new value, distinct from
+`escalate_to_vet`/`consult_vet`/`monitor` — none of those imply a real diagnosis happened).
+`"uncertain"` still means something different: a real animal photo the disease classifier
+just wasn't confident about. `invalid_image` results are **excluded** from the
+`diagnosesAgree` comparison — they're not a competing diagnosis to agree or disagree with; 4
+matching real diagnoses plus 1 invalid photo in a batch still reads as `diagnosesAgree: true`.
+See [docs/specs/M15-image-diagnosis-quality-gate.md](specs/M15-image-diagnosis-quality-gate.md).
 
 **New error codes** (backend, via `ApiException`): `ANIMAL_NOT_FOUND` (`404`),
 `ANIMAL_TAG_DUPLICATE` (`409` — also returned by `POST /api/animals` itself when an existing

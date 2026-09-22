@@ -3,7 +3,7 @@
 Living snapshot of project state. Update this whenever you finish a meaningful chunk of work —
 this is what an agent (or you) reads first when resuming.
 
-_Last updated: 2026-09-20 (session 11)_
+_Last updated: 2026-09-22 (session 12)_
 
 ## Known gaps
 
@@ -406,11 +406,67 @@ _Last updated: 2026-09-20 (session 11)_
   30/30 (3 new tests: reuse-on-match, reject-on-farm-mismatch, reject-on-species-mismatch).
   Live-verified: two diagnoses submitted for the same tag both landed on the same `animalId`,
   and a farm/species mismatch on a reused tag still cleanly rejects.
+- **Buffalo removed; Sheep gets a real, trained PPR model** (2026-09-22, direct user request
+  after asking "which species are trained well" and being told no usable buffalo/sheep
+  dataset had ever been found): `BUFFALO` dropped from `Species` (backend enum) and
+  `SPECIES_OPTIONS` (frontend) — two dataset searches months apart both found nothing, so
+  rather than leave it a permanent "approximation," it's gone (`docs/specs/
+  M11-buffalo-disease-detection.md` marked superseded, not deleted). New Flyway migration
+  (`V3__remove_buffalo_species.sql`) cleans up any existing `species = 'BUFFALO'` rows.
+  Sheep, meanwhile, got a real dataset this time —
+  [PPR disease data from goats and sheep](https://www.kaggle.com/datasets/devothanyambo/ppr-disease-data-from-goats-and-sheep)
+  (real field-collected, RT-qPCR-confirmed clinical data) — and now has its own trained
+  binary PPR (Peste des Petits Ruminants) screen (`app/models/sheep_symptom_model.py`,
+  80.5% CV accuracy, 78.8% macro F1), replacing the cattle-model approximation on the
+  *symptom* path only (image diagnosis for Sheep is unchanged — still the cattle model, no
+  sheep-specific image dataset exists). Real caveat, disclosed: the dataset's `animal`
+  column is an undocumented 0/1 encoding with no way to verify which value means sheep vs.
+  goat, so the model trains on the combined goat+sheep file rather than a guessed-at subset
+  — full detail in `ml-service/data/sheep-symptoms/SOURCE.md`. `species` is now forwarded to
+  `ml-service` on the symptom path too (previously only the image path was species-aware).
+  `PPR (Peste des Petits Ruminants)` added to `REPORTABLE_DISEASES` (WOAH/OIE-notifiable,
+  escalates same as FMD/LSD). Frontend: Sheep now renders its own symptom checklist
+  (`symptomFields.js`'s `SHEEP_SYMPTOM_FIELDS` — 6 fields, a completely different vocabulary
+  from cattle's) instead of the cattle checklist, with rewritten disclosure copy describing
+  the model's real, narrow scope. Spec: `docs/specs/M12-sheep-disease-detection.md`'s
+  "Follow-up" section. **Validated**: backend 29/29 (Flyway migration applies cleanly
+  against real Postgres), ml-service 50/2 (skipped, RAG — same documented local blocker as
+  always; 2 new routing tests + 5 new sheep-model tests), frontend lint + 13/13 + build all
+  green, **plus live end-to-end verification**: ran the real backend + ml-service, created a
+  real Sheep animal, submitted real PPR-positive symptoms through the actual browser form,
+  got back a correctly-escalated PPR diagnosis; confirmed Buffalo is now rejected
+  (`INVALID_REQUEST_BODY`, 400) and Cow's path is unaffected (regression-checked).
+- **Image-mismatch/invalid-photo detection, all 4 image-diagnosable species** (2026-09-22,
+  M15, same session): a photo that isn't of an animal at all (car, table, ...) now gets a
+  distinct, honest `diagnosis: "invalid_image"` / `recommendedAction: "retry_upload"` instead
+  of running through a disease classifier that was never trained to say "I don't recognize
+  this." New `app/models/species_gate.py` — a free, pretrained (zero fine-tuning)
+  torchvision ImageNet-1k classifier, gating on whether any of the top-5 predictions falls in
+  the (verified, not assumed) animal-class index range 0–397. Tested against real data before
+  wiring in: this repo's own cattle/cat/dog training photos all pass (3/3), two real
+  Wikimedia photos (a table, a car) are both cleanly rejected — but **synthetic test images
+  (solid color, noise, checkerboard) all incorrectly pass** (documented, not hidden — ~40% of
+  ImageNet-1k classes are animals, so a degenerate image's top-5 has a high chance of
+  including one by pure chance; fine for the real "accidental mismatched upload" problem,
+  not an adversarial boundary). Deliberately does **not** verify the photo matches the
+  *selected* species (confirmed scope with the user first) — that's separate, bigger,
+  previously-deferred work. Also fixed a real pre-existing bug found while building this: the
+  `"uncertain"` diagnosis explanation always said "not enough *symptom* information," even
+  for an image submission with no symptoms involved at all. Frontend renders `invalid_image`
+  with its own dedicated card style (no confidence %, no vet-triage badge — neither concept
+  applies). Multi-photo batches exclude `invalid_image` from the `diagnosesAgree` comparison
+  (backend). Spec: `docs/specs/M15-image-diagnosis-quality-gate.md`. **Validated**: backend
+  33/33, ml-service 63/2 (skipped, RAG — same documented blocker as always; 8 new tests: 5
+  for the gate directly, 3 for graph.py routing across all 4 species), frontend lint + 14/14
+  all green, **plus live end-to-end verification against the real running stack**: a real
+  car photo submitted through the actual backend + ml-service came back `invalid_image` /
+  `retry_upload` exactly as designed; a real cat photo submitted right after came back a
+  correct `Ringworm` diagnosis (regression-checked, same request path).
 
 ## In Progress
 
-- Multi-photo upload + species preview + visual redesign, plus the animal find-or-create fix
-  — all committed on `feat/multi-photo-diagnosis-ui`, not yet pushed/PR'd.
+Nothing currently in progress — all of the above (Buffalo removal, Sheep model, M15 image
+quality gate) is complete but not yet committed/pushed (working tree only as of this update).
 
 ## Not Started
 
