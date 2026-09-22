@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 
 export const MAX_IMAGES = 5
 
@@ -6,6 +6,27 @@ export default function ImageUploadForm({ images, onImagesChange, onSubmit, disa
   // Set when a selection was larger than the remaining room. The alternative — silently
   // keeping the first few — loses photos the user thought they'd attached.
   const [skippedNotice, setSkippedNotice] = useState(null)
+
+  // Real thumbnails, not filenames. This app diagnoses *from* the photo, so "is this the
+  // lesion shot or the blurry one of the ground?" is a question the UI has to answer before
+  // submission — a wrong photo produces a confidently wrong diagnosis.
+  //
+  // Derived during render rather than set from an effect: an effect would trigger a second
+  // render on every pick and the thumbnail would appear a frame late.
+  //
+  // jsdom (and any environment without the Blob URL API) has no createObjectURL — fall back
+  // to the icon treatment rather than throwing.
+  const previews = useMemo(() => {
+    const supported = typeof URL !== 'undefined' && typeof URL.createObjectURL === 'function'
+    return images.map((file) => (supported ? URL.createObjectURL(file) : null))
+  }, [images])
+
+  // Revoking is not optional: without it every re-pick leaks a blob for the page's lifetime,
+  // and these are full-size camera photos. Cleanup runs both when the selection changes
+  // (releasing the previous batch) and on unmount.
+  useEffect(() => {
+    return () => previews.forEach((url) => url && URL.revokeObjectURL(url))
+  }, [previews])
 
   function handleSubmit(event) {
     event.preventDefault()
@@ -76,9 +97,15 @@ export default function ImageUploadForm({ images, onImagesChange, onSubmit, disa
           <div className="photo-tray">
             {images.map((file, index) => (
               <div key={`${file.name}-${index}`} className="photo-tray__slot photo-tray__slot--filled">
-                <span className="photo-tray__icon" aria-hidden="true">
-                  📷
-                </span>
+                {previews[index] ? (
+                  // Decorative: the remove button beside it already names the file, so an
+                  // alt here would just repeat it.
+                  <img className="photo-tray__thumb" src={previews[index]} alt="" />
+                ) : (
+                  <span className="photo-tray__icon" aria-hidden="true">
+                    📷
+                  </span>
+                )}
                 <span className="photo-tray__filename">{file.name}</span>
                 <button
                   type="button"

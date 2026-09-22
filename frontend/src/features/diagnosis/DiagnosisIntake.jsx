@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { submitSymptoms, submitImage } from '../../api/diagnosisApi'
 import { ApiError } from '../../api/client'
 import SpeciesField from './SpeciesField'
@@ -15,6 +15,42 @@ export default function DiagnosisIntake() {
   const [status, setStatus] = useState('idle') // idle | submitting | success | error
   const [result, setResult] = useState(null)
   const [error, setError] = useState(null)
+  // Short summary spoken by the persistent live region below. A live region has to exist in
+  // the DOM *before* its content changes, so it's always rendered and only its text changes
+  // — mounting an aria-live node together with its content is the classic way to get silence.
+  const [announcement, setAnnouncement] = useState('')
+  const resultRef = useRef(null)
+
+  // Sighted users on a phone had the same problem from the other direction: the result lands
+  // below the fold, so submitting looked like nothing happened. Moving focus fixes the
+  // screen-reader case and the scroll case at once.
+  useEffect(() => {
+    if (status !== 'success' || !resultRef.current) return
+    resultRef.current.focus()
+    resultRef.current.scrollIntoView?.({ behavior: 'smooth', block: 'start' })
+  }, [status, result])
+
+  function summarize(diagnosis) {
+    if (Array.isArray(diagnosis?.results)) {
+      const count = diagnosis.results.length
+      return `${count} photo ${count === 1 ? 'result' : 'results'} ready.${
+        diagnosis.diagnosesAgree ? '' : ' The photos did not all get the same diagnosis.'
+      }`
+    }
+    if (diagnosis?.diagnosis === 'invalid_image') return 'That photo was not recognized as an animal.'
+    return `Result ready. Likely ${diagnosis?.diagnosis}, ${Math.round((diagnosis?.confidence ?? 0) * 100)}% confidence.`
+  }
+
+  // Species deliberately survives a reset: the next animal is usually the same kind, on the
+  // same farm, in the same session.
+  function handleReset() {
+    setSymptoms(emptySymptoms(species))
+    setImages([])
+    setResult(null)
+    setError(null)
+    setStatus('idle')
+    setAnnouncement('Form cleared. Ready for a new check.')
+  }
 
   function handleSymptomChange(key, checked) {
     setSymptoms((prev) => ({ ...prev, [key]: checked }))
@@ -39,10 +75,12 @@ export default function DiagnosisIntake() {
       const diagnosis = await submitSymptoms(species, symptoms, correlationId)
       setResult(diagnosis)
       setStatus('success')
+      setAnnouncement(summarize(diagnosis))
     } catch (err) {
       const apiError = err instanceof ApiError ? err : new ApiError('UNKNOWN_ERROR', 'Something went wrong.', null)
       setError(apiError)
       setStatus('error')
+      setAnnouncement('')
     }
   }
 
@@ -61,10 +99,12 @@ export default function DiagnosisIntake() {
       const diagnosis = await submitImage(species, images, correlationId)
       setResult(diagnosis)
       setStatus('success')
+      setAnnouncement(summarize(diagnosis))
     } catch (err) {
       const apiError = err instanceof ApiError ? err : new ApiError('UNKNOWN_ERROR', 'Something went wrong.', null)
       setError(apiError)
       setStatus('error')
+      setAnnouncement('')
     }
   }
 
@@ -128,8 +168,20 @@ export default function DiagnosisIntake() {
           </p>
         )}
 
-        {status === 'success' && result && <DiagnosisResult result={result} />}
+        {status === 'success' && result && (
+          <div className="diagnosis-outcome" ref={resultRef} tabIndex={-1}>
+            <DiagnosisResult result={result} />
+            <button type="button" className="reset-button" onClick={handleReset}>
+              <span aria-hidden="true">↺</span> Start a new check
+            </button>
+          </div>
+        )}
       </main>
+
+      {/* Always mounted, empty until there's something to say. */}
+      <div className="sr-only" role="status" aria-live="polite">
+        {announcement}
+      </div>
     </div>
   )
 }

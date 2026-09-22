@@ -294,8 +294,8 @@ button[type='submit']:disabled {
 
 .photo-tray {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(72px, 1fr));
-  gap: 8px;
+  grid-template-columns: repeat(auto-fill, minmax(92px, 1fr));
+  gap: 10px;
   margin-top: 10px;
 }
 
@@ -325,8 +325,16 @@ button[type='submit']:disabled {
 .photo-tray__slot--filled {
   border: 2px solid var(--accent);
   background: var(--card-bg);
-  padding: 4px;
-  gap: 2px;
+  padding: 0;
+  justify-content: flex-end;
+}
+
+.photo-tray__thumb {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
 .photo-tray__icon {
@@ -334,30 +342,48 @@ button[type='submit']:disabled {
 }
 
 .photo-tray__filename {
+  position: relative;
   font-size: 0.62em;
   text-align: center;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   width: 100%;
-  padding: 0 2px;
-  opacity: 0.8;
+  box-sizing: border-box;
+  padding: 3px 4px;
+  color: #fff;
+  background: rgba(0, 0, 0, 0.55);
 }
 
 .photo-tray__remove {
   position: absolute;
-  top: 2px;
-  right: 2px;
-  width: 18px;
-  height: 18px;
+  top: 4px;
+  right: 4px;
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   line-height: 1;
   border: none;
   border-radius: 50%;
   background: var(--urgency-escalate);
   color: #fff;
   cursor: pointer;
-  font-size: 13px;
+  font-size: 18px;
   padding: 0;
+}
+
+/* Visible circle stays 28px so it doesn't cover the thumbnail, but the touch target is the
+   full 44px the guideline asks for. */
+.photo-tray__remove::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 44px;
+  height: 44px;
+  transform: translate(-50%, -50%);
 }
 
 .image-upload-form__count {
@@ -665,4 +691,81 @@ section[data-urgent='true'] [role='alert'] {
   .live-bg__mote {
     display: none;
   }
+}
+
+/* ---------------------------------------------------------------------------
+   Confidence meter, single disclaimer, reset action, live region
+   --------------------------------------------------------------------------- */
+
+/* Reinforces the percentage that's already in the heading (required wording — see
+   docs/DISCLAIMER.md); never replaces it. 91% and 53% used to look identical at a glance. */
+.confidence {
+  margin: 0 0 12px;
+}
+
+.confidence__track {
+  height: 6px;
+  border-radius: 3px;
+  background: var(--accent-bg);
+  overflow: hidden;
+}
+
+.confidence__fill {
+  height: 100%;
+  border-radius: 3px;
+}
+
+.confidence__fill--high {
+  background: var(--urgency-monitor);
+}
+
+.confidence__fill--moderate {
+  background: var(--urgency-consult);
+}
+
+.confidence__fill--low {
+  background: var(--urgency-escalate);
+}
+
+.confidence__caveat {
+  margin: 6px 0 0;
+  font-size: 0.85em;
+  color: var(--urgency-escalate);
+}
+
+.reset-button {
+  margin-top: 16px;
+  background: transparent;
+  color: var(--text-h);
+  border: 1.5px solid var(--border);
+  box-shadow: none;
+}
+
+.reset-button:hover:not(:disabled) {
+  border-color: var(--accent);
+  box-shadow: none;
+}
+
+/* The result container takes focus on success, so it needs a visible ring when it does —
+   but only from focus moved programmatically, never a stray click. */
+.diagnosis-outcome:focus {
+  outline: none;
+}
+
+.diagnosis-outcome:focus-visible {
+  outline: 3px solid var(--accent-border);
+  outline-offset: 4px;
+  border-radius: 16px;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }

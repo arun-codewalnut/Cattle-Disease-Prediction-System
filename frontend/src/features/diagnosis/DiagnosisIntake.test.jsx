@@ -245,7 +245,7 @@ describe('DiagnosisIntake', () => {
 
     expect(screen.getByText(/5 of 5 selected/i)).toBeInTheDocument()
     // Silently swallowing the extras would leave the user thinking 7 were attached.
-    expect(await screen.findByRole('status')).toHaveTextContent(/2 photos not added/i)
+    expect(await screen.findByText(/2 photos not added/i)).toBeInTheDocument()
     expect(screen.getByText(/maximum 5 photos selected/i)).toBeInTheDocument()
     expect(screen.getByLabelText(/add photos/i)).toBeDisabled()
   })
@@ -263,6 +263,123 @@ describe('DiagnosisIntake', () => {
 
     expect(screen.getByText(/1 of 5 selected/i)).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /remove a\.jpg/i })).not.toBeInTheDocument()
+  })
+
+  // A live region has to exist before its content changes, or screen readers stay silent.
+  // Focus moving to the result is what makes it discoverable for everyone else — on a phone
+  // the result otherwise lands below the fold and submitting looks like nothing happened.
+  it('announces the result and moves focus to it', async () => {
+    const user = userEvent.setup()
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse(true, {
+        id: 7, species: 'COW', diagnosis: 'Foot and Mouth Disease', confidence: 0.81,
+        explanation: 'Predicted FMD.', recommendedAction: 'escalate_to_vet',
+        precautions: [], nextSteps: [], createdAt: '2026-01-01T00:00:00Z',
+      })
+    )
+
+    render(<DiagnosisIntake />)
+
+    // Present and empty before anything is submitted — that is the whole point.
+    const live = document.querySelector('[aria-live="polite"]')
+    expect(live).toBeInTheDocument()
+    expect(live).toHaveTextContent('')
+
+    await fillAndSubmit(user)
+    await screen.findByText(/likely: foot and mouth disease/i)
+
+    expect(live).toHaveTextContent(/likely foot and mouth disease, 81% confidence/i)
+    expect(document.querySelector('.diagnosis-outcome')).toHaveFocus()
+  })
+
+  it('shows the disclaimer once for a multi-photo result, not once per card', async () => {
+    const user = userEvent.setup()
+    const card = (id, diagnosis) => ({
+      id, species: 'CAT', diagnosis, confidence: 0.9, explanation: 'x',
+      recommendedAction: 'consult_vet', precautions: [], nextSteps: [],
+      createdAt: '2026-01-01T00:00:00Z',
+    })
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse(true, { results: [card(1, 'Ringworm'), card(2, 'Ringworm'), card(3, 'Ringworm')], diagnosesAgree: true })
+    )
+
+    render(<DiagnosisIntake />)
+    await user.selectOptions(screen.getByLabelText(/species/i), 'CAT')
+    await user.upload(screen.getByLabelText(/add photos/i), [
+      new File(['a'], 'a.jpg', { type: 'image/jpeg' }),
+      new File(['b'], 'b.jpg', { type: 'image/jpeg' }),
+      new File(['c'], 'c.jpg', { type: 'image/jpeg' }),
+    ])
+    await user.click(screen.getByRole('button', { name: /diagnose from photos/i }))
+
+    await screen.findAllByText(/likely: ringworm/i)
+    expect(screen.getAllByText(/probabilistic estimate, not a confirmed diagnosis/i)).toHaveLength(1)
+  })
+
+  // docs/DISCLAIMER.md requires "likely X, confidence Y%" wording — the meter reinforces the
+  // number, it must never replace it. The Dog model sits near this band in reality.
+  it('flags a low-confidence result while keeping the required wording', async () => {
+    const user = userEvent.setup()
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse(true, {
+        results: [{
+          id: 1, species: 'DOG', diagnosis: 'Mange', confidence: 0.53, explanation: 'x',
+          recommendedAction: 'consult_vet', precautions: [], nextSteps: [],
+          createdAt: '2026-01-01T00:00:00Z',
+        }],
+        diagnosesAgree: true,
+      })
+    )
+
+    render(<DiagnosisIntake />)
+    await user.selectOptions(screen.getByLabelText(/species/i), 'DOG')
+    await user.upload(screen.getByLabelText(/add photos/i), new File(['a'], 'a.jpg', { type: 'image/jpeg' }))
+    await user.click(screen.getByRole('button', { name: /diagnose from photo/i }))
+
+    expect(await screen.findByText(/likely: mange \(53% confidence\)/i)).toBeInTheDocument()
+    expect(screen.getByText(/low confidence/i)).toBeInTheDocument()
+  })
+
+  it('clears the form for the next animal but keeps the species', async () => {
+    const user = userEvent.setup()
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse(true, {
+        id: 1, species: 'COW', diagnosis: 'Healthy', confidence: 0.95, explanation: 'x',
+        recommendedAction: 'monitor', precautions: [], nextSteps: [],
+        createdAt: '2026-01-01T00:00:00Z',
+      })
+    )
+
+    render(<DiagnosisIntake />)
+    await fillAndSubmit(user)
+    await screen.findByText(/likely: healthy/i)
+    expect(screen.getByLabelText(/fever/i)).toBeChecked()
+
+    await user.click(screen.getByRole('button', { name: /start a new check/i }))
+
+    expect(screen.queryByText(/likely: healthy/i)).not.toBeInTheDocument()
+    expect(screen.getByLabelText(/fever/i)).not.toBeChecked()
+    // Same farm, same kind of animal — re-picking the species every time is busywork.
+    expect(screen.getByLabelText(/species/i)).toHaveValue('COW')
+  })
+
+  it('renders real thumbnails and releases them when a photo is removed', async () => {
+    const user = userEvent.setup()
+    // jsdom has no Blob URL API, so the component falls back to an icon unless it's stubbed.
+    const createObjectURL = vi.fn(() => 'blob:preview-1')
+    const revokeObjectURL = vi.fn()
+    vi.stubGlobal('URL', { ...URL, createObjectURL, revokeObjectURL })
+
+    render(<DiagnosisIntake />)
+    await user.upload(screen.getByLabelText(/add photos/i), new File(['a'], 'lesion.jpg', { type: 'image/jpeg' }))
+
+    const thumb = document.querySelector('.photo-tray__thumb')
+    expect(thumb).toHaveAttribute('src', 'blob:preview-1')
+    expect(createObjectURL).toHaveBeenCalledTimes(1)
+
+    // Leaking a full-size camera photo per re-pick is the failure mode this guards.
+    await user.click(screen.getByRole('button', { name: /remove lesion\.jpg/i }))
+    expect(revokeObjectURL).toHaveBeenCalledWith('blob:preview-1')
   })
 
   it('disables the photo submit button until a file is chosen', () => {
