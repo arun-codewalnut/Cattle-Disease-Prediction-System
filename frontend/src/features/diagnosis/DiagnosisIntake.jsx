@@ -5,14 +5,14 @@ import AnimalIdentityFields from './AnimalIdentityFields'
 import SymptomForm from './SymptomForm'
 import ImageUploadForm from './ImageUploadForm'
 import DiagnosisResult from './DiagnosisResult'
-import { emptySymptoms } from './symptomFields'
+import { emptySymptoms, getSymptomFields } from './symptomFields'
 import { DIAGNOSIS_SUPPORTED_SPECIES, IMAGE_ONLY_SUPPORTED_SPECIES, SPECIES_OPTIONS } from './species'
 
 export default function DiagnosisIntake() {
   const [tagNumber, setTagNumber] = useState('')
   const [farmId, setFarmId] = useState('')
   const [species, setSpecies] = useState('COW')
-  const [symptoms, setSymptoms] = useState(emptySymptoms())
+  const [symptoms, setSymptoms] = useState(emptySymptoms('COW'))
   const [images, setImages] = useState([])
   const [status, setStatus] = useState('idle') // idle | submitting | success | error
   const [result, setResult] = useState(null)
@@ -20,6 +20,14 @@ export default function DiagnosisIntake() {
 
   function handleSymptomChange(key, checked) {
     setSymptoms((prev) => ({ ...prev, [key]: checked }))
+  }
+
+  // Sheep's symptom vocabulary is completely different from cattle's (see
+  // symptomFields.js) — switching species must reset to that species' own empty shape, not
+  // carry over stale keys the new species' model wouldn't recognize.
+  function handleSpeciesChange(nextSpecies) {
+    setSpecies(nextSpecies)
+    setSymptoms(emptySymptoms(nextSpecies))
   }
 
   // AnimalIdentityFields lives outside both <form> elements below (it's shared by both), so
@@ -92,11 +100,8 @@ export default function DiagnosisIntake() {
   return (
     <div className="app-shell">
       <header className="app-header">
-        <span className="app-logo" aria-hidden="true">🐄</span>
-        <div>
-          <h1>Livestock symptom checker</h1>
-          <p className="app-tagline">🌾 Quick symptom check for your herd, right from the field.</p>
-        </div>
+        <h1>Livestock symptom checker</h1>
+        <p className="app-tagline">Quick symptom check for your herd, right from the field.</p>
       </header>
 
       <main className="diagnosis-card">
@@ -106,13 +111,14 @@ export default function DiagnosisIntake() {
           species={species}
           onTagNumberChange={setTagNumber}
           onFarmIdChange={setFarmId}
-          onSpeciesChange={setSpecies}
+          onSpeciesChange={handleSpeciesChange}
           disabled={disabled}
         />
 
         {diagnosisSupported && (
           <>
             <SymptomForm
+              fields={getSymptomFields(species)}
               symptoms={symptoms}
               onSymptomChange={handleSymptomChange}
               onSubmit={handleSubmit}

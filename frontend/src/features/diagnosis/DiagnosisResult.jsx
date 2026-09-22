@@ -10,7 +10,30 @@ const ACTION_ICONS = {
   monitor: '👀',
 }
 
+// M15 (docs/specs/M15-image-diagnosis-quality-gate.md): a photo that isn't of an animal at
+// all never reached a disease model — rendering it through the normal card (a confidence
+// percentage, a vet-triage badge) would be actively misleading, since neither concept
+// applies to "this wasn't a valid photo." Deliberately its own simple treatment instead,
+// matching AnimalIdentityFields' `.species-unavailable` visual language.
+function InvalidImageCard({ result }) {
+  return (
+    <section className="diagnosis-result diagnosis-result--invalid-image">
+      <span className="diagnosis-result__icon" aria-hidden="true">
+        🚫
+      </span>
+      <div>
+        <h2>Not a valid photo</h2>
+        <p>{result.explanation}</p>
+      </div>
+    </section>
+  )
+}
+
 function DiagnosisResultCard({ result }) {
+  if (result.diagnosis === 'invalid_image') {
+    return <InvalidImageCard result={result} />
+  }
+
   const confidencePercent = Math.round(result.confidence * 100)
   const isUrgent = result.recommendedAction === 'escalate_to_vet'
   const urgencyIcon = ACTION_ICONS[result.recommendedAction] ?? 'ℹ️'

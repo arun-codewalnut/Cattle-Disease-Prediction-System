@@ -1,6 +1,4 @@
-import { SYMPTOM_FIELDS } from './symptomFields'
-
-export default function SymptomForm({ symptoms, onSymptomChange, onSubmit, disabled }) {
+export default function SymptomForm({ fields, symptoms, onSymptomChange, onSubmit, disabled }) {
   function handleSubmit(event) {
     event.preventDefault()
     onSubmit()
@@ -11,7 +9,7 @@ export default function SymptomForm({ symptoms, onSymptomChange, onSubmit, disab
       <fieldset disabled={disabled}>
         <legend>🩺 Symptoms</legend>
         <div className="symptom-grid">
-          {SYMPTOM_FIELDS.map((field) => (
+          {fields.map((field) => (
             <label key={field.key} htmlFor={field.key} className="symptom-chip">
               <input
                 id={field.key}
