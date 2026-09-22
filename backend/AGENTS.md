@@ -6,6 +6,10 @@
   wrapper tries to download its own Maven distribution and may fail without direct internet
   access to `repo.maven.apache.org`; prefer `mvn` directly in this environment.
 - **Run**: `mvn spring-boot:run`. **Build/verify**: `mvn -q compile` or `mvn -q verify`.
+  **All Maven commands here run from `backend/`, not the repo root** — there's no root
+  `pom.xml`, so running them one level up fails with `No plugin found for prefix
+  'spring-boot'` (or `there is no POM in this directory`), which reads like a broken setup
+  but just means the wrong working directory.
 - **Tests**: JUnit under `src/test/java`, mirroring the package under test. `mvn -q test`
   runs them (`mvn -q verify` runs tests as part of the build). **Needs a real Postgres
   running on `localhost:5432`** (matching `.env.example`'s defaults) — `BackendApplicationTests`

@@ -1,7 +1,17 @@
 # Spec: Backend domain model, persistence, and case history
 
 **Milestone**: M3
-**Status**: done
+**Status**: partly superseded — animal identity removed (2026-09-22)
+
+> **Partly superseded.** The animal record this spec introduced (tag number, farm ID, and the
+> `POST /api/animals` registration step) was removed — none of it ever reached `ml-service`,
+> which has always taken only symptoms/image/species. Diagnosis is now a single
+> `POST /api/diagnoses` call carrying `species`, and `diagnosis_case` holds its own `species`
+> column instead of an `animal_id`. What this spec established and what still stands: the
+> persisted case, the correlation ID stored on it, the structured `ApiError` contract, and
+> the rule that a failed `ml-service` call never persists a case. This spec is kept as-is
+> (not rewritten) per this repo's convention of not editing history — see
+> [remove-animal-identity.md](remove-animal-identity.md) for what replaced it.
 
 ## Actor + goal
 

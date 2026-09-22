@@ -34,7 +34,7 @@ There are two ways to run this (Option A / Option B below) and they need differe
 | [Docker Desktop](https://www.docker.com/products/docker-desktop/) | **Option A (all services)**; Postgres in either option; `ml-service`'s RAG feature and RAG tests | the only way to get RAG-grounded explanations — see the native-install note below |
 | [GNU Make](https://www.gnu.org/software/make/) (optional) | the `make` shortcuts | not installed on Windows by default — every target is a one-line `docker compose …` you can run directly instead, see [Makefile](Makefile) |
 | [Node.js](https://nodejs.org/) 20.19+ or 22.12+ | Option B `frontend` | Vite 8 rejects 20.0–20.18, 21.x and 22.0–22.11; the frontend **tests** (Vitest 5) need 22.12+. CI and `frontend/Dockerfile` both use Node 24 |
-| [Java 21](https://adoptium.net/) | Option B `backend` | a system [Maven](https://maven.apache.org/) is optional — `backend/mvnw` (`mvnw.cmd` on Windows) works without one |
+| [Java 21](https://adoptium.net/) + [Maven](https://maven.apache.org/) | Option B `backend` | every Maven command runs **from `backend/`** — there's no root `pom.xml`. `backend/mvnw` (`mvnw.cmd` on Windows) is a fallback if you have no system Maven, but it downloads its own Maven distribution and can fail behind a restricted network — see [backend/AGENTS.md](backend/AGENTS.md) |
 | [Python 3.13](https://www.python.org/) | Option B `ml-service` | Windows: use the `py` launcher. Read the native-install note below before `pip install` |
 | [Ollama](https://ollama.com/download) (optional, either option) | real LLM-generated explanations | without it, explanations use a deterministic template — the app works fully either way, see `docs/DECISIONS.md` |
 
@@ -166,7 +166,7 @@ Then run each service in its own terminal:
 
 ```bash
 cd ml-service && .venv\Scripts\activate && uvicorn app.main:app --reload   # :8000
-cd backend && ./mvnw spring-boot:run                                       # :8080  (mvnw.cmd on Windows)
+cd backend && mvn spring-boot:run                                          # :8080  (must be run from backend/)
 cd frontend && npm run dev                                                 # :5173
 ```
 
@@ -182,8 +182,10 @@ Docker): [agents/playbooks/run-stack.md](agents/playbooks/run-stack.md) and
 ## Testing the application
 
 Once all three services are up (either option above), open **http://localhost:5173**. The
-intake form: pick a species, enter an animal tag number + farm ID, then submit symptoms
-and/or up to 5 photos. What's actually supported differs by species — this isn't a bug if a
+intake form: pick a species, then submit symptoms and/or up to 5 photos. There's nothing
+else to fill in — animal tag numbers and farm IDs were removed (see
+[docs/specs/remove-animal-identity.md](docs/specs/remove-animal-identity.md)); species is the
+only field the diagnosis actually needs, because it selects which trained model runs. What's actually supported differs by species — this isn't a bug if a
 species behaves differently, it's how the underlying models were scoped. **Buffalo was
 removed as a supported species** (no usable dataset was ever found for it — see
 `docs/specs/M11-buffalo-disease-detection.md`'s superseded note):
@@ -213,8 +215,10 @@ checked reliably produces **PPR Negative**.
 
 ### Image-based diagnosis (single or multi-photo)
 
-Upload 1–5 JPEG/PNG photos in one submission (the photo tray shows thumbnails as you add
-them). Real sample photos to test with live under
+Upload 1–5 JPEG/PNG photos in one submission — one file picker takes them all at once
+(ctrl/shift-click, or drag a multi-selection), and each chosen photo is then listed with its
+own remove button. Picking more than 5 keeps the first 5 and says how many it dropped, rather
+than silently trimming the selection. Real sample photos to test with live under
 `ml-service/data/{cattle,cat,dog}-images/<class-name>/` once you've populated them (see
 "Training/retraining a model" below) — e.g. `ml-service/data/cat-images/ringworm/` for a real
 Ringworm photo.
@@ -231,44 +235,22 @@ Ringworm photo.
 - **6th photo**: rejected with `400 TOO_MANY_IMAGES` before anything is sent to `ml-service`
   (limit is enforced in `backend`, see `DiagnosisService.MAX_IMAGES`).
 
-### Repeat visits for the same animal (find-or-create)
-
-Animal records are keyed by tag number and looked up (not always recreated) on every
-diagnosis submission:
-- Same tag number + same farm ID + same species, submitted again later (e.g. a follow-up
-  visit weeks after the first) → reuses the existing animal record, new diagnosis case
-  attached to its history. No error, no duplicate record.
-- Same tag number but a **different** farm ID or species than what's on file → rejected with
-  `409 ANIMAL_TAG_DUPLICATE` ("already exists for a different farm or species"). This is
-  intentional: tag numbers are only unique within one farm+species in real life, so a
-  mismatch is treated as a data-entry error, not silently overwritten or silently created as
-  a second animal.
-
-Try it: submit a diagnosis for tag `COW-001` / farm `1` / species `Cow` twice — the second
-submission succeeds and reuses the animal. Then submit `COW-001` again with a different farm
-ID — expect the `409`.
-
 ### Testing the API directly (skipping the UI)
 
 Useful if you want to see the raw request/response shapes (full contract:
 [docs/API_CONTRACTS.md](docs/API_CONTRACTS.md)):
 
 ```bash
-# 1. Find-or-create the animal (returns "id" — reuses the record if this tag/farm/species
-#    combination already exists, see "Repeat visits" above)
-curl -X POST http://localhost:8080/api/animals \
+# Symptom-based diagnosis (Foot and Mouth Disease profile). One call — species is required
+# and has no default, since it picks which trained model runs.
+curl -X POST http://localhost:8080/api/diagnoses \
   -H "Content-Type: application/json" \
-  -d '{ "tagNumber": "COW-001", "farmId": 1, "species": "COW" }'
+  -d '{ "species": "COW", "symptoms": { "fever": true, "mouthLesions": true, "excessiveSalivation": true, "lameness": true } }'
 
-# 2. Symptom-based diagnosis against that animal id (Foot and Mouth Disease profile)
-curl -X POST http://localhost:8080/api/animals/1/diagnoses \
-  -H "Content-Type: application/json" \
-  -d '{ "symptoms": { "fever": true, "mouthLesions": true, "excessiveSalivation": true, "lameness": true } }'
-
-# 3. Or, multi-photo diagnosis against that same animal id (1-5 photos; response includes
-#    "diagnosesAgree": true|false)
-curl -X POST http://localhost:8080/api/animals/1/diagnoses/image \
-  -F "images=@/path/to/photo1.jpg" -F "images=@/path/to/photo2.jpg"
+# Or, multi-photo diagnosis (1-5 photos; response includes "diagnosesAgree": true|false).
+# species travels as a form field here because the request is multipart.
+curl -X POST http://localhost:8080/api/diagnoses/image \
+  -F "species=COW" -F "images=@/path/to/photo1.jpg" -F "images=@/path/to/photo2.jpg"
 ```
 
 `ml-service` can also be hit directly (bypassing `backend`, e.g. to isolate whether an issue
@@ -280,7 +262,8 @@ is in the ML layer or the gateway) at `POST http://localhost:8000/agent/diagnose
 | Trigger | Response |
 |---|---|
 | More than 5 images in one submission | `400 TOO_MANY_IMAGES` |
-| Existing tag number, different farm ID or species | `409 ANIMAL_TAG_DUPLICATE` |
+| Missing `species` in the request | `400 VALIDATION_FAILED` — never defaulted, since it picks the model |
+| Unrecognized `species` value | `400 INVALID_REQUEST_BODY` |
 | Symptom diagnosis requested for Cat/Dog | blocked client-side (no symptom model exists for them) |
 | A model artifact isn't present locally yet | `503 MODEL_NOT_TRAINED` — see below to train it |
 | Unreadable/corrupt image bytes | ml-service degrades to `diagnosis: "uncertain"` rather than erroring |
@@ -317,7 +300,7 @@ Strategy and per-service conventions: [docs/TESTING.md](docs/TESTING.md).
 | Suite | Command | Also needs |
 |---|---|---|
 | `frontend` (Vitest) | `cd frontend && npm ci && npm test` | Node 22.12+ — Vitest 5 refuses to run on older versions even though Vite itself allows 20.19+ |
-| `backend` (JUnit) | `cd backend && ./mvnw -B verify` | a reachable Postgres — the tests boot the real Spring context against `localhost:5432` (`cattlecare`/`cattlecare`/`cattlecare`). `make up`, or the `docker run` one-liner in Option B, gives you one |
+| `backend` (JUnit) | `cd backend && mvn -B verify` | a reachable Postgres — the tests boot the real Spring context against `localhost:5432` (`cattlecare`/`cattlecare`/`cattlecare`). `make up`, or the `docker run` one-liner in Option B, gives you one |
 | `ml-service` — full suite | `docker build -t ml-service-test ./ml-service` then run `pytest` in it — exact commands in [ml-service/AGENTS.md](ml-service/AGENTS.md) | Docker. This is the only way to exercise the RAG tests on Windows |
 | `ml-service` — native subset | `cd ml-service && pytest` | the venv. Without `chromadb` the RAG tests skip themselves cleanly (`importorskip`) rather than failing — a green run here is *not* full coverage |
 | e2e (Playwright) | `make test-e2e` | all three services running, plus one-time `cd tests/e2e && npm install && npx playwright install --with-deps chromium`. The smoke test posts a real symptom diagnosis, so the Cow symptom model must be trained first |

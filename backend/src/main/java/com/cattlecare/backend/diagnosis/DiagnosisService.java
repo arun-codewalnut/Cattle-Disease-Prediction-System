@@ -12,9 +12,6 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
-import com.cattlecare.backend.animal.Animal;
-import com.cattlecare.backend.animal.AnimalService;
-import com.cattlecare.backend.animal.Species;
 import com.cattlecare.backend.client.DiagnosisResult;
 import com.cattlecare.backend.client.MlServiceClient;
 import com.cattlecare.backend.config.ApiException;
@@ -29,11 +26,14 @@ public class DiagnosisService {
     // disk, only validated, base64-encoded, and forwarded to ml-service for one placeholder
     // prediction — see that spec for why.
     //
-    // M12 follow-up (docs/specs/M12-sheep-disease-detection.md): animal.getSpecies() IS now
-    // forwarded to ml-service for the symptom path too (it wasn't originally — Buffalo/Sheep
-    // both used to silently share the cattle-trained model with no species-aware routing at
-    // all). Sheep now routes to its own real, PPR-trained symptom model; every other
-    // symptom-diagnosable species still falls back to the cattle model, same as before.
+    // M12 follow-up (docs/specs/M12-sheep-disease-detection.md): species IS forwarded to
+    // ml-service for the symptom path too (it wasn't originally — Buffalo/Sheep both used to
+    // silently share the cattle-trained model with no species-aware routing at all). Sheep
+    // now routes to its own real, PPR-trained symptom model; every other symptom-diagnosable
+    // species still falls back to the cattle model, same as before.
+    //
+    // Species now arrives directly on the request instead of being read off an animal record
+    // — animal identity was removed, see docs/specs/remove-animal-identity.md.
     private static final Set<String> ALLOWED_IMAGE_TYPES = Set.of("image/jpeg", "image/png");
     private static final long MAX_IMAGE_SIZE_BYTES = 5L * 1024 * 1024;
 
@@ -55,32 +55,26 @@ public class DiagnosisService {
     // symptom diagnosis stays rejected for them (no symptom model exists for either).
     static final Set<Species> IMAGE_ONLY_SUPPORTED_SPECIES = Set.of(Species.CAT, Species.DOG);
 
-    private final AnimalService animalService;
     private final MlServiceClient mlServiceClient;
     private final DiagnosisCaseRepository diagnosisCaseRepository;
 
-    public DiagnosisService(
-            AnimalService animalService,
-            MlServiceClient mlServiceClient,
-            DiagnosisCaseRepository diagnosisCaseRepository) {
-        this.animalService = animalService;
+    public DiagnosisService(MlServiceClient mlServiceClient, DiagnosisCaseRepository diagnosisCaseRepository) {
         this.mlServiceClient = mlServiceClient;
         this.diagnosisCaseRepository = diagnosisCaseRepository;
     }
 
-    public DiagnosisCaseResponse submitSymptoms(Long animalId, Map<String, Object> symptoms) {
-        Animal animal = animalService.getOrThrow(animalId);
-        requireSymptomDiagnosisSupported(animal);
+    public DiagnosisCaseResponse submitSymptoms(Species species, Map<String, Object> symptoms) {
+        requireSymptomDiagnosisSupported(species);
 
         // If this throws (unreachable / error response), nothing gets persisted below —
         // we don't record a case that never actually got a diagnosis. species is forwarded
         // so Sheep routes to its own trained symptom model in ml-service — see this class's
         // header comment.
-        DiagnosisResult result = mlServiceClient.diagnose(symptoms, null, null, animal.getSpecies().name());
+        DiagnosisResult result = mlServiceClient.diagnose(symptoms, null, null, species.name());
 
         String correlationId = MDC.get(CorrelationIdFilter.MDC_KEY);
         DiagnosisCase entity = new DiagnosisCase(
-                animal.getId(),
+                species,
                 correlationId,
                 symptoms,
                 result.diagnosis(),
@@ -91,7 +85,7 @@ public class DiagnosisService {
         return DiagnosisCaseResponse.from(entity, result.explanation(), result.precautions(), result.nextSteps());
     }
 
-    public ImageDiagnosisBatchResponse submitImage(Long animalId, List<MultipartFile> images) {
+    public ImageDiagnosisBatchResponse submitImage(Species species, List<MultipartFile> images) {
         if (images == null || images.isEmpty()) {
             throw new ApiException("IMAGE_REQUIRED", "At least one image file is required.", HttpStatus.BAD_REQUEST);
         }
@@ -103,8 +97,7 @@ public class DiagnosisService {
         }
         images.forEach(this::validateImage);
 
-        Animal animal = animalService.getOrThrow(animalId);
-        requireImageDiagnosisSupported(animal);
+        requireImageDiagnosisSupported(species);
         String correlationId = MDC.get(CorrelationIdFilter.MDC_KEY);
 
         // Nothing gets persisted if any photo fails partway through — same "no partial case"
@@ -123,11 +116,10 @@ public class DiagnosisService {
             // ml-service request/DB column contracts (both require a non-null object) hold.
             // species is forwarded so Cat/Dog route to their own trained image models in
             // ml-service — see DiagnosisService's class comment.
-            DiagnosisResult result =
-                    mlServiceClient.diagnose(Map.of(), null, imageBase64, animal.getSpecies().name());
+            DiagnosisResult result = mlServiceClient.diagnose(Map.of(), null, imageBase64, species.name());
 
             DiagnosisCase entity = new DiagnosisCase(
-                    animal.getId(),
+                    species,
                     correlationId,
                     Map.of(),
                     result.diagnosis(),
@@ -142,17 +134,16 @@ public class DiagnosisService {
         return ImageDiagnosisBatchResponse.from(results);
     }
 
-    private void requireSymptomDiagnosisSupported(Animal animal) {
-        if (!DIAGNOSIS_SUPPORTED_SPECIES.contains(animal.getSpecies())) {
+    private void requireSymptomDiagnosisSupported(Species species) {
+        if (!DIAGNOSIS_SUPPORTED_SPECIES.contains(species)) {
             throw new ApiException(
                     "DIAGNOSIS_NOT_SUPPORTED_FOR_SPECIES",
-                    "Symptom-based diagnosis isn't available for species " + animal.getSpecies() + ".",
+                    "Symptom-based diagnosis isn't available for species " + species + ".",
                     HttpStatus.BAD_REQUEST);
         }
     }
 
-    private void requireImageDiagnosisSupported(Animal animal) {
-        Species species = animal.getSpecies();
+    private void requireImageDiagnosisSupported(Species species) {
         if (!DIAGNOSIS_SUPPORTED_SPECIES.contains(species) && !IMAGE_ONLY_SUPPORTED_SPECIES.contains(species)) {
             throw new ApiException(
                     "DIAGNOSIS_NOT_SUPPORTED_FOR_SPECIES",

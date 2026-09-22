@@ -1,39 +1,111 @@
+import { useEffect, useMemo, useState } from 'react'
+
 export const MAX_IMAGES = 5
 
 export default function ImageUploadForm({ images, onImagesChange, onSubmit, disabled }) {
+  // Set when a selection was larger than the remaining room. The alternative — silently
+  // keeping the first few — loses photos the user thought they'd attached.
+  const [skippedNotice, setSkippedNotice] = useState(null)
+
+  // Real thumbnails, not filenames. This app diagnoses *from* the photo, so "is this the
+  // lesion shot or the blurry one of the ground?" is a question the UI has to answer before
+  // submission — a wrong photo produces a confidently wrong diagnosis.
+  //
+  // Derived during render rather than set from an effect: an effect would trigger a second
+  // render on every pick and the thumbnail would appear a frame late.
+  //
+  // jsdom (and any environment without the Blob URL API) has no createObjectURL — fall back
+  // to the icon treatment rather than throwing.
+  const previews = useMemo(() => {
+    const supported = typeof URL !== 'undefined' && typeof URL.createObjectURL === 'function'
+    return images.map((file) => (supported ? URL.createObjectURL(file) : null))
+  }, [images])
+
+  // Revoking is not optional: without it every re-pick leaks a blob for the page's lifetime,
+  // and these are full-size camera photos. Cleanup runs both when the selection changes
+  // (releasing the previous batch) and on unmount.
+  useEffect(() => {
+    return () => previews.forEach((url) => url && URL.revokeObjectURL(url))
+  }, [previews])
+
   function handleSubmit(event) {
     event.preventDefault()
     onSubmit()
   }
 
-  function handleFileSelected(event) {
-    const file = event.target.files?.[0]
-    if (file && images.length < MAX_IMAGES) {
-      onImagesChange([...images, file])
+  // One `multiple` input replaces the five single-file slots this form used to render: the
+  // browser's own picker already takes several files at once, so the slots were five ways to
+  // do one thing. Selections append rather than replace, so adding more in a second pick
+  // still works, as does removing one and picking it again.
+  function handleFilesSelected(event) {
+    const selected = Array.from(event.target.files ?? [])
+    const room = MAX_IMAGES - images.length
+    const accepted = selected.slice(0, room)
+    const skipped = selected.length - accepted.length
+
+    if (accepted.length > 0) {
+      onImagesChange([...images, ...accepted])
     }
+    setSkippedNotice(
+      skipped > 0
+        ? `${skipped} photo${skipped > 1 ? 's' : ''} not added — ${MAX_IMAGES} per diagnosis is the limit.`
+        : null
+    )
+
     // Reset so selecting the same file again (after removing it) still fires onChange.
     event.target.value = ''
   }
 
   function handleRemove(index) {
     onImagesChange(images.filter((_, i) => i !== index))
+    setSkippedNotice(null)
   }
+
+  const isFull = images.length >= MAX_IMAGES
 
   return (
     <form onSubmit={handleSubmit} className="image-upload-form">
       <div>
         <p className="image-upload-form__label">
           <span aria-hidden="true">📷 </span>
-          Or upload up to {MAX_IMAGES} photos instead
+          Or upload photos instead — up to {MAX_IMAGES}, selectable in one go
         </p>
-        <div className="photo-tray">
-          {Array.from({ length: MAX_IMAGES }, (_, index) => {
-            const file = images[index]
-            return file ? (
-              <div key={index} className="photo-tray__slot photo-tray__slot--filled">
-                <span className="photo-tray__icon" aria-hidden="true">
-                  📷
-                </span>
+
+        <label className={`photo-picker${isFull ? ' photo-picker--full' : ''}`}>
+          <span className="photo-picker__icon" aria-hidden="true">
+            {isFull ? '✓' : '+'}
+          </span>
+          <span className="photo-picker__text">
+            {isFull
+              ? `Maximum ${MAX_IMAGES} photos selected`
+              : images.length === 0
+                ? 'Choose photos'
+                : 'Add more photos'}
+          </span>
+          <input
+            type="file"
+            className="photo-tray__input"
+            aria-label="Add photos"
+            accept="image/jpeg,image/png"
+            multiple
+            onChange={handleFilesSelected}
+            disabled={disabled || isFull}
+          />
+        </label>
+
+        {images.length > 0 && (
+          <div className="photo-tray">
+            {images.map((file, index) => (
+              <div key={`${file.name}-${index}`} className="photo-tray__slot photo-tray__slot--filled">
+                {previews[index] ? (
+                  // Decorative: the remove button beside it already names the file, so an
+                  // alt here would just repeat it.
+                  <img className="photo-tray__thumb" src={previews[index]} alt="" />
+                ) : (
+                  <span className="photo-tray__icon" aria-hidden="true">
+                    📷
+                  </span>
+                )}
                 <span className="photo-tray__filename">{file.name}</span>
                 <button
                   type="button"
@@ -45,24 +117,19 @@ export default function ImageUploadForm({ images, onImagesChange, onSubmit, disa
                   ×
                 </button>
               </div>
-            ) : (
-              <label key={index} className="photo-tray__slot photo-tray__slot--empty">
-                <span aria-hidden="true">+</span>
-                <input
-                  type="file"
-                  className="photo-tray__input"
-                  aria-label={`Add photo ${index + 1}`}
-                  accept="image/jpeg,image/png"
-                  onChange={handleFileSelected}
-                  disabled={disabled || images.length >= MAX_IMAGES}
-                />
-              </label>
-            )
-          })}
-        </div>
+            ))}
+          </div>
+        )}
+
         {images.length > 0 && (
           <p className="image-upload-form__count">
             {images.length} of {MAX_IMAGES} selected
+          </p>
+        )}
+
+        {skippedNotice && (
+          <p role="status" className="image-upload-form__notice">
+            <span aria-hidden="true">⚠️</span> {skippedNotice}
           </p>
         )}
       </div>

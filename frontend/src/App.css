@@ -247,10 +247,56 @@ button[type='submit']:disabled {
   color: var(--text-h);
 }
 
+/* One multi-select picker replaced the five single-file slots. The tray below it now holds
+   only the chosen photos, so it grows with the selection instead of always showing 5 boxes. */
+.photo-picker {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 14px 16px;
+  border: 2px dashed var(--border);
+  border-radius: 10px;
+  background: var(--accent-bg);
+  color: var(--text);
+  cursor: pointer;
+  opacity: 0.85;
+  transition: border-color 0.15s ease, background 0.15s ease, transform 0.15s ease, opacity 0.15s ease;
+}
+
+.photo-picker:hover {
+  border-color: var(--accent);
+  transform: translateY(-1px);
+  opacity: 1;
+}
+
+.photo-picker:has(.photo-tray__input:focus-visible) {
+  outline: 3px solid var(--accent-border);
+  outline-offset: 2px;
+}
+
+.photo-picker--full,
+.photo-picker:has(.photo-tray__input:disabled) {
+  cursor: not-allowed;
+  opacity: 0.55;
+  transform: none;
+  border-color: var(--border);
+}
+
+.photo-picker__icon {
+  font-size: 20px;
+  line-height: 1;
+}
+
+.photo-picker__text {
+  font-weight: 600;
+}
+
 .photo-tray {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(72px, 1fr));
-  gap: 8px;
+  grid-template-columns: repeat(auto-fill, minmax(92px, 1fr));
+  gap: 10px;
+  margin-top: 10px;
 }
 
 .photo-tray__slot {
@@ -262,32 +308,6 @@ button[type='submit']:disabled {
   align-items: center;
   justify-content: center;
   overflow: hidden;
-}
-
-.photo-tray__slot--empty {
-  border: 2px dashed var(--border);
-  background: var(--accent-bg);
-  font-size: 24px;
-  color: var(--text);
-  opacity: 0.7;
-  cursor: pointer;
-  transition: border-color 0.15s ease, background 0.15s ease, transform 0.15s ease, opacity 0.15s ease;
-}
-
-.photo-tray__slot--empty:hover {
-  border-color: var(--accent);
-  transform: translateY(-1px);
-  opacity: 1;
-}
-
-.photo-tray__slot--empty:has(.photo-tray__input:focus-visible) {
-  outline: 3px solid var(--accent-border);
-  outline-offset: 2px;
-}
-
-.photo-tray__slot--empty:has(.photo-tray__input:disabled) {
-  cursor: not-allowed;
-  opacity: 0.4;
 }
 
 .photo-tray__input {
@@ -305,8 +325,16 @@ button[type='submit']:disabled {
 .photo-tray__slot--filled {
   border: 2px solid var(--accent);
   background: var(--card-bg);
-  padding: 4px;
-  gap: 2px;
+  padding: 0;
+  justify-content: flex-end;
+}
+
+.photo-tray__thumb {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
 .photo-tray__icon {
@@ -314,36 +342,60 @@ button[type='submit']:disabled {
 }
 
 .photo-tray__filename {
+  position: relative;
   font-size: 0.62em;
   text-align: center;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   width: 100%;
-  padding: 0 2px;
-  opacity: 0.8;
+  box-sizing: border-box;
+  padding: 3px 4px;
+  color: #fff;
+  background: rgba(0, 0, 0, 0.55);
 }
 
 .photo-tray__remove {
   position: absolute;
-  top: 2px;
-  right: 2px;
-  width: 18px;
-  height: 18px;
+  top: 4px;
+  right: 4px;
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   line-height: 1;
   border: none;
   border-radius: 50%;
   background: var(--urgency-escalate);
   color: #fff;
   cursor: pointer;
-  font-size: 13px;
+  font-size: 18px;
   padding: 0;
+}
+
+/* Visible circle stays 28px so it doesn't cover the thumbnail, but the touch target is the
+   full 44px the guideline asks for. */
+.photo-tray__remove::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 44px;
+  height: 44px;
+  transform: translate(-50%, -50%);
 }
 
 .image-upload-form__count {
   margin: 8px 0 0;
   font-size: 0.85em;
   opacity: 0.75;
+}
+
+.image-upload-form__notice {
+  margin: 6px 0 0;
+  font-size: 0.85em;
+  color: var(--urgency-escalate);
 }
 
 .image-upload-form button[type='submit'] {
@@ -508,4 +560,212 @@ section[data-urgent='true'] [role='alert'] {
   .diagnosis-result h2 {
     text-align: center;
   }
+}
+
+/* ---------------------------------------------------------------------------
+   Live background (LiveBackground.jsx)
+
+   Atmospheric, not illustrative: drifting daylight, a horizon glow, and slow
+   pollen. Everything is built from the existing tokens, so dark mode comes for
+   free, and only transform/opacity animate so the whole thing composites on the
+   GPU. Sits behind the content and never touches its contrast — the card above
+   it is opaque.
+
+   Cycles are deliberately long (35-90s). Anything quicker reads as fidgeting in
+   peripheral vision while someone is reading a diagnosis.
+   --------------------------------------------------------------------------- */
+.live-bg {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.live-bg__glow {
+  position: absolute;
+  border-radius: 50%;
+  will-change: transform;
+}
+
+/* Warm daylight, top-left, the strongest of the three. */
+.live-bg__glow--sun {
+  width: 78vmax;
+  height: 78vmax;
+  top: -34vmax;
+  left: -18vmax;
+  background: radial-gradient(circle, color-mix(in srgb, var(--urgency-consult) 20%, transparent), transparent 66%);
+  animation: bg-drift-sun 78s ease-in-out infinite;
+}
+
+/* Cool counterweight, top-right, so the wash isn't one flat hue. */
+.live-bg__glow--sky {
+  width: 64vmax;
+  height: 64vmax;
+  top: -26vmax;
+  right: -20vmax;
+  background: radial-gradient(circle, color-mix(in srgb, var(--accent) 18%, transparent), transparent 68%);
+  animation: bg-drift-sky 92s ease-in-out infinite;
+}
+
+/* Green rising from below — the "field" the light is falling on. */
+.live-bg__glow--field {
+  width: 96vmax;
+  height: 58vmax;
+  bottom: -34vmax;
+  left: 50%;
+  margin-left: -48vmax;
+  background: radial-gradient(ellipse at center, color-mix(in srgb, var(--accent) 24%, transparent), transparent 62%);
+  animation: bg-drift-field 86s ease-in-out infinite;
+}
+
+/* A soft band where land would meet sky. Breathes rather than moves. */
+.live-bg__horizon {
+  position: absolute;
+  left: -6%;
+  right: -6%;
+  bottom: 0;
+  height: 34vh;
+  background: linear-gradient(to top, color-mix(in srgb, var(--accent) 22%, transparent), transparent 82%);
+  opacity: 0.85;
+  will-change: transform, opacity;
+  animation: bg-horizon 64s ease-in-out infinite;
+}
+
+.live-bg__motes {
+  position: absolute;
+  inset: 0;
+}
+
+/* Pollen/dust caught in sunlight: the layer that actually reads as alive.
+   Negative animation-delay starts them mid-flight so the field isn't empty on load. */
+.live-bg__mote {
+  position: absolute;
+  bottom: -8vh;
+  left: var(--mote-left);
+  width: var(--mote-size);
+  height: var(--mote-size);
+  border-radius: 50%;
+  background: var(--accent);
+  opacity: 0;
+  will-change: transform, opacity;
+  animation: bg-mote-rise var(--mote-duration) linear var(--mote-delay) infinite;
+}
+
+@keyframes bg-drift-sun {
+  0%, 100% { transform: translate3d(0, 0, 0) scale(1); }
+  50% { transform: translate3d(6vw, 4vh, 0) scale(1.12); }
+}
+
+@keyframes bg-drift-sky {
+  0%, 100% { transform: translate3d(0, 0, 0) scale(1.05); }
+  50% { transform: translate3d(-5vw, 6vh, 0) scale(1); }
+}
+
+@keyframes bg-drift-field {
+  0%, 100% { transform: translate3d(0, 0, 0) scale(1); }
+  50% { transform: translate3d(3vw, -3vh, 0) scale(1.08); }
+}
+
+@keyframes bg-horizon {
+  0%, 100% { transform: translate3d(0, 0, 0); opacity: 0.85; }
+  50% { transform: translate3d(0, -2vh, 0); opacity: 1; }
+}
+
+@keyframes bg-mote-rise {
+  0% { transform: translate3d(0, 0, 0); opacity: 0; }
+  12% { opacity: 0.55; }
+  88% { opacity: 0.35; }
+  100% { transform: translate3d(var(--mote-drift), -112vh, 0); opacity: 0; }
+}
+
+/* Non-negotiable for a health-adjacent tool: drifting peripheral motion is a real
+   vestibular trigger. Reduced motion keeps the same composition, completely still,
+   and drops the motes rather than freezing them mid-air. */
+@media (prefers-reduced-motion: reduce) {
+  .live-bg__glow,
+  .live-bg__horizon {
+    animation: none;
+  }
+
+  .live-bg__mote {
+    display: none;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   Confidence meter, single disclaimer, reset action, live region
+   --------------------------------------------------------------------------- */
+
+/* Reinforces the percentage that's already in the heading (required wording — see
+   docs/DISCLAIMER.md); never replaces it. 91% and 53% used to look identical at a glance. */
+.confidence {
+  margin: 0 0 12px;
+}
+
+.confidence__track {
+  height: 6px;
+  border-radius: 3px;
+  background: var(--accent-bg);
+  overflow: hidden;
+}
+
+.confidence__fill {
+  height: 100%;
+  border-radius: 3px;
+}
+
+.confidence__fill--high {
+  background: var(--urgency-monitor);
+}
+
+.confidence__fill--moderate {
+  background: var(--urgency-consult);
+}
+
+.confidence__fill--low {
+  background: var(--urgency-escalate);
+}
+
+.confidence__caveat {
+  margin: 6px 0 0;
+  font-size: 0.85em;
+  color: var(--urgency-escalate);
+}
+
+.reset-button {
+  margin-top: 16px;
+  background: transparent;
+  color: var(--text-h);
+  border: 1.5px solid var(--border);
+  box-shadow: none;
+}
+
+.reset-button:hover:not(:disabled) {
+  border-color: var(--accent);
+  box-shadow: none;
+}
+
+/* The result container takes focus on success, so it needs a visible ring when it does —
+   but only from focus moved programmatically, never a stray click. */
+.diagnosis-outcome:focus {
+  outline: none;
+}
+
+.diagnosis-outcome:focus-visible {
+  outline: 3px solid var(--accent-border);
+  outline-offset: 4px;
+  border-radius: 16px;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }

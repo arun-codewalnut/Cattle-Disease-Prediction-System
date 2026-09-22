@@ -3,7 +3,7 @@
 Living snapshot of project state. Update this whenever you finish a meaningful chunk of work —
 this is what an agent (or you) reads first when resuming.
 
-_Last updated: 2026-09-22 (session 12)_
+_Last updated: 2026-09-22 (session 13)_
 
 ## Known gaps
 
@@ -463,10 +463,33 @@ _Last updated: 2026-09-22 (session 12)_
   `retry_upload` exactly as designed; a real cat photo submitted right after came back a
   correct `Ringworm` diagnosis (regression-checked, same request path).
 
+- **Animal identity removed entirely** (branch `refactor/remove-animal-identity`, spec
+  [docs/specs/remove-animal-identity.md](docs/specs/remove-animal-identity.md)). The user
+  decided tag numbers and farm IDs were no longer needed; asked which way to take it, they
+  chose dropping the animal record outright over keeping a thin `id + species` one.
+  - Gone: the whole `com.cattlecare.backend.animal` package (entity, repository, service,
+    controller, both DTOs), `POST /api/animals`, both `/api/animals/{id}/diagnoses*` routes,
+    the `animal` table, the `ANIMAL_TAG_DUPLICATE`/`ANIMAL_NOT_FOUND` error codes, the
+    find-or-create-by-tag behavior, and the tag/farm form fields with their validation.
+  - Kept: `Species` (moved to the `diagnosis` package — it genuinely picks which trained
+    model runs), case history, the correlation ID, and every species-support rule
+    (Cat/Dog symptom diagnosis still rejected; image diagnosis still allowed for all four).
+  - `diagnosis_case` now carries its own `species` column instead of `animal_id`.
+    `V4__remove_animal_identity.sql` backfills it **from the animal each case pointed at**
+    before dropping the join, so historical cases keep their real species rather than all
+    being stamped `COW` — verified on a seeded scratch database (a SHEEP case stayed SHEEP).
+  - API is one call per diagnosis now (`POST /api/diagnoses`, `POST /api/diagnoses/image`
+    with `species` as a form field), down from two. The frontend makes one request instead
+    of two.
+  - `ml-service` was not touched at all — it never knew about tags or farms. Its suite
+    (63 passed, 2 skipped) was re-run to prove it.
+  - Verified: `mvnw -B verify` 20/20 green against a scratch Postgres (full V1→V4 migration
+    chain applies clean, and Hibernate's `ddl-auto: validate` confirms the entity matches
+    the migrated schema); frontend lint clean, 12/12 tests, production build OK.
+
 ## In Progress
 
-Nothing currently in progress — all of the above (Buffalo removal, Sheep model, M15 image
-quality gate) is complete but not yet committed/pushed (working tree only as of this update).
+Nothing currently in progress.
 
 ## Not Started
 

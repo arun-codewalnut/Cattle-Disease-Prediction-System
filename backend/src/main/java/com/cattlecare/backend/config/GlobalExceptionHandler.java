@@ -8,10 +8,13 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import org.springframework.web.multipart.support.MissingServletRequestPartException;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
@@ -22,7 +25,7 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(ex.getStatus()).body(error);
     }
 
-    // Thrown by @Valid on a @RequestBody DTO (e.g. a blank tagNumber) — previously fell
+    // Thrown by @Valid on a @RequestBody DTO (e.g. a null species) — previously fell
     // through to the generic handler below, which dumped the raw exception (including every
     // internal class/code name) as the user-facing "message". Maps each rejected field to a
     // short, readable reason instead.
@@ -61,6 +64,39 @@ public class GlobalExceptionHandler {
         ApiError error = new ApiError(
                 "INVALID_REQUEST_BODY", "Request body is malformed or contains an invalid value.", null);
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(error);
+    }
+
+    // The multipart image endpoint takes `species` as a form field, not JSON, so neither of
+    // the two handlers above fires for it: a missing part throws
+    // MissingServletRequestParameterException and an unparseable enum value throws
+    // MethodArgumentTypeMismatchException. Both used to reach the catch-all below as a 500.
+    // Mapped here so the multipart path returns the same codes/statuses as the JSON path —
+    // see docs/specs/remove-animal-identity.md.
+    @ExceptionHandler(MissingServletRequestParameterException.class)
+    public ResponseEntity<ApiError> handleMissingRequestParameter(MissingServletRequestParameterException ex) {
+        ApiError error = new ApiError(
+                "VALIDATION_FAILED",
+                "Request failed validation.",
+                Map.of(ex.getParameterName(), "must not be null"));
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(error);
+    }
+
+    @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+    public ResponseEntity<ApiError> handleTypeMismatch(MethodArgumentTypeMismatchException ex) {
+        ApiError error = new ApiError(
+                "INVALID_REQUEST_BODY", "Request body is malformed or contains an invalid value.", null);
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(error);
+    }
+
+    // An unmapped path used to fall through to the catch-all below as a 500 whose message
+    // leaked Spring's internals ("No static resource api/animals for request ..."). That's
+    // wrong on both counts — nothing broke, the route just isn't there — and it started
+    // mattering once /api/animals* was removed, since any old client still calling it lands
+    // here. See docs/specs/remove-animal-identity.md.
+    @ExceptionHandler(NoResourceFoundException.class)
+    public ResponseEntity<ApiError> handleNoResourceFound(NoResourceFoundException ex) {
+        ApiError error = new ApiError("NOT_FOUND", "No endpoint exists at this path.", null);
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(error);
     }
 
     @ExceptionHandler(Exception.class)
