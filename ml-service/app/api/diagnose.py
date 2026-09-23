@@ -26,9 +26,6 @@ class DiagnoseResponse(BaseModel):
     sources: list[str]
     precautions: list[str]
     next_steps: list[str]
-    # Set when an uploaded photo doesn't look like the selected species — advisory, the
-    # diagnosis is still returned. See docs/specs/species-mismatch-and-actionable-results.md.
-    species_warning: str | None = None
 
 
 @router.post("/agent/diagnose", response_model=DiagnoseResponse)

@@ -738,16 +738,6 @@ section[data-urgent='true'] [role='alert'] {
   color: var(--text);
 }
 
-/* Advisory species mismatch. Sits above the result, because the result may be meaningless. */
-.species-warning-banner {
-  margin: 0 0 12px;
-  padding: 12px 14px;
-  border-radius: 12px;
-  border: 1px solid var(--urgency-consult);
-  background: var(--urgency-consult-bg);
-  color: var(--text-h);
-  font-weight: 600;
-}
 
 .reset-button {
   margin-top: 16px;

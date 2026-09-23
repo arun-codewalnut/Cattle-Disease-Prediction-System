@@ -2,7 +2,6 @@ package com.cattlecare.backend.diagnosis;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -41,7 +40,7 @@ class DiagnosisServiceTest {
     void submitSymptoms_success_returnsDiagnosis() {
         DiagnosisResult mlResult = new DiagnosisResult(
                 "Foot and Mouth Disease", 0.81, "Predicted FMD...", "escalate_to_vet", List.of(),
-                List.of("Isolate the animal."), List.of("Contact your vet immediately."), null);
+                List.of("Isolate the animal."), List.of("Contact your vet immediately."));
         when(mlServiceClient.diagnose(anyMap(), isNull(), isNull(), eq("COW"))).thenReturn(mlResult);
 
         Map<String, Object> symptoms = Map.of("fever", true);
@@ -60,7 +59,7 @@ class DiagnosisServiceTest {
     void submitSymptoms_returnsTheRequestedSpecies() {
         DiagnosisResult mlResult = new DiagnosisResult(
                 "PPR (Peste des Petits Ruminants)", 0.77, "Predicted PPR.", "escalate_to_vet",
-                List.of(), List.of(), List.of(), null);
+                List.of(), List.of(), List.of());
         when(mlServiceClient.diagnose(anyMap(), isNull(), isNull(), eq("SHEEP"))).thenReturn(mlResult);
 
         DiagnosisCaseResponse response = diagnosisService.submitSymptoms(Species.SHEEP, Map.of("diarrhea", true));
@@ -95,7 +94,7 @@ class DiagnosisServiceTest {
     void submitImage_success_encodesAsBase64AndSendsEmptySymptoms() {
         DiagnosisResult mlResult = new DiagnosisResult(
                 "Lumpy Skin Disease", 0.5, "This is a placeholder image-based prediction...",
-                "escalate_to_vet", List.of(), List.of(), List.of(), null);
+                "escalate_to_vet", List.of(), List.of(), List.of());
         when(mlServiceClient.diagnose(eq(Map.of()), isNull(), anyString(), eq("COW"))).thenReturn(mlResult);
 
         MultipartFile image = new MockMultipartFile("image", "cow.jpg", "image/jpeg", new byte[] {1, 2, 3});
@@ -108,31 +107,22 @@ class DiagnosisServiceTest {
         verify(mlServiceClient).diagnose(eq(Map.of()), isNull(), eq("AQID"), eq("COW")); // base64("\x01\x02\x03")
     }
 
-    // docs/specs/species-mismatch-and-actionable-results.md: the warning is advisory and
-    // must reach the frontend intact — the diagnosis still comes back alongside it.
+    // docs/specs/species-mismatch-and-actionable-results.md: a wrong-species photo is
+    // refused by ml-service, and the backend passes that through as an ordinary result —
+    // no confidence, no vet action, and excluded from batch agreement.
     @Test
-    void submitImage_speciesWarningIsPassedThroughWithTheDiagnosis() {
-        String warning = "This photo doesn't look like a cow. If the species is wrong, ...";
-        DiagnosisResult mlResult = new DiagnosisResult(
-                "Foot and Mouth Disease", 0.85, "x", "escalate_to_vet", List.of(),
-                List.of(), List.of(), warning);
-        when(mlServiceClient.diagnose(eq(Map.of()), isNull(), anyString(), eq("COW"))).thenReturn(mlResult);
+    void submitImage_speciesMismatchIsPassedThroughAsANonDiagnosis() {
+        DiagnosisResult mismatch = new DiagnosisResult(
+                "species_mismatch", 0.0, "This photo doesn't look like a cow...", "retry_upload",
+                List.of(), List.of(), List.of());
+        when(mlServiceClient.diagnose(eq(Map.of()), isNull(), anyString(), eq("COW"))).thenReturn(mismatch);
 
-        MultipartFile image = new MockMultipartFile("image", "cat.jpg", "image/jpeg", new byte[] {1});
+        MultipartFile image = new MockMultipartFile("image", "dog.jpg", "image/jpeg", new byte[] {1});
         ImageDiagnosisBatchResponse response = diagnosisService.submitImage(Species.COW, List.of(image));
 
-        assertEquals(warning, response.results().get(0).speciesWarning());
-        assertEquals("Foot and Mouth Disease", response.results().get(0).diagnosis());
-    }
-
-    @Test
-    void submitSymptoms_hasNoSpeciesWarning() {
-        // No photo to disagree with.
-        DiagnosisResult mlResult = new DiagnosisResult(
-                "Mastitis", 0.84, "x", "consult_vet", List.of(), List.of(), List.of(), null);
-        when(mlServiceClient.diagnose(anyMap(), isNull(), isNull(), eq("COW"))).thenReturn(mlResult);
-
-        assertNull(diagnosisService.submitSymptoms(Species.COW, Map.of("fever", true)).speciesWarning());
+        assertEquals("species_mismatch", response.results().get(0).diagnosis());
+        assertEquals("retry_upload", response.results().get(0).recommendedAction());
+        assertEquals(0.0, response.results().get(0).confidence());
     }
 
     // Multi-photo follow-up: up to 5 photos per submission, each diagnosed independently.
@@ -140,7 +130,7 @@ class DiagnosisServiceTest {
     @Test
     void submitImage_multiplePhotosAllSameDiagnosis_agrees() {
         DiagnosisResult mlResult = new DiagnosisResult(
-                "Healthy", 0.9, "Predicted Healthy.", "monitor", List.of(), List.of(), List.of(), null);
+                "Healthy", 0.9, "Predicted Healthy.", "monitor", List.of(), List.of(), List.of());
         when(mlServiceClient.diagnose(eq(Map.of()), isNull(), anyString(), eq("COW"))).thenReturn(mlResult);
 
         MultipartFile a = new MockMultipartFile("images", "a.jpg", "image/jpeg", new byte[] {1});
@@ -156,9 +146,9 @@ class DiagnosisServiceTest {
     @Test
     void submitImage_multiplePhotosDisagreeingDiagnoses_flagsDisagreement() {
         DiagnosisResult ringworm = new DiagnosisResult(
-                "Ringworm", 0.9, "Predicted Ringworm.", "consult_vet", List.of(), List.of(), List.of(), null);
+                "Ringworm", 0.9, "Predicted Ringworm.", "consult_vet", List.of(), List.of(), List.of());
         DiagnosisResult scabies = new DiagnosisResult(
-                "Scabies", 0.85, "Predicted Scabies.", "consult_vet", List.of(), List.of(), List.of(), null);
+                "Scabies", 0.85, "Predicted Scabies.", "consult_vet", List.of(), List.of(), List.of());
         when(mlServiceClient.diagnose(eq(Map.of()), isNull(), eq("AQ=="), eq("CAT"))).thenReturn(ringworm); // "\x01"
         when(mlServiceClient.diagnose(eq(Map.of()), isNull(), eq("Ag=="), eq("CAT"))).thenReturn(ringworm); // "\x02"
         when(mlServiceClient.diagnose(eq(Map.of()), isNull(), eq("Aw=="), eq("CAT"))).thenReturn(scabies); // "\x03"
@@ -179,10 +169,10 @@ class DiagnosisServiceTest {
     @Test
     void submitImage_matchingDiagnosesPlusOneInvalidImage_stillAgrees() {
         DiagnosisResult ringworm = new DiagnosisResult(
-                "Ringworm", 0.9, "Predicted Ringworm.", "consult_vet", List.of(), List.of(), List.of(), null);
+                "Ringworm", 0.9, "Predicted Ringworm.", "consult_vet", List.of(), List.of(), List.of());
         DiagnosisResult invalidImage = new DiagnosisResult(
                 "invalid_image", 0.0, "This doesn't look like a photo of an animal.", "retry_upload",
-                List.of(), List.of(), List.of(), null);
+                List.of(), List.of(), List.of());
         when(mlServiceClient.diagnose(eq(Map.of()), isNull(), eq("AQ=="), eq("CAT"))).thenReturn(ringworm); // "\x01"
         when(mlServiceClient.diagnose(eq(Map.of()), isNull(), eq("Ag=="), eq("CAT"))).thenReturn(ringworm); // "\x02"
         when(mlServiceClient.diagnose(eq(Map.of()), isNull(), eq("Aw=="), eq("CAT"))).thenReturn(invalidImage);
@@ -275,7 +265,7 @@ class DiagnosisServiceTest {
     void submitImage_catSpecies_succeedsAndForwardsSpecies() {
         DiagnosisResult mlResult = new DiagnosisResult(
                 "Ringworm", 0.91, "Predicted Ringworm with 91% confidence.", "consult_vet",
-                List.of(), List.of(), List.of(), null);
+                List.of(), List.of(), List.of());
         when(mlServiceClient.diagnose(eq(Map.of()), isNull(), anyString(), eq("CAT"))).thenReturn(mlResult);
         MultipartFile image = new MockMultipartFile("image", "cat.jpg", "image/jpeg", new byte[] {1});
 
@@ -289,7 +279,7 @@ class DiagnosisServiceTest {
     void submitImage_dogSpecies_succeedsAndForwardsSpecies() {
         DiagnosisResult mlResult = new DiagnosisResult(
                 "Mange", 0.99, "Predicted Mange with 99% confidence.", "consult_vet",
-                List.of(), List.of(), List.of(), null);
+                List.of(), List.of(), List.of());
         when(mlServiceClient.diagnose(eq(Map.of()), isNull(), anyString(), eq("DOG"))).thenReturn(mlResult);
         MultipartFile image = new MockMultipartFile("image", "dog.jpg", "image/jpeg", new byte[] {1});
 

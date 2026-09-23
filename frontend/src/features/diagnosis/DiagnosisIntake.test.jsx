@@ -380,20 +380,17 @@ describe('DiagnosisIntake', () => {
     expect(revokeObjectURL).toHaveBeenCalledWith('blob:preview-1')
   })
 
-  // docs/specs/species-mismatch-and-actionable-results.md — the warning exists because a cat
-  // photo submitted as a cow was measured coming back "Foot and Mouth Disease, 85%" with
-  // nothing at all to flag it.
-  it('shows the species-mismatch warning above the result, without blocking it', async () => {
+  // docs/specs/species-mismatch-and-actionable-results.md — a wrong-species photo is refused
+  // outright. Warning alongside a real diagnosis was tried first and was wrong: a dog photo
+  // submitted as a cow still read "Foot and Mouth Disease, 60% — contact your veterinarian".
+  it('renders a wrong-species photo as a refusal, with no diagnosis or vet action', async () => {
     const user = userEvent.setup()
-    const warning =
-      "This photo doesn't look like a cow. If the species is wrong, the result below came " +
-      'from the cow model and may be meaningless — check the species and try again.'
     fetchMock.mockResolvedValueOnce(
       jsonResponse(true, {
         results: [{
-          species: 'COW', diagnosis: 'Foot and Mouth Disease', confidence: 0.85,
-          explanation: 'x', recommendedAction: 'escalate_to_vet',
-          precautions: [], nextSteps: [], speciesWarning: warning,
+          species: 'COW', diagnosis: 'species_mismatch', confidence: 0,
+          explanation: "This photo doesn't look like a cow, so no diagnosis was made — check the species selection, or try a photo showing more of the animal.",
+          recommendedAction: 'retry_upload', precautions: [], nextSteps: [],
           createdAt: '2026-01-01T00:00:00Z',
         }],
         diagnosesAgree: true,
@@ -401,27 +398,26 @@ describe('DiagnosisIntake', () => {
     )
 
     render(<DiagnosisIntake />)
-    await user.upload(screen.getByLabelText(/add photos/i), new File(['a'], 'cat.jpg', { type: 'image/jpeg' }))
+    await user.upload(screen.getByLabelText(/add photos/i), new File(['a'], 'dog.jpg', { type: 'image/jpeg' }))
     await user.click(screen.getByRole('button', { name: /diagnose from photo/i }))
 
-    const banner = await screen.findByText(/doesn't look like a cow/i)
-    expect(banner).toBeInTheDocument()
-    // Advisory, not a block: the diagnosis is still shown.
-    expect(screen.getByText(/likely: foot and mouth disease/i)).toBeInTheDocument()
-    // Above the result, so it's read before the thing it's warning about.
-    const bannerEl = document.querySelector('.species-warning-banner')
-    const card = document.querySelector('.diagnosis-result')
-    expect(bannerEl.compareDocumentPosition(card) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(await screen.findByText(/wrong species for this photo/i)).toBeInTheDocument()
+    expect(screen.getByText(/doesn't look like a cow/i)).toBeInTheDocument()
+    // The whole point: no disease named, no confidence invented, no escalation offered.
+    expect(screen.queryByText(/likely:/i)).not.toBeInTheDocument()
+    expect(screen.queryByText(/% confidence/i)).not.toBeInTheDocument()
+    expect(document.querySelector('.next-actions')).not.toBeInTheDocument()
+    expect(screen.queryByText(/escalate to vet/i)).not.toBeInTheDocument()
   })
 
-  it('shows no warning banner when the photo matches the species', async () => {
+  it('still diagnoses normally when the photo matches the species', async () => {
     const user = userEvent.setup()
     fetchMock.mockResolvedValueOnce(
       jsonResponse(true, {
         results: [{
           species: 'COW', diagnosis: 'Healthy', confidence: 0.9, explanation: 'x',
-          recommendedAction: 'monitor', precautions: [], nextSteps: [],
-          speciesWarning: null, createdAt: '2026-01-01T00:00:00Z',
+          recommendedAction: 'monitor', precautions: [], nextSteps: ['Keep monitoring.'],
+          createdAt: '2026-01-01T00:00:00Z',
         }],
         diagnosesAgree: true,
       })
@@ -431,8 +427,8 @@ describe('DiagnosisIntake', () => {
     await user.upload(screen.getByLabelText(/add photos/i), new File(['a'], 'cow.jpg', { type: 'image/jpeg' }))
     await user.click(screen.getByRole('button', { name: /diagnose from photo/i }))
 
-    await screen.findByText(/likely: healthy/i)
-    expect(document.querySelector('.species-warning-banner')).not.toBeInTheDocument()
+    expect(await screen.findByText(/likely: healthy/i)).toBeInTheDocument()
+    expect(screen.queryByText(/wrong species/i)).not.toBeInTheDocument()
   })
 
   // The second half of that spec: lead with what to do, and state the percentage once.

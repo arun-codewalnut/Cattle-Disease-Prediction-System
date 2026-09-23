@@ -41,9 +41,30 @@ function InvalidImageCard({ result }) {
   )
 }
 
+// Same treatment, different cause: the photo is an animal, just not the selected one. No
+// diagnosis was made, so rendering a confidence figure or a vet-triage badge would be
+// inventing both. This replaced a warning shown *alongside* a real diagnosis, which left a
+// dog photo reading "Foot and Mouth Disease, 60% — contact your veterinarian".
+function SpeciesMismatchCard({ result }) {
+  return (
+    <section className="diagnosis-result diagnosis-result--invalid-image">
+      <span className="diagnosis-result__icon" aria-hidden="true">
+        🔄
+      </span>
+      <div>
+        <h2>Wrong species for this photo</h2>
+        <p>{result.explanation}</p>
+      </div>
+    </section>
+  )
+}
+
 function DiagnosisResultCard({ result }) {
   if (result.diagnosis === 'invalid_image') {
     return <InvalidImageCard result={result} />
+  }
+  if (result.diagnosis === 'species_mismatch') {
+    return <SpeciesMismatchCard result={result} />
   }
 
   const confidencePercent = Math.round(result.confidence * 100)
@@ -123,28 +144,10 @@ function ResultDisclaimer() {
 // Multi-photo follow-up: an image submission returns { results: [...], diagnosesAgree } —
 // one card per photo, plus a warning banner when the photos didn't all get the same
 // diagnosis. A symptom submission still returns a single result object, rendered as one card.
-// Advisory, never a block — see docs/specs/species-mismatch-and-actionable-results.md.
-// It sits above the result because the result may be meaningless: a cat photo submitted as
-// a cow was measured coming back "Foot and Mouth Disease, 85%" with nothing to flag it.
-function SpeciesWarning({ message }) {
-  if (!message) return null
-  return (
-    <p role="alert" className="species-warning-banner">
-      <span aria-hidden="true">⚠️</span> {message}
-    </p>
-  )
-}
-
-// A multi-photo batch repeats the same warning per photo; show it once.
-function firstSpeciesWarning(results) {
-  return results.map((item) => item.speciesWarning).find(Boolean) ?? null
-}
-
 export default function DiagnosisResult({ result }) {
   if (!Array.isArray(result?.results)) {
     return (
       <div className="diagnosis-result-list">
-        <SpeciesWarning message={result?.speciesWarning} />
         <DiagnosisResultCard result={result} />
         <ResultDisclaimer />
       </div>
@@ -153,7 +156,6 @@ export default function DiagnosisResult({ result }) {
 
   return (
     <div className="diagnosis-result-list">
-      <SpeciesWarning message={firstSpeciesWarning(result.results)} />
       {!result.diagnosesAgree && (
         <p role="alert" className="diagnosis-disagreement-banner">
           <span aria-hidden="true">⚠️</span> These photos didn't all get the same diagnosis —

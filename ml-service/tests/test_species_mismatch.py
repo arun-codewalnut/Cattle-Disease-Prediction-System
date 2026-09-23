@@ -6,14 +6,17 @@ cattle model with COW selected returned `uncertain` 0 times, averaged 71% confid
 included "Foot and Mouth Disease, 85%" — a reportable disease, confidently, from a photo of
 a cat.
 
-The detector reports only that a photo *isn't* the selected species, never what it is
-instead. ImageNet carries 118 dog classes against 5 cat and 3 cattle, so the "what is it"
+A wrong-species photo is refused outright rather than annotated: warning alongside a real
+diagnosis was tried first and left a dog photo reading "Foot and Mouth Disease, 60% —
+contact your veterinarian". The detector reports only that a photo *isn't* the selected
+species, never what it is instead. ImageNet carries 118 dog classes against 5 cat and 3 cattle, so the "what is it"
 guess is unreliable enough to tell someone their cat looks like a dog; the negative is the
 part that holds up.
 
 Tests needing real photos skip when the datasets aren't present (they're gitignored), the
 same convention the image-model tests use. The logic tests always run.
 """
+import base64
 import pathlib
 
 import pytest
@@ -66,11 +69,48 @@ def test_cow_photos_submitted_as_cat_are_flagged():
 
 
 @pytest.mark.skipif(not _photos(_CAT_PHOTOS, 1), reason="no cat photos available locally")
-def test_warning_text_never_claims_what_the_animal_is():
-    from app.agent.graph import _species_warning
+def test_message_never_claims_what_the_animal_is():
+    from app.agent.graph import _species_mismatch_message
 
-    message = _species_warning("COW")
+    message = _species_mismatch_message("COW")
     assert "doesn't look like a cow" in message
+    assert "no diagnosis was made" in message
     # Naming the wrong animal is the failure mode this wording exists to avoid.
     for other in ("cat", "dog", "sheep"):
         assert other not in message.lower()
+
+
+_DOG_PHOTOS = pathlib.Path(__file__).resolve().parents[1] / "data" / "dog-images"
+
+
+@pytest.mark.skipif(not _photos(_DOG_PHOTOS, 1), reason="no dog photos available locally")
+def test_dog_photo_submitted_as_cow_is_refused_not_diagnosed():
+    # The reported bug, end to end through the agent: a dog photo with Cow selected used to
+    # return "Foot and Mouth Disease, 60%" with escalation guidance attached.
+    from app.agent.graph import run_diagnosis
+
+    refused = 0
+    for photo in _photos(_DOG_PHOTOS, 6):
+        result = run_diagnosis({}, image_base64=base64.b64encode(photo.read_bytes()).decode(), species="COW")
+        if result["diagnosis"] == "species_mismatch":
+            refused += 1
+            assert result["confidence"] == 0.0
+            assert result["recommended_action"] == "retry_upload"
+            # No disease guidance may ride along with a refusal.
+            assert result["precautions"] == []
+            assert result["next_steps"] == []
+        else:
+            # Whatever slips through must never be a reportable disease escalation.
+            assert result["recommended_action"] != "escalate_to_vet", (
+                f"a dog photo produced {result['diagnosis']} with escalation"
+            )
+    assert refused >= 4
+
+
+@pytest.mark.skipif(not _photos(_COW_PHOTOS, 1), reason="no cattle photos available locally")
+def test_matching_photo_still_gets_a_real_diagnosis():
+    from app.agent.graph import run_diagnosis
+
+    for photo in _photos(_COW_PHOTOS, 5):
+        result = run_diagnosis({}, image_base64=base64.b64encode(photo.read_bytes()).decode(), species="COW")
+        assert result["diagnosis"] != "species_mismatch"
