@@ -5,137 +5,103 @@ End-of-session notes. Overwrite this each session — it's a handoff to "next se
 
 ---
 
-## This session (2026-09-22)
+## This session (2026-09-22 → 2026-09-23)
 
-- Picked up on the `docs/readme-comprehensive-guide` branch's README work from a prior
-  session, then moved into a UI redesign pass on the frontend: iterated through several
-  directions for the species-selection panel (a real Wikimedia photo, 3D flip/tilt motion,
-  a real drag-to-rotate `<model-viewer>` 3D model with smoothed normals) before you said you
-  didn't like any of the motion/imagery approaches — reverted all of it, and the species
-  panel is now **removed entirely**. The app is back to a single centered form (no
-  photo/model panel), with a species capability summary shown as a plain inline caption
-  under the species `<select>` instead. Background/typography also got a full pass: replaced
-  the illustrated farm-theme background with a clean accent-tinted gradient (and fixed a
-  real bug where the old background's hill illustration used hardcoded light-mode colors
-  even in dark mode), tightened the whole typographic scale, and fixed a real pre-existing
-  spacing bug (the species/tag-number/farm-ID fields had zero margin between them — a CSS
-  selector, `form > div`, never matched them since those fields sit outside the `<form>`
-  elements).
-- **You asked "which species are trained well," then "is there any other species dataset
-  available," then explicitly asked to remove Buffalo entirely and train Sheep with a real
-  dataset found during that research.** Confirmed clear on scope via `AskUserQuestion`
-  before touching anything (3 real judgment calls: Sheep's model should fully replace the
-  cow-model approximation rather than fall back to it, Sheep's *image* path should keep
-  using the cow model as an approximation since no sheep image dataset exists either way,
-  and the M11 spec should be marked superseded rather than deleted).
-- **Buffalo removed** across all three services: `Species` enum (backend), `SPECIES_OPTIONS`
-  (frontend), new Flyway migration (`V3__remove_buffalo_species.sql`) cleaning up any
-  existing `species = 'BUFFALO'` rows (the column has no DB-level enum/CHECK constraint —
-  plain `VARCHAR(20)`, enforced only at the Java/JPA level, so no `ALTER TYPE` needed).
-  `docs/specs/M11-buffalo-disease-detection.md` marked superseded (not deleted, per this
-  repo's own "don't rewrite history" convention).
-- **Sheep got a real, trained model**: found
-  [PPR disease data from goats and sheep](https://www.kaggle.com/datasets/devothanyambo/ppr-disease-data-from-goats-and-sheep)
-  on Kaggle — real field-collected clinical data (Tanzania, RT-qPCR-confirmed ground truth),
-  downloadable anonymously via `kagglehub`. Built `app/models/sheep_symptom_model.py` (a
-  6-feature binary XGBoost classifier — same architecture pattern as the cattle symptom
-  model) and `training/sheep_symptom_model_train.py`; trained it — **80.5% CV accuracy,
-  78.8% macro F1**, genuinely comparable to Cat's real model, not a weak result. One real
-  data-quality finding, disclosed rather than papered over: the dataset's `animal` (species)
-  column is pre-encoded to 0/1 with no data dictionary anywhere confirming which value means
-  goat vs. sheep — so the model trains on the **combined goat+sheep file**, not a guessed-at
-  "sheep-only" subset (PPR is the same disease in both, which is why the original study
-  grouped them). Full writeup: `ml-service/data/sheep-symptoms/SOURCE.md`.
-- **Wired end to end**: `species` is now forwarded to `ml-service` on the *symptom* path too
-  (it wasn't before — only the image path was species-aware). `ml-service/app/agent/graph.py`
-  gained `_SYMPTOM_MODEL_BY_SPECIES` (mirrors the existing `_IMAGE_MODEL_BY_SPECIES` pattern)
-  routing `SHEEP` to the new model, everything else to the cattle model unchanged.
-  `PPR (Peste des Petits Ruminants)` added to `REPORTABLE_DISEASES` (it's WOAH/OIE-notifiable,
-  same escalation tier as FMD/LSD). Frontend: `symptomFields.js` now exports
-  `getSymptomFields(species)` instead of one fixed list — Sheep renders its own 6-checkbox
-  form (temp/nasal discharge/diarrhea/difficult breathing/eye discharge/oral-nasal lesions),
-  completely different from cattle's vocabulary; switching species resets the symptom state
-  to that species' own empty shape. Disclosure copy rewritten to describe the model's real,
-  narrow scope (PPR only — "a negative result means 'not PPR,' not 'healthy'"), replacing the
-  old "reusing the cow model as an approximation" wording for Sheep specifically.
-- Docs updated to match: `docs/API_CONTRACTS.md`, `docs/DECISIONS.md` (new dated entry),
-  `docs/ROADMAP.md`, `STATE.md`, `docs/specs/M12-sheep-disease-detection.md` (new "Follow-up"
-  section) — plus this file.
-- **Validated thoroughly**: backend 29/29 (Flyway migration applies cleanly against a real
-  local Postgres), ml-service 50/2 (skipped — the usual RAG/chromadb local blocker, unrelated;
-  7 new tests: 5 for the sheep model directly, 2 for graph.py routing), frontend lint clean +
-  13/13 + build green. **Then live end-to-end against the real running stack** (not just
-  mocks): started `ml-service` and `backend` fresh, created a real Sheep animal via the API,
-  submitted real PPR-positive symptoms straight through the actual browser form, got back a
-  correctly-diagnosed and correctly-escalated result; confirmed Buffalo is now rejected
-  (`400 INVALID_REQUEST_BODY`) at the API level; confirmed Cow's symptom path is
-  regression-free.
-- **Image-mismatch/invalid-photo detection (M15), same session**: you described the intended
-  UX directly — a clear photo gets a confident diagnosis, a real-but-unclear photo prompts
-  for a clearer one, a completely unrelated photo (car/table) says the image is invalid.
-  Confirmed via `AskUserQuestion` that the middle tier means "real animal, low confidence" —
-  not "wrong species," which would need real per-species verification (bigger, separate,
-  already-deferred scope). Built `app/models/species_gate.py`: a free, pretrained (zero
-  fine-tuning) torchvision ImageNet-1k classifier gates every image-diagnosis path (all 4
-  species, one shared implementation) before any disease model runs — a photo whose top-5
-  predictions are all outside the verified animal-class index range (0–397) comes back
-  `diagnosis: "invalid_image"` / `recommendedAction: "retry_upload"` instead of a fake
-  disease guess. Tested against real data first: this repo's own cattle/cat/dog photos all
-  pass, two real Wikimedia photos (table, car) both correctly rejected. **Real finding**:
-  synthetic test images (solid color, noise) all incorrectly pass the gate — ~40% of
-  ImageNet-1k classes are animals, so a degenerate image's top-5 has good odds of including
-  one by chance; fine for the actual product problem (real accidental mismatched uploads),
-  documented as a known limitation rather than hidden. Also fixed a real pre-existing bug
-  found along the way: the `"uncertain"` explanation always said "not enough *symptom*
-  information," even for a photo submission with no symptoms at all. Frontend gives
-  `invalid_image` its own dedicated card (no fake confidence %, no vet-action badge); backend
-  excludes it from the multi-photo `diagnosesAgree` comparison. Spec:
-  `docs/specs/M15-image-diagnosis-quality-gate.md`. **Validated**: backend 33/33, ml-service
-  63/2 (skipped, same RAG blocker), frontend lint + 14/14 green, **plus live verification
-  against the real running stack**: a real car photo through the actual backend + ml-service
-  came back correctly rejected; a real cat photo submitted right after still diagnosed
-  correctly (regression-checked, same code path).
+A long session that started with one CI failure and turned into a sustained simplification
+pass: two databases deleted, animal identity removed, and the image-validation path rebuilt
+twice after you caught it being wrong. **Six PRs, all merged (#35 through #40)**, plus a documentation PR carrying these notes.
 
-## Next session
+### What shipped
 
-- **Nothing has been committed or pushed yet** — all of the above (UI redesign, Buffalo
-  removal, Sheep model, M15 image quality gate) is sitting in the working tree. Ask before
-  committing/pushing, per the established per-action-permission pattern this repo's sessions
-  have followed.
-- `ml-service` and `backend` were left **running in the background** for the live
-  verification above (ml-service on `:8000`, backend on `:8080`, against the existing
-  `cattlecare-postgres` Docker container) — stop them if you don't need the stack up, or
-  just restart fresh next session.
-- A few real, throwaway test rows now exist in the local dev Postgres (`SHE-TEST-001`,
-  `SHE-UI-001` tag numbers) from the live verification above — harmless, same as the
-  `COW-001`-style test data already scattered through prior sessions' verification, not
-  worth a cleanup pass on its own.
-- Sheep's real gap is now narrower but not gone: the PPR model doesn't cover foot rot or
-  sheep pox (flagged back in M12's original spec) — still true, unaffected by this session.
-  If a sheep-specific *image* dataset ever turns up, that's the next real gap to close (photo
-  diagnosis for Sheep still falls back to the cow image model).
-- Decide on a `LICENSE` (still open, carried over from several sessions back).
-- Fix `GITHUB_TOKEN` for GitHub MCP so the `gh` CLI workaround (`env -u GITHUB_TOKEN gh ...`)
-  isn't needed every session.
-- M7 (notifications, issue #7) is still open and unstarted, independent of everything above.
-- `npx playwright install --with-deps chromium` in `tests/e2e/` — still not done.
-- Consider a future cleanup pass: `docker-compose.yml`'s `chroma` service and
-  `CHROMA_HOST`/`CHROMA_PORT` in `.env.example` are still unused (M6 uses embedded Chroma) —
-  flagged, not urgent.
-- `STATE.md`'s "In Progress"/older session entries drifted out of date before this session
-  started (referenced work that had already actually been merged) — worth a proper audit
-  pass at some point, not done here beyond what this session's own entry needed.
+- **PR #35 CI fix** — `test_get_precautions_reportable_diseases_always_advise_escalation`
+  was failing because the M12 follow-up added PPR to `REPORTABLE_DISEASES` without a
+  reference document, so `get_precautions()` returned **empty guidance for a reportable
+  disease**. Added `peste-des-petits-ruminants.md` and its slug mapping. A real gap, not a
+  flaky test.
+- **PR #36 — README audit.** The biggest find: **training a model was never a documented
+  step**, so following the README end to end gave a running stack where every diagnosis
+  returned `503 MODEL_NOT_TRAINED`. Also corrected the Node version (20+ was wrong on three
+  ranges), the native-install note (`shap` fails too, not just `chromadb`), and added a
+  "how to run the tests" section that didn't exist.
+- **PR #37 — animal identity removed.** Tag numbers and farm IDs never reached `ml-service`;
+  they existed so the backend could attach a diagnosis to an `Animal` row. You chose to drop
+  the record entirely rather than keep a thin one. Diagnosis is one call now
+  (`POST /api/diagnoses`). Shipped alongside: one multi-file photo picker instead of five
+  slots, an ambient CSS background, and a UI pass (persistent live region + focus move,
+  real photo thumbnails, 44px remove target, confidence meter, one disclaimer per
+  submission, "start a new check").
+- **PR #38 — both databases deleted.** Measured first, with both absent: symptom diagnosis
+  6/6 correct, image diagnosis 5/5 on real photos — but precautions came back **empty**.
+  So Postgres (write-only, two saves, zero queries, yet a hard startup dependency) was
+  deleted outright, and Chroma was replaced by direct markdown reads. `ml-service`'s suite
+  now runs **natively with no skips** — Docker is no longer needed to test it.
+- **PR #39 / #40 — species mismatch and image validation.** See STATE.md for the full
+  measured detail; the short version is in "What I got wrong" below.
+
+### What I got wrong, and how it was caught
+
+Worth reading before trusting any of this session's measurements at face value.
+
+1. **I chose warning over blocking for species mismatch**, reasoning that a 6% false-positive
+   rate was too high to refuse a photo on. You sent a screenshot of a dog photo showing the
+   warning *and* "Likely: Foot and Mouth Disease (60%) — Escalate to vet". The error budget
+   was priced wrong: a false refusal costs one retry, a missed mismatch tells a farmer to
+   report a notifiable disease that isn't there.
+2. **I fixed the species check without questioning the gate in front of it.** You then
+   uploaded a text screenshot under Dog and got "Kennel Cough, 42%". M15's gate accepted any
+   photo with an animal class in its top-5, and 398 of ImageNet's 1000 classes are animals.
+   The question was wrong, not the threshold.
+3. **A browser verification appeared to fail and didn't.** A hand-built `File` in the test
+   harness produced corrupt bytes; the same bytes through the API worked. Re-verified with
+   bytes the browser fetched itself. If a browser check fails oddly, suspect the harness.
+
+### Watch out for
+
+- **Commits landed directly on `main` twice** during this session without my checking it
+  out — I caught both before pushing, moved them to branches, and reset `main` to
+  `origin/main` with `git branch -f` (not `git reset --hard`, which the guardrail hook
+  blocks). Worth checking `git status -sb` before committing; I don't know what switched it.
+- **You merged PRs mid-task four times** (#35, #37, #38, #39). It works — I branch from the
+  updated `main` and continue — but a follow-up fix then lands in a *new* PR rather than the
+  one you were watching. If you'd rather review one larger PR, hold off merging until a
+  piece is called finished.
+- **`.mcp.json` is uncommitted and now stale**: it adds a postgres MCP server pointing at
+  `cattlecare`, the database PR #38 deleted. You chose to leave it local. Reverting it is
+  the tidy end state whenever you get to it.
+- **21 local branches**, most from merged PRs. `refactor/remove-animal-identity` shows
+  `ahead 1` — a pre-squash leftover, its content is in `main`. Safe to prune.
+- **Docker Desktop stopped partway through** the session and took the dev Postgres with it.
+  Nothing depends on Docker now except `make up`, so this matters less than it used to.
+- The dev database was already **empty** when I first looked (no tables at all), before I
+  touched anything. If you expected history there, it was gone before this session.
+
+### Next, roughly in order of value
+
+1. **Write reference documents for cat and dog diseases.** Companion-animal diagnoses
+   currently return *no* precautions and *no* next steps, because
+   `DIAGNOSIS_TO_DOC_SLUG` has no entries for them. `docs/DISCLAIMER.md` treats rabies as
+   the companion-animal equivalent of a reportable disease, so this is the most
+   safety-relevant gap left open. Pre-existing, not introduced this session.
+2. **Train a real species classifier** to replace the ImageNet workaround the species guard
+   leans on. Downloaded and verified *Sheep Breed Classification* (1,680 labelled sheep
+   photos, CC BY 4.0); *Indian Bovine breeds* (CC0) and *Cows and Buffalo* (MIT) exist too.
+   This would fix the two limitations the current guard can't: weak sheep detection, and
+   livestock-under-Cat/Dog being undetectable.
+3. **Try the goat health dataset** (Apache 2.0, 278 MB) for the missing sheep *image* model,
+   and the dog skin-disease sets (CC0 / Apache 2.0) against the weak 52.6% dog model.
+   Metadata only so far — neither is verified beyond the licence and size.
+4. `LICENSE` decision (carried over several sessions), `npx playwright install` for e2e,
+   M7 notifications (still unstarted).
 
 ## Blockers
 
-- **Dog image model quality**: real data exists and was used, the result is just weak for 3
-  of 4 classes (52.6% accuracy overall). A different kind of data (photos where systemic
-  symptoms are visually apparent rather than close-up skin shots) might help more than
-  additional volume of the same kind; unverified, worth testing if picked up again.
-- **Sheep's remaining disease gap**: foot rot and sheep pox still aren't represented by
-  anything (the new PPR model is real but single-disease) — would need its own dataset
-  search if this becomes a priority.
-- `GITHUB_TOKEN` used by the GitHub MCP server is invalid ("Bad credentials" on every MCP
-  call, multiple sessions running now) — not blocking, since `gh` CLI has a separate working
-  keyring login (`env -u GITHUB_TOKEN gh ...` per call), but MCP itself needs a real token
-  refresh at some point instead of relying on that workaround indefinitely.
+- **Livestock photos under Cat or Dog cannot be detected** with the current approach, and
+  it isn't a tuning problem: the ratio distributions overlap with valid pet photos. Needs a
+  purpose-trained species classifier (see next-steps 2).
+- **Dog image model quality** — 52.6% overall, 0.25 F1 for Canine Distemper, no Healthy
+  class. Unchanged this session; alternative datasets identified but untested.
+- **Sheep's disease gap** — the PPR model is real but single-disease; foot rot and sheep pox
+  are still represented by nothing, and no sheep *image* dataset has been found.
+- `GITHUB_TOKEN` for the GitHub MCP server is still invalid, and the server disconnected
+  mid-session. `gh` CLI works throughout (separate keyring login), so this stayed a nuisance
+  rather than a blocker.
