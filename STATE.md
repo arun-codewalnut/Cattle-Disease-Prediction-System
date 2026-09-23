@@ -17,6 +17,20 @@ _Last updated: 2026-09-23 (session 14)_
 - `tests/e2e` browsers not installed yet (`npx playwright install --with-deps chromium`,
   one-time) — smoke test scaffold works, hasn't been run against a live `make up` stack yet.
 - ~~Backend tests need a real Postgres~~ — no longer true, the backend is stateless.
+- **Cat and Dog diagnoses return no precautions or next steps.** `DIAGNOSIS_TO_DOC_SLUG`
+  has no entry for Ringworm, Mange, Scabies, Flea Allergy, Canine Distemper, Parvovirus or
+  Kennel Cough, so `get_precautions()` returns empty lists for every companion-animal
+  result. Found while verifying the database removal; the map is byte-identical to before,
+  so it predates that work. Fixing it means writing six or seven reference documents in
+  `data/veterinary-reference/`, the same hand-authored basis as the livestock ones.
+- **A livestock photo submitted under Cat or Dog is not caught** by the species check, and
+  no threshold fixes it: a cow photo with Dog selected has a median ratio (3.9) *below* the
+  90th percentile of genuinely valid cat photos (10.4), so the distributions overlap. The
+  guard covers the common mistake — a pet photo under livestock — only. A purpose-trained
+  species classifier would close this; generic ImageNet cannot.
+- **Image validation refuses ~7.5% of valid photos** (both gates combined), mostly extreme
+  close-ups of lesions. Deliberate: a refusal is recoverable in one retry, and the
+  alternative was a screenshot diagnosed as "Kennel Cough, 42%".
 
 ## Done
 
@@ -512,9 +526,57 @@ _Last updated: 2026-09-23 (session 14)_
     no reference documents, so they return no guidance. The diagnosis→document map is
     byte-identical to before, so this predates the change.
 
+- **Species-mismatch guard and action-first results**
+  (spec [docs/specs/species-mismatch-and-actionable-results.md](docs/specs/species-mismatch-and-actionable-results.md),
+  PR #39 merged, follow-up fix in PR #40). Shipped in three passes, each corrected by
+  evidence rather than argument:
+  1. **The deferral was wrong.** `docs/DECISIONS.md` had twice deferred checking the photo
+     against the selected species, reasoning that a wrong-species photo "most likely comes
+     back `uncertain`". Measured: 15 cat photos through the cattle model returned
+     `uncertain` **0 times**, averaged 71% confidence, and included **"Foot and Mouth
+     Disease, 85%"** — a reportable disease, confidently, from a photo of a cat.
+  2. **Warning was not enough.** Shipped as an advisory banner first; the user immediately
+     hit a dog photo with Cow selected that showed the warning *and* "Likely: Foot and Mouth
+     Disease (60%)" with full escalation guidance beneath it. Now `species_mismatch` is a
+     diagnosis value of its own (mirroring `invalid_image`): the disease model never runs,
+     no confidence, no guidance, excluded from batch agreement.
+  3. **The not-an-animal gate was the real hole.** A screenshot of text with Dog selected
+     returned "Kennel Cough, 42%". M15's gate accepted a photo if *any* of its top-5 classes
+     was an animal — and **398 of ImageNet's 1000 classes are animals**, so cluttered images
+     passed by chance. It scores total animal probability mass (≥ 0.30) now: 0/12 non-animal
+     test images let through, versus 2/12 before, at the same 2/90 cost in valid photos.
+  - Choosing the species statistic took three attempts, all measured: summing class
+    probabilities gave dog a structural advantage (118 classes against 5) and refused 7.5%
+    of genuine cattle photos; dividing by class count over-corrected and dropped detection
+    to 7%; **peak class probability** is scale-free and does neither. Threshold 25, taken
+    from the gap between valid photos (p95 ≈ 24) and genuine mismatches (median 98–170).
+  - **Measured end state**: 7.5% of valid photos refused, 87% of dog-as-cow and 93% of
+    cat-as-cow refused, 100% of non-animal images refused.
+  - Result cards also restructured: the confidence percentage appears **once** (the heading,
+    where `docs/DISCLAIMER.md` requires it — it was stated three times), the recommended
+    action and numbered next steps moved above the explanation, and the template explanation
+    stopped repeating the percentage and stopped printing raw feature keys
+    (`mouth_lesions` → "mouth lesions").
+
+- **Kaggle dataset survey** (no code change). Kaggle's site won't render in the in-app
+  browser — its JS bundles are blocked (`ERR_BLOCKED_BY_CLIENT`) — but the public API works
+  unauthenticated for both search and download, confirmed by pulling a real 11 MB dataset.
+  No sign-in is needed for public datasets, matching what
+  `data/sheep-symptoms/SOURCE.md` already documents. 175 datasets surveyed, 113 openly
+  licensed. Candidates worth following up, none verified beyond metadata:
+  - *Healthy and Unhealthy Goat Images* (Apache 2.0, 278 MB) — closest thing to the missing
+    sheep disease image set; the PPR symptom model already combines goat+sheep data.
+  - *Dog's skin diseases* (Apache 2.0 / CC0, ~200 MB each) — candidates to replace the weak
+    52.6% dog model.
+  - *Sheep Breed Classification* (CC BY 4.0, 1,680 real sheep photos across 4 breeds,
+    downloaded and verified), *Indian Bovine breeds* (CC0), *Cows and Buffalo* (MIT) —
+    together these could train a real 4-class species classifier and retire the ImageNet
+    workaround the species guard currently depends on.
+
 ## In Progress
 
-Nothing currently in progress.
+- **PR #40 is open and green** (`fix/species-mismatch-blocks-diagnosis`) — the blocking
+  species guard plus the image-validation fix. Everything else from this session is merged.
 
 ## Not Started
 
