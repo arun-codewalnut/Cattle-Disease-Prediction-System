@@ -17,6 +17,20 @@ _Last updated: 2026-09-23 (session 15 — M16 Goat + Dog v2)_
 - `tests/e2e` browsers not installed yet (`npx playwright install --with-deps chromium`,
   one-time) — smoke test scaffold works, hasn't been run against a live `make up` stack yet.
 - ~~Backend tests need a real Postgres~~ — no longer true, the backend is stateless.
+- **Cat and Dog diagnoses return no precautions or next steps.** `DIAGNOSIS_TO_DOC_SLUG`
+  has no entry for Ringworm, Mange, Scabies, Flea Allergy, Canine Distemper, Parvovirus or
+  Kennel Cough, so `get_precautions()` returns empty lists for every companion-animal
+  result. Found while verifying the database removal; the map is byte-identical to before,
+  so it predates that work. Fixing it means writing six or seven reference documents in
+  `data/veterinary-reference/`, the same hand-authored basis as the livestock ones.
+- **A livestock photo submitted under Cat or Dog is not caught** by the species check, and
+  no threshold fixes it: a cow photo with Dog selected has a median ratio (3.9) *below* the
+  90th percentile of genuinely valid cat photos (10.4), so the distributions overlap. The
+  guard covers the common mistake — a pet photo under livestock — only. A purpose-trained
+  species classifier would close this; generic ImageNet cannot.
+- **Image validation refuses ~7.5% of valid photos** (both gates combined), mostly extreme
+  close-ups of lesions. Deliberate: a refusal is recoverable in one retry, and the
+  alternative was a screenshot diagnosed as "Kennel Cough, 42%".
 
 ## Done
 
@@ -558,7 +572,8 @@ _Last updated: 2026-09-23 (session 15 — M16 Goat + Dog v2)_
 
 ## In Progress
 
-Nothing currently in progress.
+Nothing in progress. Every PR from this session is merged (#35 through #40), apart from the
+documentation PR carrying this update.
 
 ## Not Started
 

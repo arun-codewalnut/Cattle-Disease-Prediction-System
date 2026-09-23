@@ -60,7 +60,7 @@ replacing the weak Dog model specifically (not a new species-classifier project)
   verification against the real running stack is the next step before calling this fully
   done — see below.
 
-## Next session
+### What shipped
 
 - **Live end-to-end verification done this session**, against the real running stack — but
   hit a real environmental snag worth knowing about: another chat session already had
