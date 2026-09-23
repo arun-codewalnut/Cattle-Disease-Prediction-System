@@ -13,7 +13,7 @@ import com.cattlecare.backend.diagnosis.Species;
 class ImageDiagnosisBatchResponseTest {
 
     private static DiagnosisCaseResponse withDiagnosis(String diagnosis) {
-        return new DiagnosisCaseResponse(1L, Species.COW, diagnosis, 0.9, "...", "consult_vet", List.of(), List.of(), Instant.now());
+        return new DiagnosisCaseResponse(Species.COW, diagnosis, 0.9, "...", "consult_vet", List.of(), List.of(), Instant.now());
     }
 
     // M15 (docs/specs/M15-image-diagnosis-quality-gate.md): "invalid_image" isn't a real

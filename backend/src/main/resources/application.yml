@@ -5,18 +5,6 @@ spring:
     multipart:
       max-file-size: 5MB
       max-request-size: 5MB
-  datasource:
-    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:cattlecare}
-    username: ${DB_USER:cattlecare}
-    password: ${DB_PASSWORD:cattlecare}
-  jpa:
-    hibernate:
-      ddl-auto: validate
-    open-in-view: false
-  flyway:
-    enabled: true
-    locations: classpath:db/migration
-
 ml-service:
   base-url: ${ML_SERVICE_BASE_URL:http://localhost:8000}
 

@@ -3,22 +3,20 @@
 Living snapshot of project state. Update this whenever you finish a meaningful chunk of work —
 this is what an agent (or you) reads first when resuming.
 
-_Last updated: 2026-09-22 (session 13)_
+_Last updated: 2026-09-23 (session 14)_
 
 ## Known gaps
 
-- `chromadb`/`chroma-hnswlib` cannot install natively on Windows/Python 3.13 — confirmed no
-  `cp313` wheel exists at all (any platform), not just "needs Build Tools." Verified working
-  via Docker instead — see [ml-service/AGENTS.md](ml-service/AGENTS.md) for the exact build
-  command (includes a fix for a network/proxy that was corrupting `apt-get`'s HTTP
-  downloads — forced to HTTPS).
+- `shap` has no cp313 wheel on Windows, so a bare `pip install -r requirements.txt` fails
+  there; it's never imported, so skipping it is the fix (README has the command). The bigger
+  version of this problem, `chromadb`/`chroma-hnswlib`, is **gone** — ml-service's whole
+  suite now runs natively, no Docker.
 - `springdoc-openapi` Spring-Boot-4 compatibility unverified — not added to `backend/pom.xml`
   yet. See [backend/AGENTS.md](backend/AGENTS.md).
 - No `LICENSE` file yet — open decision, not yet made.
 - `tests/e2e` browsers not installed yet (`npx playwright install --with-deps chromium`,
   one-time) — smoke test scaffold works, hasn't been run against a live `make up` stack yet.
-- Backend tests need a real Postgres running locally (not just `mvn compile`) — see
-  `backend/AGENTS.md` for the one-line `docker run` to start one.
+- ~~Backend tests need a real Postgres~~ — no longer true, the backend is stateless.
 
 ## Done
 
@@ -486,6 +484,33 @@ _Last updated: 2026-09-22 (session 13)_
   - Verified: `mvnw -B verify` 20/20 green against a scratch Postgres (full V1→V4 migration
     chain applies clean, and Hibernate's `ddl-auto: validate` confirms the entity matches
     the migrated schema); frontend lint clean, 12/12 tests, production build OK.
+
+- **Both databases removed** (spec
+  [docs/specs/remove-databases.md](docs/specs/remove-databases.md), decision logged in
+  `docs/DECISIONS.md`). Asked whether either was needed, the answer was measured rather than
+  argued: with both absent, symptom diagnosis was 6/6 correct and image diagnosis 5/5 on real
+  labelled photos, but precautions/next-steps came back **empty** — including for FMD, where
+  the farmer was told to escalate with no guidance.
+  - **Postgres deleted entirely**: entity, repository, all four Flyway migrations, the JPA /
+    Flyway / postgresql dependencies, the datasource config, the compose service and CI's
+    service container. It was write-only (two saves, zero queries) yet a hard startup
+    dependency — the backend would not boot without it. Now stateless; boots in 1.8s instead
+    of ~10s, and `mvn verify` passes with no database anywhere.
+  - **Chroma replaced by direct markdown reads**, not deleted in spirit: `app/rag/` still
+    does RAG, it just reads `data/veterinary-reference/*.md`. The corpus is 10.8 KB over six
+    documents that both callers addressed by exact key, so the index earned nothing.
+    `retrieve()` is now an exact lookup — strictly narrower, it can't surface another
+    disease's text. The precautions text is byte-identical, pinned by a golden-output test.
+  - **`DiagnosisCaseResponse.id` removed** — no row, nothing to identify. `createdAt` stays;
+    the correlation ID remains the tracing handle.
+  - Verified by running the stack natively (Docker was down, which made the point): 6/6
+    symptom scenarios correct *with* full guidance, image diagnosis byte-identical to the
+    pre-change run on the same five photos, multi-photo agreement intact. Suites:
+    **ml-service 79 passed / 0 skipped natively** (was 63 passed / 2 skipped, RAG file
+    skipped outside Docker), backend 20/20 with no DB, frontend 23/23.
+  - Pre-existing gap noticed, not introduced: cat/dog diagnoses (Ringworm, Mange, ...) have
+    no reference documents, so they return no guidance. The diagnosis→document map is
+    byte-identical to before, so this predates the change.
 
 ## In Progress
 

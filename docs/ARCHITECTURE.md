@@ -3,11 +3,10 @@
 ```mermaid
 flowchart TD
     U[Farmer / Vet] -->|symptoms, image| FE[React frontend]
-    FE -->|REST/JSON<br/>X-Correlation-Id| BE[Java Spring Boot backend<br/>auth, case history, notifications]
+    FE -->|REST/JSON<br/>X-Correlation-Id| BE[Java Spring Boot backend<br/>validation, API gateway]
     BE -->|POST /agent/diagnose<br/>X-Correlation-Id forwarded| ML[Python FastAPI ml-service<br/>LangGraph agent]
     ML --> MODELS[XGBoost / CNN models]
-    ML --> RAG[Chroma RAG<br/>vet knowledge base]
-    BE --> DB[(Postgres<br/>Flyway-migrated)]
+    ML --> RAG[RAG over markdown<br/>vet knowledge base]
     BE -->|escalate| NOTIFY[Email / WhatsApp<br/>free tier]
 ```
 
@@ -25,7 +24,6 @@ sequenceDiagram
     BE->>ML: POST /agent/diagnose (X-Correlation-Id forwarded)
     ML->>ML: intake -> route -> predict -> explain
     ML-->>BE: { diagnosis, confidence, explanation, recommended_action }
-    BE->>BE: persist case (Postgres)
     alt recommended_action == escalate
         BE->>U: notify (email/WhatsApp)
     end
@@ -35,9 +33,11 @@ sequenceDiagram
 
 ## Why this split
 
-- **Java (backend)**: everything that's conventional CRUD/business-logic/auth — plays to
-  existing team skill, mature ecosystem for this kind of work (Spring Security, Spring Data,
-  Flyway).
+- **Java (backend)**: request validation, species rules, and the API gateway to
+  `ml-service` — plays to existing team skill, and the mature ecosystem is there if
+  auth/persistence are ever needed (Spring Security, Spring Data, Flyway). **There is no
+  database today**: both were removed once neither was earning its place — see
+  [specs/remove-databases.md](specs/remove-databases.md). The backend is stateless.
 - **Python (ml-service)**: ML training/inference and agent orchestration (LangGraph) are
   Python-native ecosystems — fighting that would cost more than it saves.
 - **React (frontend)**: symptom/image intake UI, results display.

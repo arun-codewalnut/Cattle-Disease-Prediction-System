@@ -7,7 +7,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-import org.slf4j.MDC;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
@@ -15,7 +14,6 @@ import org.springframework.web.multipart.MultipartFile;
 import com.cattlecare.backend.client.DiagnosisResult;
 import com.cattlecare.backend.client.MlServiceClient;
 import com.cattlecare.backend.config.ApiException;
-import com.cattlecare.backend.config.CorrelationIdFilter;
 import com.cattlecare.backend.diagnosis.dto.DiagnosisCaseResponse;
 import com.cattlecare.backend.diagnosis.dto.ImageDiagnosisBatchResponse;
 
@@ -32,8 +30,10 @@ public class DiagnosisService {
     // now routes to its own real, PPR-trained symptom model; every other symptom-diagnosable
     // species still falls back to the cattle model, same as before.
     //
-    // Species now arrives directly on the request instead of being read off an animal record
-    // — animal identity was removed, see docs/specs/remove-animal-identity.md.
+    // Species arrives directly on the request instead of being read off an animal record —
+    // animal identity was removed, see docs/specs/remove-animal-identity.md. Results are no
+    // longer persisted either (docs/specs/remove-databases.md): the backend is a stateless
+    // gateway that validates, calls ml-service and returns the answer.
     private static final Set<String> ALLOWED_IMAGE_TYPES = Set.of("image/jpeg", "image/png");
     private static final long MAX_IMAGE_SIZE_BYTES = 5L * 1024 * 1024;
 
@@ -56,33 +56,19 @@ public class DiagnosisService {
     static final Set<Species> IMAGE_ONLY_SUPPORTED_SPECIES = Set.of(Species.CAT, Species.DOG);
 
     private final MlServiceClient mlServiceClient;
-    private final DiagnosisCaseRepository diagnosisCaseRepository;
 
-    public DiagnosisService(MlServiceClient mlServiceClient, DiagnosisCaseRepository diagnosisCaseRepository) {
+    public DiagnosisService(MlServiceClient mlServiceClient) {
         this.mlServiceClient = mlServiceClient;
-        this.diagnosisCaseRepository = diagnosisCaseRepository;
     }
 
     public DiagnosisCaseResponse submitSymptoms(Species species, Map<String, Object> symptoms) {
         requireSymptomDiagnosisSupported(species);
 
-        // If this throws (unreachable / error response), nothing gets persisted below —
-        // we don't record a case that never actually got a diagnosis. species is forwarded
-        // so Sheep routes to its own trained symptom model in ml-service — see this class's
-        // header comment.
+        // species is forwarded so Sheep routes to its own trained symptom model in
+        // ml-service — see this class's header comment.
         DiagnosisResult result = mlServiceClient.diagnose(symptoms, null, null, species.name());
 
-        String correlationId = MDC.get(CorrelationIdFilter.MDC_KEY);
-        DiagnosisCase entity = new DiagnosisCase(
-                species,
-                correlationId,
-                symptoms,
-                result.diagnosis(),
-                result.confidence(),
-                result.recommendedAction());
-        diagnosisCaseRepository.save(entity);
-
-        return DiagnosisCaseResponse.from(entity, result.explanation(), result.precautions(), result.nextSteps());
+        return DiagnosisCaseResponse.from(species, result);
     }
 
     public ImageDiagnosisBatchResponse submitImage(Species species, List<MultipartFile> images) {
@@ -98,10 +84,7 @@ public class DiagnosisService {
         images.forEach(this::validateImage);
 
         requireImageDiagnosisSupported(species);
-        String correlationId = MDC.get(CorrelationIdFilter.MDC_KEY);
 
-        // Nothing gets persisted if any photo fails partway through — same "no partial case"
-        // principle as the rest of this class, just applied to a batch instead of one call.
         List<DiagnosisCaseResponse> results = new ArrayList<>();
         for (MultipartFile image : images) {
             String imageBase64;
@@ -112,23 +95,12 @@ public class DiagnosisService {
                         "IMAGE_READ_FAILED", "Could not read the uploaded image.", HttpStatus.BAD_REQUEST);
             }
 
-            // No symptoms for an image-based diagnosis — an empty map, not null, so the
-            // ml-service request/DB column contracts (both require a non-null object) hold.
-            // species is forwarded so Cat/Dog route to their own trained image models in
-            // ml-service — see DiagnosisService's class comment.
+            // No symptoms for an image-based diagnosis — an empty map, not null, since
+            // ml-service's request contract requires a non-null object. species is forwarded
+            // so Cat/Dog route to their own trained image models — see the class comment.
             DiagnosisResult result = mlServiceClient.diagnose(Map.of(), null, imageBase64, species.name());
 
-            DiagnosisCase entity = new DiagnosisCase(
-                    species,
-                    correlationId,
-                    Map.of(),
-                    result.diagnosis(),
-                    result.confidence(),
-                    result.recommendedAction());
-            diagnosisCaseRepository.save(entity);
-
-            results.add(DiagnosisCaseResponse.from(
-                    entity, result.explanation(), result.precautions(), result.nextSteps()));
+            results.add(DiagnosisCaseResponse.from(species, result));
         }
 
         return ImageDiagnosisBatchResponse.from(results);

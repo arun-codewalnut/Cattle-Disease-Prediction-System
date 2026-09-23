@@ -1,47 +1,22 @@
 services:
-  postgres:
-    image: postgres:16-alpine
-    environment:
-      POSTGRES_DB: cattlecare
-      POSTGRES_USER: cattlecare
-      POSTGRES_PASSWORD: cattlecare
-    ports:
-      - "5432:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-
-  chroma:
-    image: chromadb/chroma:latest
-    ports:
-      - "8001:8000"
-    volumes:
-      - chroma_data:/chroma/chroma
-
   ml-service:
     build: ./ml-service
     env_file: ./ml-service/.env
-    environment:
-      CHROMA_HOST: chroma
-      CHROMA_PORT: "8000"
     ports:
       - "8000:8000"
     volumes:
       - ./ml-service:/app
-    depends_on:
-      - chroma
 
   backend:
     build: ./backend
     env_file: ./backend/.env
     environment:
-      DB_HOST: postgres
       ML_SERVICE_BASE_URL: http://ml-service:8000
     ports:
       - "8080:8080"
     volumes:
       - ./backend:/app
     depends_on:
-      - postgres
       - ml-service
 
   frontend:
@@ -56,7 +31,3 @@ services:
       - /app/node_modules
     depends_on:
       - backend
-
-volumes:
-  postgres_data:
-  chroma_data:
