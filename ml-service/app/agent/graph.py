@@ -102,35 +102,32 @@ class DiagnosisState(TypedDict, total=False):
     next_steps: list[str]
     recommended_action: str
     sources: list[str]
-    species_warning: str | None
 
 
-# Human-readable species names for the mismatch warning — "cow", not "COW".
+# Human-readable species names for the mismatch message — "cow", not "COW".
 SPECIES_LABELS = {"COW": "cow", "SHEEP": "sheep", "CAT": "cat", "DOG": "dog"}
 
 
-def _species_warning(selected: str) -> str:
-    """The message shown when a photo doesn't look like the selected species.
+def _species_mismatch_message(selected: str | None) -> str:
+    """Shown instead of a diagnosis when the photo doesn't look like the selected species.
 
-    Blunt on purpose. Without it, a cat photo submitted as a cow is diagnosed
-    "Foot and Mouth Disease, 85%" with nothing to suggest anything went wrong — measured,
-    not hypothesised. See docs/specs/species-mismatch-and-actionable-results.md.
-
-    Says only what the detector can actually support: that the photo doesn't look like the
-    selected species. It never claims what the animal *is* — that guess is unreliable enough
-    to tell someone their cat looks like a dog.
+    Says only what the detector can support — that the photo doesn't look like the selected
+    species — and never what the animal *is*: that guess is unreliable enough to tell someone
+    their cat looks like a dog. The second sentence covers the other reason this fires, a
+    close-up so tight that nothing recognisable is visible.
     """
-    label = SPECIES_LABELS.get(selected, selected.lower())
+    label = SPECIES_LABELS.get(selected or "", (selected or "selected species").lower())
     return (
-        f"This photo doesn't look like a {label}. If the species is wrong, the result below "
-        f"came from the {label} model and may be meaningless — check the species and try again."
+        f"This photo doesn't look like a {label}, so no diagnosis was made — a {label} model "
+        f"reading another animal's photo would give a confident, meaningless answer. Check the "
+        f"species selection, or try a photo showing more of the animal."
     )
 
 
 def _recommended_action(diagnosis: str) -> str:
     if diagnosis in REPORTABLE_DISEASES:
         return "escalate_to_vet"
-    if diagnosis == "invalid_image":
+    if diagnosis in ("invalid_image", "species_mismatch"):
         # Deliberately not consult_vet/monitor/escalate — nothing was actually diagnosed,
         # so none of the vet-triage actions apply. A distinct value the frontend renders as
         # its own "try again" affordance instead of a diagnosis-result badge.
@@ -145,6 +142,8 @@ def _recommended_action(diagnosis: str) -> str:
 def _template_explanation(state: DiagnosisState) -> str:
     if state["diagnosis"] == "invalid_image":
         return "This doesn't look like a photo of an animal — please upload a clear photo of the animal itself."
+    if state["diagnosis"] == "species_mismatch":
+        return _species_mismatch_message(state.get("species"))
     if state["diagnosis"] == "uncertain":
         was_image = bool(state.get("image_url") or state.get("image_base64"))
         if was_image:
@@ -243,12 +242,13 @@ def predict_image_node(state: DiagnosisState) -> dict[str, Any]:
         # docs/specs/M15-image-diagnosis-quality-gate.md.
         return {"diagnosis": "invalid_image", "confidence": 0.0, "top_features": []}
 
-    # Advisory only, and only once we know it's an animal at all: does the photo look like
-    # the species the user picked? Never blocks — see the spec for why a warning beats a
-    # refusal at this detector's measured error rate.
+    # Once we know it's an animal: is it the species the user picked? If not, stop here. The
+    # disease model would otherwise answer confidently about the wrong animal — a dog photo
+    # submitted as a cow produced "Foot and Mouth Disease, 60%" with full escalation guidance,
+    # which is why this refuses rather than annotates.
     selected_species = state.get("species")
-    mismatch = species_gate.looks_like_a_different_species(image_bytes, selected_species)
-    species_warning = _species_warning(selected_species) if mismatch else None
+    if species_gate.looks_like_a_different_species(image_bytes, selected_species):
+        return {"diagnosis": "species_mismatch", "confidence": 0.0, "top_features": []}
 
     model_module = _IMAGE_MODEL_BY_SPECIES.get(state.get("species") or "", cattle_image_model)
 
@@ -265,12 +265,11 @@ def predict_image_node(state: DiagnosisState) -> dict[str, Any]:
         "diagnosis": result["diagnosis"],
         "confidence": result["confidence"],
         "top_features": result["top_features"],
-        "species_warning": species_warning,
     }
 
 
 def explain_node(state: DiagnosisState) -> dict[str, Any]:
-    if state["diagnosis"] in ("uncertain", "invalid_image"):
+    if state["diagnosis"] in ("uncertain", "invalid_image", "species_mismatch"):
         return {"explanation": _template_explanation(state), "sources": []}
 
     # Retrieval failure (Chroma unreachable, empty collection) degrades to no retrieved
@@ -377,6 +376,4 @@ def run_diagnosis(
         "sources": final_state.get("sources", []),
         "precautions": final_state.get("precautions", []),
         "next_steps": final_state.get("next_steps", []),
-        # None for symptom submissions — there is no photo to disagree with.
-        "species_warning": final_state.get("species_warning"),
     }

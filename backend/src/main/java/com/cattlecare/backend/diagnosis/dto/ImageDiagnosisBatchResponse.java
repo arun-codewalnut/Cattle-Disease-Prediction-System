@@ -16,12 +16,15 @@ import java.util.List;
  * disagreement warning over something that was never a competing diagnosis. */
 public record ImageDiagnosisBatchResponse(List<DiagnosisCaseResponse> results, boolean diagnosesAgree) {
 
-    private static final String INVALID_IMAGE_DIAGNOSIS = "invalid_image";
+    // Neither of these is a diagnosis, so neither can agree or disagree with one: a photo
+    // that isn't an animal, and a photo that isn't the selected species.
+    private static final java.util.Set<String> NON_DIAGNOSES =
+            java.util.Set.of("invalid_image", "species_mismatch");
 
     public static ImageDiagnosisBatchResponse from(List<DiagnosisCaseResponse> results) {
         boolean agree = results.stream()
                 .map(DiagnosisCaseResponse::diagnosis)
-                .filter(diagnosis -> !INVALID_IMAGE_DIAGNOSIS.equals(diagnosis))
+                .filter(diagnosis -> !NON_DIAGNOSES.contains(diagnosis))
                 .distinct()
                 .count() <= 1;
         return new ImageDiagnosisBatchResponse(results, agree);

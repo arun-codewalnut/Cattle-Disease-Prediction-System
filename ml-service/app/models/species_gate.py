@@ -71,6 +71,11 @@ def is_animal_photo(image_bytes: bytes, top_k: int = 5) -> bool:
 # --------------------------------------------------------------------------------------
 # Species-mismatch detection (see docs/specs/species-mismatch-and-actionable-results.md)
 #
+# This blocks the diagnosis rather than annotating it. Warning alongside the result was tried
+# first and was wrong: a dog photo submitted as a cow still rendered "Foot and Mouth Disease,
+# 60% confidence" with "contact your veterinarian — this is a reportable disease" underneath,
+# and a caveat above that does not undo a confident, escalating, wrong answer.
+#
 # Reuses the same pretrained model as the gate above — no new dependency, no new dataset.
 # ImageNet-1k class indices grouped into this project's four species. Index 383 is
 # "Madagascar cat", which is a lemur, and is deliberately excluded from CAT.
@@ -92,9 +97,17 @@ _SPECIES_CLASS_INDICES = {
 # species — common for close-up lesion photos. Silence is the correct output there.
 _SPECIES_OPINION_FLOOR = 0.15
 
-# Warn only when the selected species holds almost none of the mass. Deliberately strict:
-# a false warning costs a moment's doubt, and this threshold is what keeps that rare.
+# Reject only when the selected species holds almost none of the mass. This gates a refusal,
+# not a warning, so it is deliberately strict: measured at 2.7% false rejections of valid
+# photos while catching 84% of genuine mismatches (a dog photo submitted as a cow).
 _SELECTED_SPECIES_MIN_SHARE = 0.02
+
+# Cow and sheep are treated as one group on purpose. There is no sheep image model — sheep
+# photos are routed to the cattle model as a disclosed approximation (docs/DISCLAIMER.md) —
+# so cow/sheep confusion is already accepted by design, and refusing a sheep photo for
+# looking bovine would be rejecting something the app deliberately supports. It also removes
+# a third of the false rejections outright.
+_INTERCHANGEABLE_SPECIES = frozenset({"COW", "SHEEP"})
 
 
 def looks_like_a_different_species(image_bytes: bytes, selected_species: str | None) -> bool:
@@ -133,4 +146,9 @@ def looks_like_a_different_species(image_bytes: bytes, selected_species: str | N
     if total <= _SPECIES_OPINION_FLOOR:
         return False
 
-    return (mass[selected_species] / total) < _SELECTED_SPECIES_MIN_SHARE
+    if selected_species in _INTERCHANGEABLE_SPECIES:
+        selected_mass = sum(mass[species] for species in _INTERCHANGEABLE_SPECIES)
+    else:
+        selected_mass = mass[selected_species]
+
+    return (selected_mass / total) < _SELECTED_SPECIES_MIN_SHARE

@@ -12,9 +12,5 @@ public record DiagnosisResult(
         @JsonProperty("recommended_action") String recommendedAction,
         List<String> sources,
         List<String> precautions,
-        @JsonProperty("next_steps") List<String> nextSteps,
-        /** Set when an uploaded photo doesn't look like the selected species — advisory,
-         * the diagnosis is still returned. Null for symptom submissions and matching photos.
-         * See docs/specs/species-mismatch-and-actionable-results.md. */
-        @JsonProperty("species_warning") String speciesWarning) {
+        @JsonProperty("next_steps") List<String> nextSteps) {
 }

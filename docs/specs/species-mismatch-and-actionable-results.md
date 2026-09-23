@@ -29,9 +29,9 @@ part.
 
 ## Boundaries & failure states
 
-- **The warning does not block the diagnosis.** It is a message, per the request. A photo
-  still gets diagnosed and the result is still shown; the warning sits above it and says the
-  result may be meaningless.
+- **A mismatch blocks the diagnosis.** Revised after seeing it in use — see the
+  "Revision" section at the end. The photo gets no disease prediction at all; the result slot
+  shows a refusal instead.
 - **The detector is the existing M15 species gate's model**, reused — no new dependency, no
   new dataset, no new download. It compares ImageNet probability mass across the four species
   groups this project supports.
@@ -41,9 +41,9 @@ part.
     catches anything — rejected;
   - normalised group-mass with `share < 0.02` and `total animal mass > 0.15`: **6% false
     warnings, 95% of real mismatches caught** — adopted.
-- **False warnings are the accepted cost** and are why this warns rather than blocks. 6 in
-  100 valid photos will see a warning they can ignore; the alternative is a confidently wrong
-  reportable-disease result with no caveat at all.
+- **False rejections are the accepted cost**, measured at 2.7% of valid photos. A rejection
+  is recoverable — the message says what to do and the photo can be resubmitted — whereas a
+  missed mismatch produces a confident, escalating diagnosis of the wrong animal.
 - **No warning is emitted when the model has no opinion** (total animal mass at or below the
   floor) — close-up lesion photos often land there, and silence is correct for them.
 - **Sheep is detectable but weak**: ImageNet has 3 cattle classes and 2 sheep classes against
@@ -120,3 +120,35 @@ restructure the result so the first thing read is the action, not the arithmetic
    gate passes — a non-animal photo already has its own dedicated message.
 4. **Confidence stays in the heading.** "Fewer percentages" is read as removing the second and
    third statements of the same number, not as overriding `docs/DISCLAIMER.md`.
+
+## Revision (2026-09-23, same day): warn → block
+
+Shipped as a warning first. The user immediately hit the case this was written for and it was
+still wrong: a **dog photo with Cow selected** rendered the warning *and*, directly beneath
+it, "Likely: Foot and Mouth Disease (60% confidence)" with "🚨 Escalate to vet — contact your
+veterinarian or local animal health authority immediately; this is a reportable disease."
+
+A caveat above a confident, escalating, wrong answer does not undo it. The reasoning for
+warning-over-blocking — that a 6% false-positive rate was too high to refuse on — weighed the
+wrong side: a false rejection is recoverable in one click, while a missed mismatch tells a
+farmer to report a notifiable disease that isn't there.
+
+**What changed**:
+
+- `species_mismatch` is now a diagnosis value in its own right, mirroring M15's
+  `invalid_image`: `confidence: 0.0`, `recommended_action: "retry_upload"`, no precautions, no
+  next steps, and excluded from multi-photo agreement. The disease model never runs.
+- The `species_warning` field is gone — the diagnosis value and its explanation carry it.
+- Thresholds retuned for refusal: `share < 0.02` still, but **cow and sheep are now one
+  group**. There is no sheep image model — sheep photos are deliberately routed to the cattle
+  model (docs/DISCLAIMER.md) — so refusing a sheep photo for looking bovine would reject
+  something the app supports by design. That alone removed a third of the false rejections.
+- Measured after the change: **2.7% false rejections** of valid photos (close-up lesion shots,
+  which is also why the message suggests a photo showing more of the animal), **84%** of
+  dog-as-cow submissions refused.
+
+**Verified end to end**, not just in tests: three separate dog photos with Cow selected each
+returned `species_mismatch` / `retry_upload` / 0% / no guidance; a cat photo as Cow likewise;
+and correct-species photos still diagnosed normally (cow FMD 89%, cow healthy 88%, cat
+ringworm 48%, dog distemper 41%). In the browser the card reads "Wrong species for this
+photo" with no disease named, no percentage, and no escalation block.

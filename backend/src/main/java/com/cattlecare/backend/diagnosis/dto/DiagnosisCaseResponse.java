@@ -21,7 +21,6 @@ public record DiagnosisCaseResponse(
         String recommendedAction,
         List<String> precautions,
         List<String> nextSteps,
-        String speciesWarning,
         Instant createdAt) {
 
     public static DiagnosisCaseResponse from(Species species, DiagnosisResult result) {
@@ -33,7 +32,6 @@ public record DiagnosisCaseResponse(
                 result.recommendedAction(),
                 result.precautions(),
                 result.nextSteps(),
-                result.speciesWarning(),
                 Instant.now());
     }
 }

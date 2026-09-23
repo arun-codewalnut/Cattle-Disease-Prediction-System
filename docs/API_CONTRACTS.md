@@ -168,11 +168,14 @@ Response (`201`):
   "createdAt": "..."
 }
 ```
-`speciesWarning` (string or `null`) is set when an uploaded photo doesn't look like the
-selected species — advisory only, the diagnosis is still returned alongside it. It says the
-photo doesn't match, never what the animal is instead: that guess is unreliable enough to
-tell someone their cat looks like a dog. `null` for symptom submissions, for matching photos,
-and whenever the detector has no confident opinion. See
+**`diagnosis: "species_mismatch"`**: the photo is an animal, but not the selected species, so
+no disease model ran — `confidence: 0.0`, `recommendedAction: "retry_upload"`, empty
+precautions and next steps, and excluded from the `diagnosesAgree` comparison, exactly like
+`invalid_image`. It is a refusal, not an annotation: a dog photo submitted as a cow previously
+returned "Foot and Mouth Disease" with escalation guidance. The message says only that the
+photo doesn't match the selected species, never what the animal is — that guess is unreliable
+enough to tell someone their cat looks like a dog. Cow and sheep count as one group, since
+sheep photos already use the cattle model by design. See
 [docs/specs/species-mismatch-and-actionable-results.md](specs/species-mismatch-and-actionable-results.md).
 
 Note: **nothing is persisted at all** — the backend holds no database as of

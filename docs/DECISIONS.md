@@ -654,3 +654,31 @@ a farmer.
 **What was explicitly not done**: removing the percentage. `docs/DISCLAIMER.md` requires
 "likely X, confidence Y%" wording, so the duplicates went and the required statement stayed.
 The low-confidence caveat also stayed — it conveys something a bare number doesn't.
+
+## Species mismatch blocks the diagnosis, it doesn't annotate it (2026-09-23)
+
+**Supersedes the entry above, the same day it was written.** That one chose an advisory
+warning over a refusal, reasoning that a 6% false-positive rate was too high to reject a photo
+on. Seen in use, that was the wrong call: a **dog photo with Cow selected** showed the warning
+and, immediately beneath it, "Likely: Foot and Mouth Disease (60% confidence)" with
+"🚨 Escalate to vet — this is a reportable disease". A caveat above a confident, escalating,
+wrong answer does not undo it.
+
+**Decision**: a wrong-species photo returns `species_mismatch` and no diagnosis at all —
+`confidence: 0.0`, `recommended_action: "retry_upload"`, no precautions or next steps,
+excluded from multi-photo agreement. Exactly the shape M15 already uses for `invalid_image`.
+The `species_warning` field added hours earlier is removed; the diagnosis value carries it.
+
+**Why the error budget flipped**: a false rejection costs one retry and says what to do. A
+missed mismatch tells a farmer to report a notifiable disease that isn't there. Those are not
+comparable, and the first version priced them as if they were.
+
+**Cow and sheep are now one group** for this check. There is no sheep image model — sheep
+photos are routed to the cattle model as a disclosed approximation — so refusing a sheep photo
+for looking bovine would reject something the app deliberately supports. It also removed a
+third of the false rejections.
+
+**Measured after the change**: 2.7% false rejections of valid photos (close-up lesion shots,
+which is why the message also suggests a wider photo), 84% of dog-as-cow submissions refused.
+Correct-species photos still diagnose normally, verified against real photos for all four
+species.
