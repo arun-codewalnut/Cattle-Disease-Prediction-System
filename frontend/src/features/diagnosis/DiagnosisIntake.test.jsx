@@ -204,10 +204,10 @@ describe('DiagnosisIntake', () => {
     expect(screen.getByText(/not a valid photo/i)).toBeInTheDocument()
     expect(screen.getByText(/doesn't look like a photo of an animal/i)).toBeInTheDocument()
     expect(screen.queryByText(/didn't all get the same diagnosis/i)).not.toBeInTheDocument()
-    // The invalid-image card must not show a fake confidence percentage or a vet-action badge
-    // — both should appear exactly once each (the real Ringworm card only).
+    // The invalid-image card must not show a fake confidence percentage or an action block
+    // — both belong to the real Ringworm card only.
     expect(screen.getAllByText(/% confidence\)/i)).toHaveLength(1)
-    expect(screen.getAllByText(/recommended action:/i)).toHaveLength(1)
+    expect(document.querySelectorAll('.next-actions')).toHaveLength(1)
   })
 
   // The five "Add photo N" slots were replaced by one multi-select input — five affordances
@@ -378,6 +378,95 @@ describe('DiagnosisIntake', () => {
     // Leaking a full-size camera photo per re-pick is the failure mode this guards.
     await user.click(screen.getByRole('button', { name: /remove lesion\.jpg/i }))
     expect(revokeObjectURL).toHaveBeenCalledWith('blob:preview-1')
+  })
+
+  // docs/specs/species-mismatch-and-actionable-results.md — the warning exists because a cat
+  // photo submitted as a cow was measured coming back "Foot and Mouth Disease, 85%" with
+  // nothing at all to flag it.
+  it('shows the species-mismatch warning above the result, without blocking it', async () => {
+    const user = userEvent.setup()
+    const warning =
+      "This photo doesn't look like a cow. If the species is wrong, the result below came " +
+      'from the cow model and may be meaningless — check the species and try again.'
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse(true, {
+        results: [{
+          species: 'COW', diagnosis: 'Foot and Mouth Disease', confidence: 0.85,
+          explanation: 'x', recommendedAction: 'escalate_to_vet',
+          precautions: [], nextSteps: [], speciesWarning: warning,
+          createdAt: '2026-01-01T00:00:00Z',
+        }],
+        diagnosesAgree: true,
+      })
+    )
+
+    render(<DiagnosisIntake />)
+    await user.upload(screen.getByLabelText(/add photos/i), new File(['a'], 'cat.jpg', { type: 'image/jpeg' }))
+    await user.click(screen.getByRole('button', { name: /diagnose from photo/i }))
+
+    const banner = await screen.findByText(/doesn't look like a cow/i)
+    expect(banner).toBeInTheDocument()
+    // Advisory, not a block: the diagnosis is still shown.
+    expect(screen.getByText(/likely: foot and mouth disease/i)).toBeInTheDocument()
+    // Above the result, so it's read before the thing it's warning about.
+    const bannerEl = document.querySelector('.species-warning-banner')
+    const card = document.querySelector('.diagnosis-result')
+    expect(bannerEl.compareDocumentPosition(card) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+  })
+
+  it('shows no warning banner when the photo matches the species', async () => {
+    const user = userEvent.setup()
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse(true, {
+        results: [{
+          species: 'COW', diagnosis: 'Healthy', confidence: 0.9, explanation: 'x',
+          recommendedAction: 'monitor', precautions: [], nextSteps: [],
+          speciesWarning: null, createdAt: '2026-01-01T00:00:00Z',
+        }],
+        diagnosesAgree: true,
+      })
+    )
+
+    render(<DiagnosisIntake />)
+    await user.upload(screen.getByLabelText(/add photos/i), new File(['a'], 'cow.jpg', { type: 'image/jpeg' }))
+    await user.click(screen.getByRole('button', { name: /diagnose from photo/i }))
+
+    await screen.findByText(/likely: healthy/i)
+    expect(document.querySelector('.species-warning-banner')).not.toBeInTheDocument()
+  })
+
+  // The second half of that spec: lead with what to do, and state the percentage once.
+  it('puts the action and next steps above the explanation, with one percentage', async () => {
+    const user = userEvent.setup()
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse(true, {
+        species: 'COW',
+        diagnosis: 'Foot and Mouth Disease',
+        confidence: 0.81,
+        explanation: 'Foot and Mouth Disease is the closest match — the strongest signs were mouth lesions.',
+        recommendedAction: 'escalate_to_vet',
+        precautions: ['Isolate the affected animal.'],
+        nextSteps: ['Contact your veterinarian immediately.', 'Do not wait for symptoms to worsen.'],
+        createdAt: '2026-01-01T00:00:00Z',
+      })
+    )
+
+    render(<DiagnosisIntake />)
+    await fillAndSubmit(user)
+    await screen.findByText(/likely: foot and mouth disease/i)
+
+    // Exactly one percentage anywhere in the result.
+    const percentages = document.querySelector('.diagnosis-outcome').textContent.match(/\d+%/g)
+    expect(percentages).toHaveLength(1)
+
+    // Next steps render as an ordered list inside the action block, above the explanation.
+    const steps = document.querySelectorAll('.next-actions__steps li')
+    expect(steps).toHaveLength(2)
+    expect(steps[0]).toHaveTextContent(/contact your veterinarian/i)
+
+    const actions = document.querySelector('.next-actions')
+    const explanation = document.querySelector('.diagnosis-result__explanation')
+    expect(actions.compareDocumentPosition(explanation) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
   })
 
   it('disables the photo submit button until a file is chosen', () => {

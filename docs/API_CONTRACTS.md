@@ -168,6 +168,13 @@ Response (`201`):
   "createdAt": "..."
 }
 ```
+`speciesWarning` (string or `null`) is set when an uploaded photo doesn't look like the
+selected species — advisory only, the diagnosis is still returned alongside it. It says the
+photo doesn't match, never what the animal is instead: that guess is unreliable enough to
+tell someone their cat looks like a dog. `null` for symptom submissions, for matching photos,
+and whenever the detector has no confident opinion. See
+[docs/specs/species-mismatch-and-actionable-results.md](specs/species-mismatch-and-actionable-results.md).
+
 Note: **nothing is persisted at all** — the backend holds no database as of
 [docs/specs/remove-databases.md](specs/remove-databases.md). The old `id` field went with the
 row it identified; `createdAt` is generated when the response is built, and the

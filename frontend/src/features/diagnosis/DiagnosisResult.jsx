@@ -10,21 +10,16 @@ const ACTION_ICONS = {
   monitor: '👀',
 }
 
-// Bands are a visual encoding of the same percentage that's already in the heading — they
-// add no clinical meaning the model didn't report. The point is that 91% and 53% currently
-// look identical at a glance, and the Dog model genuinely sits near the bottom of that range
-// (52.6% accuracy, no Healthy class — see docs/DISCLAIMER.md). A weak result should look
-// weak, not just read weak.
-// Banded on the *rounded* percentage, the same number the heading shows. Banding the raw
-// value instead lets 0.798 render as "80% confidence" next to an amber "moderate" bar, which
-// reads as a bug.
+// The percentage appears exactly once, in the heading, where docs/DISCLAIMER.md requires it
+// ("likely X, confidence Y%"). The meter that used to sit under it was a second rendering of
+// the same number, and the explanation stated it a third time — that redundancy is what was
+// asked to go. What survives is the part a number alone doesn't convey: that a weak result
+// should be treated as a hint. The Dog model genuinely sits in that band (52.6% accuracy, no
+// Healthy class — see docs/DISCLAIMER.md).
 const LOW_CONFIDENCE = 60
-const HIGH_CONFIDENCE = 80
 
-function confidenceBand(confidencePercent) {
-  if (confidencePercent >= HIGH_CONFIDENCE) return 'high'
-  if (confidencePercent >= LOW_CONFIDENCE) return 'moderate'
-  return 'low'
+function isLowConfidence(confidencePercent) {
+  return confidencePercent < LOW_CONFIDENCE
 }
 
 // M15 (docs/specs/M15-image-diagnosis-quality-gate.md): a photo that isn't of an animal at
@@ -54,7 +49,7 @@ function DiagnosisResultCard({ result }) {
   const confidencePercent = Math.round(result.confidence * 100)
   const isUrgent = result.recommendedAction === 'escalate_to_vet'
   const urgencyIcon = ACTION_ICONS[result.recommendedAction] ?? 'ℹ️'
-  const band = confidenceBand(confidencePercent)
+  const lowConfidence = isLowConfidence(confidencePercent)
 
   return (
     <section data-urgent={isUrgent} className={`diagnosis-result urgency-${result.recommendedAction}`}>
@@ -63,37 +58,39 @@ function DiagnosisResultCard({ result }) {
       </span>
       <div>
         {/* "likely X, confidence Y%" is required wording, not a stylistic choice — see
-            docs/DISCLAIMER.md. The meter below reinforces the number visually; it never
-            replaces it. */}
+            docs/DISCLAIMER.md. It is also the only place a percentage appears. */}
         <h2>
           Likely: {result.diagnosis} ({confidencePercent}% confidence)
         </h2>
 
-        <div className="confidence">
-          <div className="confidence__track" aria-hidden="true">
-            <div className={`confidence__fill confidence__fill--${band}`} style={{ width: `${confidencePercent}%` }} />
-          </div>
-          {band === 'low' && (
-            <p className="confidence__caveat">
-              Low confidence — treat this as a hint to look closer, not a finding.
-            </p>
-          )}
-        </div>
+        {lowConfidence && (
+          <p className="confidence__caveat">
+            Low confidence — treat this as a hint to look closer, not a finding.
+          </p>
+        )}
 
-        <p>{result.explanation}</p>
-        <p>
-          <strong>Recommended action: </strong>
-          <span className="action-badge">
-            <span aria-hidden="true">{urgencyIcon}</span>
+        {/* What to do comes before why. The action and the steps are what someone standing
+            in a field can act on; the reasoning is supporting detail and now sits below. */}
+        <div className="next-actions">
+          <p className="next-actions__headline">
+            <span aria-hidden="true">{urgencyIcon}</span>{' '}
             <span role={isUrgent ? 'alert' : undefined}>
               {ACTION_LABELS[result.recommendedAction] ?? result.recommendedAction}
             </span>
-          </span>
-        </p>
+          </p>
+          {result.nextSteps?.length > 0 && (
+            <ol className="next-actions__steps">
+              {result.nextSteps.map((item) => (
+                <li key={item}>{item}</li>
+              ))}
+            </ol>
+          )}
+        </div>
+
         {result.precautions?.length > 0 && (
           <div className="guidance-block">
             <h3>
-              <span aria-hidden="true">🛡️</span> Precautions
+              <span aria-hidden="true">🛡️</span> Meanwhile
             </h3>
             <ul>
               {result.precautions.map((item) => (
@@ -102,18 +99,8 @@ function DiagnosisResultCard({ result }) {
             </ul>
           </div>
         )}
-        {result.nextSteps?.length > 0 && (
-          <div className="guidance-block">
-            <h3>
-              <span aria-hidden="true">📋</span> Next steps
-            </h3>
-            <ul>
-              {result.nextSteps.map((item) => (
-                <li key={item}>{item}</li>
-              ))}
-            </ul>
-          </div>
-        )}
+
+        <p className="diagnosis-result__explanation">{result.explanation}</p>
       </div>
     </section>
   )
@@ -136,10 +123,28 @@ function ResultDisclaimer() {
 // Multi-photo follow-up: an image submission returns { results: [...], diagnosesAgree } —
 // one card per photo, plus a warning banner when the photos didn't all get the same
 // diagnosis. A symptom submission still returns a single result object, rendered as one card.
+// Advisory, never a block — see docs/specs/species-mismatch-and-actionable-results.md.
+// It sits above the result because the result may be meaningless: a cat photo submitted as
+// a cow was measured coming back "Foot and Mouth Disease, 85%" with nothing to flag it.
+function SpeciesWarning({ message }) {
+  if (!message) return null
+  return (
+    <p role="alert" className="species-warning-banner">
+      <span aria-hidden="true">⚠️</span> {message}
+    </p>
+  )
+}
+
+// A multi-photo batch repeats the same warning per photo; show it once.
+function firstSpeciesWarning(results) {
+  return results.map((item) => item.speciesWarning).find(Boolean) ?? null
+}
+
 export default function DiagnosisResult({ result }) {
   if (!Array.isArray(result?.results)) {
     return (
       <div className="diagnosis-result-list">
+        <SpeciesWarning message={result?.speciesWarning} />
         <DiagnosisResultCard result={result} />
         <ResultDisclaimer />
       </div>
@@ -148,6 +153,7 @@ export default function DiagnosisResult({ result }) {
 
   return (
     <div className="diagnosis-result-list">
+      <SpeciesWarning message={firstSpeciesWarning(result.results)} />
       {!result.diagnosesAgree && (
         <p role="alert" className="diagnosis-disagreement-banner">
           <span aria-hidden="true">⚠️</span> These photos didn't all get the same diagnosis —

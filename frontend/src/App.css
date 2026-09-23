@@ -699,38 +699,54 @@ section[data-urgent='true'] [role='alert'] {
 
 /* Reinforces the percentage that's already in the heading (required wording — see
    docs/DISCLAIMER.md); never replaces it. 91% and 53% used to look identical at a glance. */
-.confidence {
-  margin: 0 0 12px;
-}
-
-.confidence__track {
-  height: 6px;
-  border-radius: 3px;
-  background: var(--accent-bg);
-  overflow: hidden;
-}
-
-.confidence__fill {
-  height: 100%;
-  border-radius: 3px;
-}
-
-.confidence__fill--high {
-  background: var(--urgency-monitor);
-}
-
-.confidence__fill--moderate {
-  background: var(--urgency-consult);
-}
-
-.confidence__fill--low {
-  background: var(--urgency-escalate);
-}
-
 .confidence__caveat {
   margin: 6px 0 0;
   font-size: 0.85em;
   color: var(--urgency-escalate);
+}
+
+/* What to do, before why. The percentage lives in the heading and nowhere else; this block
+   is the part someone standing in a field acts on. */
+.next-actions {
+  margin: 12px 0 14px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: var(--accent-bg);
+  border: 1px solid var(--accent-border);
+}
+
+.next-actions__headline {
+  margin: 0;
+  font-weight: 700;
+  font-size: 1.05em;
+  color: var(--text-h);
+}
+
+.next-actions__steps {
+  margin: 8px 0 0;
+  padding-left: 20px;
+}
+
+.next-actions__steps li {
+  margin-bottom: 4px;
+}
+
+/* Reasoning is supporting detail now — present, but not competing with the action. */
+.diagnosis-result__explanation {
+  margin-top: 12px;
+  font-size: 0.92em;
+  color: var(--text);
+}
+
+/* Advisory species mismatch. Sits above the result, because the result may be meaningless. */
+.species-warning-banner {
+  margin: 0 0 12px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid var(--urgency-consult);
+  background: var(--urgency-consult-bg);
+  color: var(--text-h);
+  font-weight: 600;
 }
 
 .reset-button {

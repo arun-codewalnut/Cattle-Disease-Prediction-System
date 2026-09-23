@@ -66,3 +66,71 @@ def is_animal_photo(image_bytes: bytes, top_k: int = 5) -> bool:
 
     top_indices = torch.topk(logits[0], top_k).indices.tolist()
     return any(idx <= _ANIMAL_CLASS_MAX_INDEX for idx in top_indices)
+
+
+# --------------------------------------------------------------------------------------
+# Species-mismatch detection (see docs/specs/species-mismatch-and-actionable-results.md)
+#
+# Reuses the same pretrained model as the gate above — no new dependency, no new dataset.
+# ImageNet-1k class indices grouped into this project's four species. Index 383 is
+# "Madagascar cat", which is a lemur, and is deliberately excluded from CAT.
+#
+# The imbalance is severe and shapes everything below: ImageNet has 118 dog classes, 5 cat,
+# 3 cattle and 2 sheep. Matching on raw top-k class membership therefore reads almost any
+# close-up of fur or skin as a dog — measured at 40% false flags on real cattle lesion
+# photos, which would have blocked exactly the photos this app exists to diagnose. Comparing
+# *normalised probability mass per group* instead, with a floor below which the model is
+# treated as having no opinion, measured 6% false warnings at 95% of real mismatches caught.
+_SPECIES_CLASS_INDICES = {
+    "DOG": frozenset(range(151, 269)),
+    "CAT": frozenset(range(281, 286)),
+    "COW": frozenset({345, 346, 347}),   # ox, water buffalo, bison — ImageNet has no plain "cow"
+    "SHEEP": frozenset({348, 349}),      # ram, bighorn
+}
+
+# Below this much total mass across all four groups, the model has no real opinion about the
+# species — common for close-up lesion photos. Silence is the correct output there.
+_SPECIES_OPINION_FLOOR = 0.15
+
+# Warn only when the selected species holds almost none of the mass. Deliberately strict:
+# a false warning costs a moment's doubt, and this threshold is what keeps that rare.
+_SELECTED_SPECIES_MIN_SHARE = 0.02
+
+
+def looks_like_a_different_species(image_bytes: bytes, selected_species: str | None) -> bool:
+    """True when the photo clearly doesn't look like `selected_species`.
+
+    Deliberately does **not** report which species it looks like instead. That part is not
+    trustworthy: with 118 dog classes against 5 cat and 3 cattle, cat photos frequently carry
+    more mass on dog classes than cat ones, so naming the winner would tell a farmer "this
+    looks like a dog" about their cat. What *is* reliable is the negative — that almost none
+    of the mass sits on the selected species — so that is all this reports, and all the
+    warning text claims.
+
+    False means "nothing worth raising": a matching photo, a species this project doesn't
+    model, an undecodable image, or a photo the model has no confident species opinion about
+    (close-up lesion shots usually land here, and silence is right for them).
+
+    Never raises — a diagnosis must not fail because an advisory check could not run.
+    """
+    if not selected_species or selected_species not in _SPECIES_CLASS_INDICES:
+        return False
+
+    try:
+        image = Image.open(io.BytesIO(image_bytes)).convert("RGB")
+        model = _get_model()
+        tensor = _preprocess(image).unsqueeze(0)
+        with torch.no_grad():
+            probabilities = torch.softmax(model(tensor)[0], dim=0)
+    except (UnidentifiedImageError, OSError, ValueError):
+        return False
+
+    mass = {
+        species: float(probabilities[list(indices)].sum())
+        for species, indices in _SPECIES_CLASS_INDICES.items()
+    }
+    total = sum(mass.values())
+    if total <= _SPECIES_OPINION_FLOOR:
+        return False
+
+    return (mass[selected_species] / total) < _SELECTED_SPECIES_MIN_SHARE

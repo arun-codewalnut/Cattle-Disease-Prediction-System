@@ -26,8 +26,15 @@ def test_explain_falls_back_to_template_when_llm_unavailable():
     result = run_diagnosis(CONFIDENT_SYMPTOMS)
 
     assert result["diagnosis"] != "uncertain"
-    assert "Predicted" in result["explanation"]
-    assert "based primarily on" in result["explanation"]
+    # The template names the diagnosis and the signs behind it, and states no percentage —
+    # the heading already carries the one required confidence figure (docs/DISCLAIMER.md,
+    # docs/specs/species-mismatch-and-actionable-results.md).
+    assert result["diagnosis"] in result["explanation"]
+    assert "strongest signs were" in result["explanation"]
+    assert "%" not in result["explanation"]
+    # Feature keys are humanised, never shown raw.
+    assert "mouth_lesions" not in result["explanation"]
+    assert "mouth lesions" in result["explanation"]
 
 
 def test_explain_uses_llm_output_when_available(monkeypatch):
@@ -53,7 +60,7 @@ def test_explain_llm_failure_mid_call_still_falls_back(monkeypatch):
 
     result = run_diagnosis(CONFIDENT_SYMPTOMS)
 
-    assert "Predicted" in result["explanation"]
+    assert result["diagnosis"] in result["explanation"]
     assert result["diagnosis"] != "uncertain"
 
 
