@@ -3,6 +3,14 @@
 **Milestone**: M15
 **Status**: in progress
 
+> **Follow-up (2026-09-23): the species-match check this spec deferred now exists.** This
+> milestone deliberately checked only "is it an animal at all", on the stated grounds that a
+> wrong-species photo would come back `uncertain` anyway. Measured later, that was false — a
+> cat photo submitted as a cow returned "Foot and Mouth Disease, 85%", and `uncertain` came
+> back 0 times in 15. An advisory, non-blocking warning was added; the not-an-animal gate this
+> spec specifies is unchanged and still runs first. See
+> [species-mismatch-and-actionable-results.md](species-mismatch-and-actionable-results.md).
+
 ## Actor + goal
 
 A farmer/vet uploads a photo for diagnosis. Today, every disease image model (cattle/cat/dog)

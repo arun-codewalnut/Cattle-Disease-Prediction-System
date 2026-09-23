@@ -593,3 +593,64 @@ no database, and CI's backend job no longer provisions one. `retrieve()` is an e
 rather than a similarity search, which is strictly narrower: it can no longer surface a
 different disease's text. `DiagnosisCaseResponse.id` is gone — there is no row to identify,
 and offering an id for something unlookupable would be a lie.
+
+## Species-mismatch warning: a deferral reversed on measurement (2026-09-23)
+
+**Decision**: warn — advisory, non-blocking — when an uploaded photo doesn't look like the
+selected species. Spec:
+[docs/specs/species-mismatch-and-actionable-results.md](specs/species-mismatch-and-actionable-results.md).
+
+**This reverses an earlier decision in this file.** M15's entry stated that verifying the
+photo matches the *selected* species was out of scope, partly because a
+wrong-species-but-real-animal photo "most likely comes back `uncertain`" anyway. That
+assumption was finally measured, and it is false:
+
+- 15 real cat photos through the cattle model with `COW` selected returned `uncertain`
+  **0 times**, averaged **71% confidence**, and included **"Foot and Mouth Disease, 85%"** —
+  a reportable disease, confidently, from a photo of a cat;
+- the mirror case matched: cow photos through the cat model gave "Ringworm 90%", uncertain
+  only 3/15.
+
+So the pre-existing behaviour was not a soft failure that users would notice. It was a
+confident wrong answer, sometimes naming a notifiable disease, with nothing to flag it.
+
+**How the detector was chosen** — three candidates, measured on 100 valid photos and 40
+genuine mismatches, all reusing M15's existing pretrained model (no new dependency or
+dataset):
+
+| approach | false flags on valid photos | real mismatches caught |
+|---|---|---|
+| top-5 ImageNet class membership | **40%** of FMD photos | — (rejected outright) |
+| top-1 + confidence threshold | 0% at the only safe threshold | **0%** — useless there |
+| normalised group probability mass | **6%** | **95%** |
+
+The third was adopted. The first two failed for the same underlying reason: ImageNet carries
+118 dog classes against 5 cat, 3 cattle and 2 sheep, so raw class matching reads almost any
+close-up of fur or skin as a dog — exactly the disease photos this app exists to diagnose.
+
+**It warns rather than blocks**, because a 6% false-positive rate is tolerable for a message
+and not for a refusal.
+
+**It never says what the animal is.** The detector knows reliably that a photo *isn't* the
+selected species; its guess at what it *is* is unreliable enough to tell someone their cat
+looks like a dog. The warning claims only the part that holds up.
+
+**Consequences**: `ml-service`'s diagnose response gains `species_warning: string | null`,
+passed through by `backend` as `speciesWarning` and rendered above the results. Sheep/cow
+mismatches will be missed more often than cat/dog ones — 2 and 3 ImageNet classes
+respectively — and that is accepted; this is a warning, not a guarantee.
+
+## Result cards lead with the action, and state the percentage once (2026-09-23)
+
+**Decision**: the result card shows the confidence figure exactly once, in the heading where
+`docs/DISCLAIMER.md` requires it, and puts the recommended action and next steps above the
+explanation.
+
+**Why**: the card previously stated the same percentage three times — heading, meter, and
+explanation text — and put the actionable part last. The explanation also exposed raw feature
+keys (`mouth_lesions`, `excessive_salivation`), which are column names, not something to show
+a farmer.
+
+**What was explicitly not done**: removing the percentage. `docs/DISCLAIMER.md` requires
+"likely X, confidence Y%" wording, so the duplicates went and the required statement stayed.
+The low-confidence caveat also stayed — it conveys something a bare number doesn't.

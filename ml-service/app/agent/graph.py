@@ -102,6 +102,29 @@ class DiagnosisState(TypedDict, total=False):
     next_steps: list[str]
     recommended_action: str
     sources: list[str]
+    species_warning: str | None
+
+
+# Human-readable species names for the mismatch warning — "cow", not "COW".
+SPECIES_LABELS = {"COW": "cow", "SHEEP": "sheep", "CAT": "cat", "DOG": "dog"}
+
+
+def _species_warning(selected: str) -> str:
+    """The message shown when a photo doesn't look like the selected species.
+
+    Blunt on purpose. Without it, a cat photo submitted as a cow is diagnosed
+    "Foot and Mouth Disease, 85%" with nothing to suggest anything went wrong — measured,
+    not hypothesised. See docs/specs/species-mismatch-and-actionable-results.md.
+
+    Says only what the detector can actually support: that the photo doesn't look like the
+    selected species. It never claims what the animal *is* — that guess is unreliable enough
+    to tell someone their cat looks like a dog.
+    """
+    label = SPECIES_LABELS.get(selected, selected.lower())
+    return (
+        f"This photo doesn't look like a {label}. If the species is wrong, the result below "
+        f"came from the {label} model and may be meaningless — check the species and try again."
+    )
 
 
 def _recommended_action(diagnosis: str) -> str:
@@ -133,9 +156,27 @@ def _template_explanation(state: DiagnosisState) -> str:
             "Not enough symptom information was provided to make a confident prediction. "
             "Provide more symptom details or consult a vet directly."
         )
-    top_feature_names = [f["feature"] for f in state.get("top_features") or []]
-    basis = f", based primarily on: {', '.join(top_feature_names)}" if top_feature_names else ""
-    return f"Predicted {state['diagnosis']} with {state['confidence']:.0%} confidence{basis}."
+    # No percentage here: the caller already states "likely X, confidence Y%" once, as
+    # docs/DISCLAIMER.md requires, and repeating it twice more was the "excessive percentage
+    # detail" this was asked to lose. Feature keys are humanised — "mouth_lesions" is a
+    # column name, not something to show a farmer.
+    top_feature_names = [_humanise_feature(f["feature"]) for f in state.get("top_features") or []]
+    if not top_feature_names:
+        return f"{state['diagnosis']} is the closest match to what was submitted."
+    return (
+        f"{state['diagnosis']} is the closest match — the strongest signs were "
+        f"{_join_readable(top_feature_names)}."
+    )
+
+
+def _humanise_feature(feature: str) -> str:
+    return feature.replace("_", " ").strip().lower()
+
+
+def _join_readable(items: list[str]) -> str:
+    if len(items) == 1:
+        return items[0]
+    return f"{', '.join(items[:-1])} and {items[-1]}"
 
 
 def intake_node(state: DiagnosisState) -> dict[str, Any]:
@@ -202,6 +243,13 @@ def predict_image_node(state: DiagnosisState) -> dict[str, Any]:
         # docs/specs/M15-image-diagnosis-quality-gate.md.
         return {"diagnosis": "invalid_image", "confidence": 0.0, "top_features": []}
 
+    # Advisory only, and only once we know it's an animal at all: does the photo look like
+    # the species the user picked? Never blocks — see the spec for why a warning beats a
+    # refusal at this detector's measured error rate.
+    selected_species = state.get("species")
+    mismatch = species_gate.looks_like_a_different_species(image_bytes, selected_species)
+    species_warning = _species_warning(selected_species) if mismatch else None
+
     model_module = _IMAGE_MODEL_BY_SPECIES.get(state.get("species") or "", cattle_image_model)
 
     try:
@@ -217,6 +265,7 @@ def predict_image_node(state: DiagnosisState) -> dict[str, Any]:
         "diagnosis": result["diagnosis"],
         "confidence": result["confidence"],
         "top_features": result["top_features"],
+        "species_warning": species_warning,
     }
 
 
@@ -328,4 +377,6 @@ def run_diagnosis(
         "sources": final_state.get("sources", []),
         "precautions": final_state.get("precautions", []),
         "next_steps": final_state.get("next_steps", []),
+        # None for symptom submissions — there is no photo to disagree with.
+        "species_warning": final_state.get("species_warning"),
     }
