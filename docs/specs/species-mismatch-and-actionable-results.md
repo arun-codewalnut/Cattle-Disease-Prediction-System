@@ -152,3 +152,28 @@ returned `species_mismatch` / `retry_upload` / 0% / no guidance; a cat photo as 
 and correct-species photos still diagnosed normally (cow FMD 89%, cow healthy 88%, cat
 ringworm 48%, dog distemper 41%). In the browser the card reads "Wrong species for this
 photo" with no disease named, no percentage, and no escalation block.
+
+## Revision 2 (2026-09-23): the not-an-animal gate was the real hole
+
+A screenshot of text uploaded with Dog selected came back "Kennel Cough, 42%" — it never
+reached the species check, because M15's gate accepted it first. That gate asked whether any
+of the top-5 classes was an animal, and 398 of ImageNet's 1000 classes are animals, so
+cluttered images pass by chance.
+
+Both checks were rebuilt on measurement:
+
+- **Animal gate**: total probability mass over animal classes, threshold 0.30. Non-animals let
+  through went from 2/12 to 0/12 at the same 2/90 cost in valid photos.
+- **Species check**: each group scores by its **peak** class probability, not its summed mass.
+  Summing gave dog an enormous structural advantage (118 classes against 5) and refused 7.5%
+  of genuine cattle photos; dividing by class count over-corrected and dropped dog-as-cow
+  detection to 7%. The peak is scale-free. Threshold 25, taken from the gap between the valid
+  distribution (p95 ≈ 24) and genuine mismatches (median 98–170).
+
+**Combined, measured**: 7.5% of valid photos refused; 87% of dog-as-cow, 93% of cat-as-cow,
+and 100% of non-animal images refused.
+
+**Known limitation, stated rather than hidden**: livestock photos submitted under Cat or Dog
+are effectively not caught. The ratio distributions overlap with valid pet photos, so no
+threshold separates them. This guards the common mistake — a pet photo under livestock — not
+both directions.

@@ -10,6 +10,13 @@
 > back 0 times in 15. An advisory, non-blocking warning was added; the not-an-animal gate this
 > spec specifies is unchanged and still runs first. See
 > [species-mismatch-and-actionable-results.md](species-mismatch-and-actionable-results.md).
+>
+> **Follow-up 2 (2026-09-23): the top-5 rule was replaced.** `is_animal_photo` accepted a
+> photo if *any* of its top-5 classes was an animal. With 398 of ImageNet's 1000 classes
+> being animals, cluttered images passed by chance — a screenshot of text was diagnosed as
+> "Kennel Cough, 42%". It now scores total probability mass over animal classes (≥ 0.30),
+> which let through 0/12 non-animal test images versus the old rule's 2/12, at the same cost
+> in valid photos. The gate's purpose and position in the graph are unchanged.
 
 ## Actor + goal
 

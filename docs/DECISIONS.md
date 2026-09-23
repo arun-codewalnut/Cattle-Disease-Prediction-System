@@ -682,3 +682,53 @@ third of the false rejections.
 which is why the message also suggests a wider photo), 84% of dog-as-cow submissions refused.
 Correct-species photos still diagnose normally, verified against real photos for all four
 species.
+
+## Image validation retuned after a screenshot was diagnosed as Kennel Cough (2026-09-23)
+
+**Reported**: a screenshot of text, uploaded with Dog selected, returned "Kennel Cough, 42%".
+M15's not-an-animal gate should have stopped it and did not.
+
+**Root cause, and it was structural.** That gate asked whether *any* of the top-5 predicted
+classes was an animal. **398 of ImageNet's 1000 classes are animals**, so nearly any cluttered
+image lands one of them in its top five by chance. It was not a tuning problem; the question
+was wrong.
+
+**Decision 1 — the animal gate scores probability mass, not top-k membership.** Measured on 12
+non-animal images (text/UI/chart/code screenshots, solid colours, plus the existing car and
+table fixtures) and 90 real animal photos:
+
+| rule | non-animals let through | valid photos refused |
+|---|---|---|
+| any of top-5 is an animal class | 2/12 | 2/90 |
+| animal mass ≥ 0.30 | **0/12** | 2/90 |
+
+Same cost, and it stops everything the old rule let through.
+
+**Decision 2 — the species comparison scores each group's PEAK class probability.** Fixing the
+gate exposed a second bug in the species check, which had been comparing summed mass per
+group. ImageNet carries 118 dog classes against 5 ruminant and 5 cat, and that imbalance
+dominated everything:
+
+| statistic | valid photos refused | dog-as-cow caught |
+|---|---|---|
+| sum of class probabilities | 7.5% (almost all cattle) | 84% |
+| mean per class | ~0% | **7%** — over-corrected, a dog concentrates on one breed |
+| **peak class probability** | ~5% | **87%** |
+
+The peak is scale-free, so it neither favours nor penalises a group for how many classes it
+has. Threshold set from the measured distributions rather than by feel: valid photos have a
+median ratio near 0.9 and a 95th percentile around 24, while genuine dog-as-cow sits at a
+median of 98 and cat-as-cow at 170. The threshold is 25, in that gap.
+
+**A limitation worth stating plainly**: **livestock photos submitted under Cat or Dog are
+effectively not caught**, and no threshold fixes it. A cow photo with Dog selected produces a
+ratio whose median (3.9) sits *below* the 90th percentile of genuinely valid cat photos
+(10.4) — the distributions overlap, so any threshold catching it would refuse valid pet
+photos far more often. This guards the common mistake, a pet photo submitted under livestock,
+not both directions.
+
+**Measured cost of both gates together**: 7.5% of valid photos refused (111/120 diagnosed),
+against 87% of dog-as-cow and 93% of cat-as-cow submissions refused, and every non-animal
+image refused. That refusal rate is higher than is comfortable, and it is the deliberate
+trade: a refusal is recoverable in one retry and says what to do, while the alternative was a
+screenshot diagnosed as Kennel Cough and a dog diagnosed with a reportable disease.

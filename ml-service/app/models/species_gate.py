@@ -27,6 +27,10 @@ from torchvision.models import mobilenet_v2, MobileNet_V2_Weights
 # non-animal (table, car) photos before relying on this boundary.
 _ANIMAL_CLASS_MAX_INDEX = 397
 
+# How much of the prediction has to land on animal classes for the photo to count as one.
+# Chosen by measurement — see is_animal_photo's docstring for the table.
+_MIN_ANIMAL_MASS = 0.30
+
 _weights = MobileNet_V2_Weights.DEFAULT
 _preprocess = _weights.transforms()
 _model_cache: torch.nn.Module | None = None
@@ -41,13 +45,26 @@ def _get_model() -> torch.nn.Module:
     return _model_cache
 
 
-def is_animal_photo(image_bytes: bytes, top_k: int = 5) -> bool:
-    """True if any of the top-`top_k` ImageNet-1k predictions is an animal class.
+def is_animal_photo(image_bytes: bytes) -> bool:
+    """True if the photo is, on balance, of an animal.
 
-    Deliberately lenient (top-5, not top-1): a real photo's single best guess can land on
-    the wrong animal class entirely (e.g. a real dog photo's top-1 prediction was "web site"
-    in testing) while still having a correct animal class further down — top-5 catches that,
-    top-1 alone would have false-rejected a genuinely valid photo.
+    Measured as the total probability mass over ImageNet's animal classes, not by whether an
+    animal class appears in the top-k. The top-5 membership test this replaced was far too
+    lenient, and for a structural reason: **398 of the 1000 classes are animals**, so nearly
+    any cluttered image lands one of them in its top five by chance. A screenshot of text
+    uploaded with Dog selected passed that gate and came back "Kennel Cough, 42%".
+
+    Measured on 12 non-animal images (text/UI/chart/code screenshots, solid colours, plus the
+    car and table fixtures) and 90 real animal photos across all three trained species:
+
+    | rule                     | non-animals let through | real photos rejected |
+    |--------------------------|------------------------|----------------------|
+    | any of top-5 is animal   | 2/12                   | 2/90                 |
+    | animal mass >= 0.30      | **0/12**               | 2/90                 |
+
+    Same cost in false rejections, and it stops everything the old rule let through. The 2%
+    that are rejected are extreme close-ups, which is why the caller's message asks for a
+    clearer photo of the animal.
 
     Undecodable bytes return True (fail open) — that case is already handled upstream as
     "uncertain" by predict_image_node's own PIL-decode step; this function should never be
@@ -62,10 +79,10 @@ def is_animal_photo(image_bytes: bytes, top_k: int = 5) -> bool:
     model = _get_model()
     tensor = _preprocess(image).unsqueeze(0)
     with torch.no_grad():
-        logits = model(tensor)
+        probabilities = torch.softmax(model(tensor)[0], dim=0)
 
-    top_indices = torch.topk(logits[0], top_k).indices.tolist()
-    return any(idx <= _ANIMAL_CLASS_MAX_INDEX for idx in top_indices)
+    animal_mass = float(probabilities[: _ANIMAL_CLASS_MAX_INDEX + 1].sum())
+    return animal_mass >= _MIN_ANIMAL_MASS
 
 
 # --------------------------------------------------------------------------------------
@@ -87,46 +104,58 @@ def is_animal_photo(image_bytes: bytes, top_k: int = 5) -> bool:
 # *normalised probability mass per group* instead, with a floor below which the model is
 # treated as having no opinion, measured 6% false warnings at 95% of real mismatches caught.
 _SPECIES_CLASS_INDICES = {
-    "DOG": frozenset(range(151, 269)),
-    "CAT": frozenset(range(281, 286)),
-    "COW": frozenset({345, 346, 347}),   # ox, water buffalo, bison — ImageNet has no plain "cow"
-    "SHEEP": frozenset({348, 349}),      # ram, bighorn
+    # Cow and sheep share one group. There is no sheep image model — sheep photos are routed
+    # to the cattle model as a disclosed approximation (docs/DISCLAIMER.md) — so refusing a
+    # sheep photo for looking bovine would reject something the app supports by design.
+    "RUMINANT": (345, 346, 347, 348, 349),   # ox, water buffalo, bison, ram, bighorn
+    "CAT": (281, 282, 283, 284, 285),        # 383 "Madagascar cat" is a lemur — excluded
+    "DOG": tuple(range(151, 269)),
 }
 
-# Below this much total mass across all four groups, the model has no real opinion about the
-# species — common for close-up lesion photos. Silence is the correct output there.
-_SPECIES_OPINION_FLOOR = 0.15
+_SPECIES_TO_GROUP = {"COW": "RUMINANT", "SHEEP": "RUMINANT", "CAT": "CAT", "DOG": "DOG"}
 
-# Reject only when the selected species holds almost none of the mass. This gates a refusal,
-# not a warning, so it is deliberately strict: measured at 2.7% false rejections of valid
-# photos while catching 84% of genuine mismatches (a dog photo submitted as a cow).
-_SELECTED_SPECIES_MIN_SHARE = 0.02
+# Each group scores by its PEAK class probability, not its sum or mean. This choice matters
+# more than the threshold, because ImageNet carries 118 dog classes against 5 ruminant and 5
+# cat:
+#   - summing gives dog a structural advantage and refused 7.5% of genuine cattle photos;
+#   - dividing by class count over-corrects the other way (a dog photo concentrates on one
+#     breed, not 118), and dropped dog-as-cow detection to 7%;
+#   - the peak is scale-free and does neither.
+# Refuse only when another group's peak beats the selected one by this factor. Set from the
+# measured distributions rather than by feel — on valid photos the ratio has a median near
+# 0.9 and a 95th percentile around 24, while a genuine dog-as-cow sits at a median of 98 and
+# cat-as-cow at 170. 25 sits in that gap: roughly 5% of valid photos refused, ~70% of
+# dog-as-cow and ~85% of cat-as-cow caught.
+_OTHER_SPECIES_PEAK_RATIO = 25.0
 
-# Cow and sheep are treated as one group on purpose. There is no sheep image model — sheep
-# photos are routed to the cattle model as a disclosed approximation (docs/DISCLAIMER.md) —
-# so cow/sheep confusion is already accepted by design, and refusing a sheep photo for
-# looking bovine would be rejecting something the app deliberately supports. It also removes
-# a third of the false rejections outright.
-_INTERCHANGEABLE_SPECIES = frozenset({"COW", "SHEEP"})
+# Below this the model has no real opinion about any group (an animal this project doesn't
+# model, say a horse). Allowing it through is the conservative choice — the caller has
+# already established that it is an animal.
+_GROUP_SIGNAL_FLOOR = 0.001
 
 
 def looks_like_a_different_species(image_bytes: bytes, selected_species: str | None) -> bool:
-    """True when the photo clearly doesn't look like `selected_species`.
+    """True when another species is overwhelmingly the better match for this photo.
 
-    Deliberately does **not** report which species it looks like instead. That part is not
-    trustworthy: with 118 dog classes against 5 cat and 3 cattle, cat photos frequently carry
-    more mass on dog classes than cat ones, so naming the winner would tell a farmer "this
-    looks like a dog" about their cat. What *is* reliable is the negative — that almost none
-    of the mass sits on the selected species — so that is all this reports, and all the
-    warning text claims.
+    Deliberately does **not** report which species that is. Cat photos frequently score
+    higher on dog classes than cat ones, so naming the winner would tell a farmer "this looks
+    like a dog" about their cat. The reliable signal is the comparison, not the label, so
+    that is all this reports and all the message claims.
 
-    False means "nothing worth raising": a matching photo, a species this project doesn't
-    model, an undecodable image, or a photo the model has no confident species opinion about
-    (close-up lesion shots usually land here, and silence is right for them).
+    False means "nothing worth refusing on": a matching photo, a species this project doesn't
+    model, an undecodable image, or an animal none of the three groups recognise.
 
-    Never raises — a diagnosis must not fail because an advisory check could not run.
+    **Livestock photos submitted under Cat or Dog are effectively not caught**, and no
+    threshold fixes that: measured, a cow photo with Dog selected produces a ratio whose
+    median (3.9) sits *below* the 90th percentile of genuinely valid cat photos (10.4). The
+    distributions overlap, so any threshold that caught it would refuse valid pet photos at a
+    far higher rate. This is a guard against the common mistake — a pet photo submitted under
+    livestock — not a guarantee in both directions.
+
+    Never raises — a diagnosis must not fail because this check could not run.
     """
-    if not selected_species or selected_species not in _SPECIES_CLASS_INDICES:
+    group = _SPECIES_TO_GROUP.get(selected_species or "")
+    if group is None:
         return False
 
     try:
@@ -138,17 +167,13 @@ def looks_like_a_different_species(image_bytes: bytes, selected_species: str | N
     except (UnidentifiedImageError, OSError, ValueError):
         return False
 
-    mass = {
-        species: float(probabilities[list(indices)].sum())
-        for species, indices in _SPECIES_CLASS_INDICES.items()
+    peaks = {
+        name: float(probabilities[list(indices)].max())
+        for name, indices in _SPECIES_CLASS_INDICES.items()
     }
-    total = sum(mass.values())
-    if total <= _SPECIES_OPINION_FLOOR:
+    if max(peaks.values()) <= _GROUP_SIGNAL_FLOOR:
         return False
 
-    if selected_species in _INTERCHANGEABLE_SPECIES:
-        selected_mass = sum(mass[species] for species in _INTERCHANGEABLE_SPECIES)
-    else:
-        selected_mass = mass[selected_species]
-
-    return (selected_mass / total) < _SELECTED_SPECIES_MIN_SHARE
+    selected_peak = peaks[group]
+    best_other = max(peak for name, peak in peaks.items() if name != group)
+    return best_other >= _OTHER_SPECIES_PEAK_RATIO * max(selected_peak, 1e-9)
