@@ -38,6 +38,12 @@ DIAGNOSIS_TO_DOC_SLUG = {
     "Bovine Respiratory Disease": "bovine-respiratory-disease",
     "Healthy": "healthy",
     "PPR (Peste des Petits Ruminants)": "peste-des-petits-ruminants",
+    # M16: Dog's retrained v2 model's disease list (docs/specs/M14-dog-disease-detection.md's
+    # "Follow-up" section) and Goat's binary "Unhealthy" output.
+    "Bacterial Dermatosis": "bacterial-dermatosis",
+    "Fungal Infection": "fungal-infection",
+    "Hypersensitivity/Allergic Dermatosis": "hypersensitivity-allergic-dermatosis",
+    "Unhealthy": "unhealthy-goat",
 }
 
 # "uncertain" isn't a disease, so it has no reference doc — mirrors

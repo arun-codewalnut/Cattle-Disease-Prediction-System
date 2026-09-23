@@ -1,8 +1,8 @@
 # Spec: Dog disease detection
 
 **Milestone**: M14
-**Status**: done — real Dog image model trained and wired in (see "Follow-up" section below,
-including a real quality caveat this model carries)
+**Status**: done — real Dog image model trained and wired in, then retrained on a better
+dataset (M16 follow-up) — see the two "Follow-up" sections below
 
 ## Actor + goal
 
@@ -183,3 +183,45 @@ footnote. `docs/DISCLAIMER.md` carries the same caveat.
 Wired into `predict_image_node` (`ml-service/app/agent/graph.py`), routed by `species: "DOG"`,
 same mechanism as Cat. Rabies escalation remains unimplemented as code for the same reason as
 Cat: no Rabies class in the trained model.
+
+## Follow-up: Dog image model v2 (M16 session) — real accuracy gain, one real regression
+
+The user asked to integrate a goat dataset and, if other species had real candidate datasets
+available too, to cover those as well (`AskUserQuestion`, confirmed "replace the weak Dog
+model" specifically). The v1 model's two disclosed gaps — 52.6% accuracy and no Healthy class
+— were exactly what this unlocked fixing.
+
+**New dataset**: [Dogs Skin disease dataset](https://www.kaggle.com/datasets/yashmotiani/dogs-skin-disease-dataset)
+(Kaggle, `yashmotiani`, CC0, downloaded anonymously). 439 images across 4 classes — see
+`ml-service/data/dog-images/SOURCE.md` for the full breakdown and the candidates found but not
+used. **The disease list changes entirely**, the same "swap in real data when it conflicts
+with prior research" call M13 made for Cat: the v1 list (Canine Distemper, Canine Parvovirus,
+Kennel Cough, Mange — all systemic diseases) is replaced by a **skin-disease** list (Bacterial
+Dermatosis, Fungal Infection, Healthy, Hypersensitivity/Allergic Dermatosis) — the same kind
+of shift that got Cat to 83%, since skin conditions have a much stronger photographic
+signature than systemic illness.
+
+**Real result: 70.5% validation accuracy, 0.683 macro F1** — a substantial jump from v1's
+52.6%/0.489, and **a real Healthy class now exists** (0.78 F1, the strongest class). Per-class
+F1: Healthy 0.78, Fungal Infection 0.73, Hypersensitivity/Allergic Dermatosis 0.71, Bacterial
+Dermatosis 0.52 (still the weakest, but far above v1's worst class, 0.25). Measured, not
+assumed, that the v1 model's train-split-only horizontal-flip augmentation trick doesn't help
+here — it scored *worse* on this dataset (69.3% acc) than the plain approach (70.5% acc), so
+`training/dog_image_model_train.py` was simplified back to the same plain pattern Cat and
+Goat use.
+
+**A real, unplanned side effect, measured and disclosed, not hidden**: the species-mismatch
+detector's ability to catch a dog photo submitted with Cow selected dropped from ~80% (v1's
+whole-body photos) to ~30% (v2's skin-lesion close-ups), on 40-photo samples of each. The
+close-ups don't show the face/ears/snout features the detector's underlying ImageNet
+classifier keys on for "this is a dog." See `docs/specs/M16-goat-disease-detection.md` and
+`docs/DECISIONS.md` for the full measurement and the fix to the test suite (which now reads a
+stable, retained `data/dog-images-v1-superseded/` folder for that specific check, decoupling
+"does the mismatch detector work on a real dog photo" from "which dataset trains today's
+disease classifier"). This tradeoff — real accuracy gain on the actual diagnosis, weaker
+protection on an unrelated safety guard — was judged worth it but is explicitly not swept
+under.
+
+`docs/DISCLAIMER.md` and `frontend/src/features/diagnosis/species.js`'s `SPECIES_SUMMARIES`
+were both updated to drop the "weak, no Healthy option" language and state the new, real
+capability and accuracy instead.

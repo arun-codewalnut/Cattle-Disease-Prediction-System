@@ -117,8 +117,8 @@ Both renames are breaking changes with no versioning ceremony, acceptable per
 `docs/DECISIONS.md`'s standing position that this is a local/learning project with no
 external consumers.
 
-`species` is `"COW"`, `"SHEEP"`, `"CAT"`, or `"DOG"` — `"BUFFALO"` (M11) was **removed** (no
-usable buffalo dataset was ever found; see
+`species` is `"COW"`, `"SHEEP"`, `"GOAT"`, `"CAT"`, or `"DOG"` — `"BUFFALO"` (M11) was
+**removed** (no usable buffalo dataset was ever found; see
 [docs/specs/M11-buffalo-disease-detection.md](specs/M11-buffalo-disease-detection.md)'s
 superseded note). It is **required on every diagnosis call and has no default** — defaulting
 it would silently run a different trained model than the caller meant.
@@ -133,26 +133,30 @@ unchanged, PPR is just no longer part of it. See
 [docs/specs/M12-sheep-disease-detection.md](specs/M12-sheep-disease-detection.md)'s
 "Follow-up" section.
 
-**`CAT` and `DOG` are different: SYMPTOM diagnosis is rejected outright** (`400
-DIAGNOSIS_NOT_SUPPORTED_FOR_SPECIES`), not routed through any symptom model at all — a
-companion animal doesn't share the livestock disease family the cattle model was trained on,
-so reusing it would produce an actively wrong result (e.g. "Foot and Mouth Disease" for a cat
-or dog), not just an imprecise one. See
+**`CAT`, `DOG`, and `GOAT` are different: SYMPTOM diagnosis is rejected outright** (`400
+DIAGNOSIS_NOT_SUPPORTED_FOR_SPECIES`), not routed through any symptom model at all. For Cat/
+Dog, a companion animal doesn't share the livestock disease family the cattle model was
+trained on, so reusing it would produce an actively wrong result (e.g. "Foot and Mouth
+Disease" for a cat or dog), not just an imprecise one. For Goat, no symptom data exists at
+all — the closest candidate (the PPR dataset Sheep's symptom model uses) can't be reliably
+split by species. See
 [docs/specs/M13-cat-disease-detection.md](specs/M13-cat-disease-detection.md),
-[docs/specs/M14-dog-disease-detection.md](specs/M14-dog-disease-detection.md), and
-[docs/DISCLAIMER.md](DISCLAIMER.md)'s companion-animal section.
+[docs/specs/M14-dog-disease-detection.md](specs/M14-dog-disease-detection.md),
+[docs/specs/M16-goat-disease-detection.md](specs/M16-goat-disease-detection.md), and
+[docs/DISCLAIMER.md](DISCLAIMER.md).
 
-**IMAGE diagnosis has its own, separate species routing (M13/M14 follow-up)**: Cat and Dog
-each have their own real, trained image model (not the cattle model) — `POST
+**IMAGE diagnosis has its own, separate species routing (M13/M14/M16 follow-up)**: Cat, Dog,
+and Goat each have their own real, trained image model (not the cattle model) — `POST
 /api/diagnoses/image` **does** work for them, forwarding `species` to
 `ml-service` the same way the symptom endpoint now does too. `SHEEP` has **no** image-side
 routing of its own — photo-based diagnosis still falls back to the cattle image model as a
 disclosed approximation (no sheep-specific image dataset exists). Cat's model is solid
-(83.0% accuracy). **Dog's model is real but meaningfully
-weak** (52.6% accuracy; only 0.25 F1 for Canine Distemper specifically) and has **no Healthy
-class at all** — it always names one of its 4 diseases, even for a healthy dog. Both caveats
-are surfaced prominently in the frontend before upload, not just here. See each spec's
-"Follow-up" section for the full detail and the real, measured numbers.
+(83.0% accuracy). **Dog's model was retrained (M16 follow-up)** on a new skin-disease dataset
+— 70.5% accuracy, 0.683 macro F1, and now has a real Healthy class (previously it had none).
+**Goat's model is real but binary only** (80.1% accuracy across `Healthy`/`Unhealthy`) — no
+disease-specific goat image data exists, so it can flag that a photo looks off but never name
+what's wrong. All caveats are surfaced prominently in the frontend before upload, not just
+here. See each spec's "Follow-up" section for the full detail and the real, measured numbers.
 
 Request: `{"species": "COW", "symptoms": {"fever": true, "...": "..."}}`
 Response (`201`):
@@ -174,9 +178,11 @@ precautions and next steps, and excluded from the `diagnosesAgree` comparison, e
 `invalid_image`. It is a refusal, not an annotation: a dog photo submitted as a cow previously
 returned "Foot and Mouth Disease" with escalation guidance. The message says only that the
 photo doesn't match the selected species, never what the animal is — that guess is unreliable
-enough to tell someone their cat looks like a dog. Cow and sheep count as one group, since
-sheep photos already use the cattle model by design. See
-[docs/specs/species-mismatch-and-actionable-results.md](specs/species-mismatch-and-actionable-results.md).
+enough to tell someone their cat looks like a dog. Cow, sheep, and goat count as one group
+(M16 added goat — ImageNet has no dedicated goat class, "ibex" is used as the closest proxy),
+since sheep and goat photos already use non-goat/non-sheep-specific models by design. See
+[docs/specs/species-mismatch-and-actionable-results.md](specs/species-mismatch-and-actionable-results.md)
+and [docs/specs/M16-goat-disease-detection.md](specs/M16-goat-disease-detection.md).
 
 Note: **nothing is persisted at all** — the backend holds no database as of
 [docs/specs/remove-databases.md](specs/remove-databases.md). The old `id` field went with the
@@ -236,5 +242,6 @@ submission), `IMAGE_READ_FAILED` (`400`, couldn't read the uploaded bytes), `VAL
 `INVALID_REQUEST_BODY` (`400`, malformed JSON or a value that doesn't fit the target type,
 e.g. an invalid `species` string — M11), `DIAGNOSIS_NOT_SUPPORTED_FOR_SPECIES`
 (`400`, M13 — the submitted species doesn't have a real diagnosis model yet for that endpoint;
-`CAT`/`DOG` on the symptom endpoint specifically, since neither has a symptom model — see
-above for how the image endpoint differs for these two species as of the M13/M14 follow-up).
+`CAT`/`DOG`/`GOAT` on the symptom endpoint specifically, since none of the three has a symptom
+model — see above for how the image endpoint differs for these species as of the M13/M14/M16
+follow-ups).

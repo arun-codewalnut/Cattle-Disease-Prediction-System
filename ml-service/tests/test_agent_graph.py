@@ -5,6 +5,7 @@ from types import SimpleNamespace
 import app.agent.graph as graph_module
 import app.models.cat_image_model as cat_image_model_module
 import app.models.dog_image_model as dog_image_model_module
+import app.models.goat_image_model as goat_image_model_module
 import app.models.image_model as image_model_module
 import app.models.sheep_symptom_model as sheep_symptom_model_module
 import pytest
@@ -137,14 +138,28 @@ _DOG_IMAGE_MODEL_PATH = dog_image_model_module.DEFAULT_MODEL_PATH
 _DOG_IMAGES_DIR = Path(__file__).resolve().parents[1] / "data" / "dog-images"
 _HAS_TRAINED_DOG_IMAGE_MODEL = _DOG_IMAGE_MODEL_PATH.exists()
 
+# M16: Goat gets its own real, trained IMAGE model too — same gitignored-artifact reasoning.
+_GOAT_IMAGE_MODEL_PATH = goat_image_model_module.DEFAULT_MODEL_PATH
+_GOAT_IMAGES_DIR = Path(__file__).resolve().parents[1] / "data" / "goat-images"
+_HAS_TRAINED_GOAT_IMAGE_MODEL = _GOAT_IMAGE_MODEL_PATH.exists()
+
 # M12 follow-up: Sheep has its own real, trained SYMPTOM model (unlike Cat/Dog above, which
 # are image-only) — see app.agent.graph._SYMPTOM_MODEL_BY_SPECIES.
 _SHEEP_SYMPTOM_MODEL_PATH = sheep_symptom_model_module.DEFAULT_MODEL_PATH
 _HAS_TRAINED_SHEEP_SYMPTOM_MODEL = _SHEEP_SYMPTOM_MODEL_PATH.exists()
 
 
+def _species_image_files(images_dir: Path, folder: str) -> list[Path]:
+    # M16: goat-images ships .jpeg, not .jpg (cat/dog's convention) — glob every extension the
+    # trained models actually accept (app.models.image_model's PREPROCESS pipeline) rather than
+    # assume one.
+    return sorted(
+        f for f in (images_dir / folder).iterdir() if f.suffix.lower() in (".jpg", ".jpeg", ".png")
+    )
+
+
 def _sample_species_image_base64(images_dir: Path, folder: str) -> str:
-    sample = next((images_dir / folder).glob("*.jpg"))
+    sample = _species_image_files(images_dir, folder)[0]
     return base64.b64encode(sample.read_bytes()).decode()
 
 
@@ -155,7 +170,7 @@ def _sample_species_images_base64(images_dir: Path, folder: str, n: int = 10) ->
     # still-reproducible sample of the class.
     import random
 
-    all_files = sorted((images_dir / folder).glob("*.jpg"))
+    all_files = _species_image_files(images_dir, folder)
     samples = random.Random(42).sample(all_files, min(n, len(all_files)))
     return [base64.b64encode(s.read_bytes()).decode() for s in samples]
 
@@ -180,15 +195,31 @@ def test_cat_species_routes_to_the_cat_model_per_class():
 
 @pytest.mark.skipif(not _HAS_TRAINED_DOG_IMAGE_MODEL, reason="no local ml-service/models/dog_image_model.pt")
 def test_dog_species_routes_to_the_dog_model():
-    # Only asserting Mange here, not all 4 classes — the dog model's real, measured accuracy
-    # is 52.6% (0.25 F1 for Canine Distemper specifically), so asserting a specific diagnosis
-    # for every class would be asserting noise. Mange is the one class this model is actually
-    # decent at (0.75 F1, still not perfect) — see docs/specs/M14-dog-disease-detection.md.
-    # Same random-sample reasoning as the Cat test above: honest given real, imperfect F1.
-    images = _sample_species_images_base64(_DOG_IMAGES_DIR, "mange")
-    diagnoses = [run_diagnosis({}, image_base64=img, species="DOG")["diagnosis"] for img in images]
-    correct = sum(1 for d in diagnoses if d == "Mange")
-    assert correct >= 5, f"only {correct}/10 correctly diagnosed as Mange, got {diagnoses}"
+    # M16 follow-up: the dog model was retrained on a new dataset (70.5% acc, 0.683 macro F1 —
+    # see docs/specs/M14-dog-disease-detection.md's "Follow-up: Dog image model v2" section).
+    # Only asserting the two classes with strong measured recall (Healthy ~96%, Fungal
+    # Infection ~70%), not all 4 — Bacterial Dermatosis's recall (~42%) is too close to chance
+    # for a tight per-sample threshold to be an honest signal of breakage vs. real model noise.
+    for folder, expected, min_correct in [
+        ("healthy", "Healthy", 8),
+        ("fungal-infection", "Fungal Infection", 5),
+    ]:
+        images = _sample_species_images_base64(_DOG_IMAGES_DIR, folder)
+        diagnoses = [run_diagnosis({}, image_base64=img, species="DOG")["diagnosis"] for img in images]
+        correct = sum(1 for d in diagnoses if d == expected)
+        assert correct >= min_correct, f"{folder}: only {correct}/10 correctly diagnosed as {expected}, got {diagnoses}"
+
+
+@pytest.mark.skipif(not _HAS_TRAINED_GOAT_IMAGE_MODEL, reason="no local ml-service/models/goat_image_model.pt")
+def test_goat_species_routes_to_the_goat_model():
+    # Goat's model is binary (Healthy/Unhealthy, 80.1% acc, 0.800 macro F1 — see
+    # docs/specs/M16-goat-disease-detection.md) — both classes have comparable, decent recall
+    # (per-class F1 0.786/0.814), so both get a real assertion, same bar as Cat's per-class test.
+    for folder, expected in [("healthy", "Healthy"), ("unhealthy", "Unhealthy")]:
+        images = _sample_species_images_base64(_GOAT_IMAGES_DIR, folder)
+        diagnoses = [run_diagnosis({}, image_base64=img, species="GOAT")["diagnosis"] for img in images]
+        correct = sum(1 for d in diagnoses if d == expected)
+        assert correct >= 5, f"{folder}: only {correct}/10 correctly diagnosed as {expected}, got {diagnoses}"
 
 
 @pytest.mark.skipif(
@@ -251,7 +282,7 @@ def _fixture_image_base64(name: str) -> str:
     return base64.b64encode((_FIXTURES_DIR / name).read_bytes()).decode()
 
 
-@pytest.mark.parametrize("species", [None, "COW", "SHEEP", "CAT", "DOG"])
+@pytest.mark.parametrize("species", [None, "COW", "SHEEP", "CAT", "DOG", "GOAT"])
 def test_non_animal_photo_is_rejected_as_invalid_image_for_every_species(species):
     # M15: a real photo that isn't an animal at all must never reach any species-specific
     # disease model, regardless of which species was selected — the gate runs before the
@@ -310,6 +341,15 @@ def test_missing_dog_image_model_returns_structured_error(monkeypatch, tmp_path)
 
     with pytest.raises(ApiError) as exc_info:
         run_diagnosis({}, image_base64=_VALID_1X1_PNG_BASE64, species="DOG")
+
+    assert exc_info.value.code == "MODEL_NOT_TRAINED"
+
+
+def test_missing_goat_image_model_returns_structured_error(monkeypatch, tmp_path):
+    monkeypatch.setattr(goat_image_model_module, "DEFAULT_MODEL_PATH", tmp_path / "does-not-exist.pt")
+
+    with pytest.raises(ApiError) as exc_info:
+        run_diagnosis({}, image_base64=_VALID_1X1_PNG_BASE64, species="GOAT")
 
     assert exc_info.value.code == "MODEL_NOT_TRAINED"
 

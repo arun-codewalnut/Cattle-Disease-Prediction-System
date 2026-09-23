@@ -1,13 +1,10 @@
 """
-Real dog image classifier — inference.
+Real goat image classifier — inference.
 
-M16 follow-up (dataset v2), see docs/specs/M14-dog-disease-detection.md's "Follow-up: Dog
-image model v2" section. **`DISEASES` replaces M14's original systemic-disease list**
-(Canine Distemper, Canine Parvovirus, Kennel Cough, Mange) with a skin-disease list — the
-same "swap in real data when it conflicts with prior research" call M13 made for Cat. The
-old list's real accuracy was 52.6% with no Healthy class at all; systemic diseases don't
-have a strong, consistent visual signature the way skin conditions do (Cat's skin-disease
-model hit 83%). The new dataset has a real Healthy class.
+M16, see docs/specs/M16-goat-disease-detection.md. Unlike Cat/Dog, no disease-specific goat
+image dataset was found anywhere — the only real candidate is a binary Healthy/Unhealthy
+labelling with no named condition. `DISEASES` reflects that honestly: this model can say a
+goat photo looks off, never what's wrong with it.
 
 Architecture (build_model/PREPROCESS) is shared with app/models/image_model.py — same
 MobileNetV2-transfer-learning approach, different head size and weights.
@@ -23,11 +20,11 @@ from PIL import Image, UnidentifiedImageError
 
 from app.models.image_model import PREPROCESS, build_model
 
-DISEASES = ["Bacterial Dermatosis", "Fungal Infection", "Healthy", "Hypersensitivity/Allergic Dermatosis"]
+DISEASES = ["Healthy", "Unhealthy"]
 
 CONFIDENCE_THRESHOLD = 0.4
 
-DEFAULT_MODEL_PATH = Path(__file__).resolve().parents[2] / "models" / "dog_image_model.pt"
+DEFAULT_MODEL_PATH = Path(__file__).resolve().parents[2] / "models" / "goat_image_model.pt"
 
 _artifact_cache: dict[str, torch.nn.Module] = {}
 
