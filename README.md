@@ -13,8 +13,8 @@ Free/open-source stack only — see [docs/DECISIONS.md](docs/DECISIONS.md) for w
 | Path | Stack | Purpose |
 |---|---|---|
 | [frontend/](frontend) | React 19 + Vite | Symptom/image intake UI |
-| [backend/](backend) | Java 21 + Spring Boot 4 | Auth, case history, notifications, API gateway |
-| [ml-service/](ml-service) | Python + FastAPI + LangGraph | ML models, agent orchestration, RAG |
+| [backend/](backend) | Java 21 + Spring Boot 4 | Request validation, species rules, API gateway (stateless) |
+| [ml-service/](ml-service) | Python + FastAPI + LangGraph | ML models, agent orchestration, RAG over local markdown |
 | [docs/](docs) | — | Architecture, decisions, roadmap, API contracts |
 | [agents/playbooks/](agents/playbooks) | — | Canonical how-to guides for agents/contributors |
 | [.claude/skills/](.claude/skills) | — | Claude Code adapters over the playbooks above |
@@ -31,7 +31,7 @@ There are two ways to run this (Option A / Option B below) and they need differe
 
 | Tool | Needed for | Notes |
 |---|---|---|
-| [Docker Desktop](https://www.docker.com/products/docker-desktop/) | **Option A (all services)**; Postgres in either option; `ml-service`'s RAG feature and RAG tests | the only way to get RAG-grounded explanations — see the native-install note below |
+| [Docker Desktop](https://www.docker.com/products/docker-desktop/) | **Option A only** — running all three services in one command | nothing else needs it: there is no database, and every test suite runs natively |
 | [GNU Make](https://www.gnu.org/software/make/) (optional) | the `make` shortcuts | not installed on Windows by default — every target is a one-line `docker compose …` you can run directly instead, see [Makefile](Makefile) |
 | [Node.js](https://nodejs.org/) 20.19+ or 22.12+ | Option B `frontend` | Vite 8 rejects 20.0–20.18, 21.x and 22.0–22.11; the frontend **tests** (Vitest 5) need 22.12+. CI and `frontend/Dockerfile` both use Node 24 |
 | [Java 21](https://adoptium.net/) + [Maven](https://maven.apache.org/) | Option B `backend` | every Maven command runs **from `backend/`** — there's no root `pom.xml`. `backend/mvnw` (`mvnw.cmd` on Windows) is a fallback if you have no system Maven, but it downloads its own Maven distribution and can fail behind a restricted network — see [backend/AGENTS.md](backend/AGENTS.md) |
@@ -48,14 +48,12 @@ downloads those weights (~14MB) the first time an image is diagnosed, caching th
 `~/.cache/torch` (image *training* pulls the same weights). Symptom-only diagnosis never
 needs this.
 
-**Native install on Windows + Python 3.13 doesn't work straight from `requirements.txt`** —
-two packages have no prebuilt wheel there and need Microsoft C++ Build Tools to compile from
-source: `chroma-hnswlib` (a `chromadb` dependency, and no `cp313` wheel exists for it at
-all — see [ml-service/AGENTS.md](ml-service/AGENTS.md)) and `shap`. `shap` isn't imported
-anywhere in the code (M1 uses XGBoost's own `pred_contribs` instead), so the practical
-workaround is to install everything *except* those two — the exact command is in Option B.
-Docker (Option A) has neither problem: its image installs the full file, `build-essential`
-included.
+**Native install on Windows + Python 3.13 needs one package skipped**: `shap` has no cp313
+wheel there and would need Microsoft C++ Build Tools to compile. It isn't imported anywhere
+in the code (M1 uses XGBoost's own `pred_contribs` instead), so installing everything except
+it is the practical workaround — the exact command is in Option B. (`chromadb` used to be the
+worse half of this problem; it's gone — see
+[docs/specs/remove-databases.md](docs/specs/remove-databases.md).)
 
 **Disk space** (measured, not estimated): the `ml-service` Docker image is **~3.9GB** built,
 and a native `ml-service` venv is **~1.2GB** — `torch`/`torchvision` dominate both, and
@@ -65,7 +63,7 @@ symptom model needs no dataset at all.
 
 ## Running locally
 
-### Option A — Docker Compose (recommended: full features, including RAG)
+### Option A — Docker Compose (recommended: all three services in one command)
 
 **1. Create the three `.env` files.** Not optional — `docker-compose.yml` declares an
 `env_file` for each service, so compose fails to start if any is missing. The checked-in
@@ -100,27 +98,20 @@ dataset downloaded first — see [Training/retraining a model](#trainingretraini
 below. Nothing forces you to train them; a species/mode you haven't trained just returns
 `503` until you do.
 
-**4. Ingest the RAG knowledge base** — optional, one-time. Skip it and the app still runs
-fine, just without grounded-explanation citations:
-
-```bash
-docker compose run --rm ml-service python -m app.rag.ingest
-```
-
-**5. Verify and open.** Both health checks should answer before you use the UI:
+**4. Verify and open.** Both health checks should answer before you use the UI:
 
 ```bash
 curl http://localhost:8000/health           # ml-service  -> {"status":"ok"}
 curl http://localhost:8080/actuator/health  # backend     -> {"status":"UP"}
 ```
 
-Open **http://localhost:5173**. (`backend` at `:8080`, `ml-service` at `:8000`, Postgres at
-`:5432` — that last one matters if you already have a local Postgres on the default port.)
+Open **http://localhost:5173**. (`backend` at `:8080`, `ml-service` at `:8000`. No
+database — see [docs/specs/remove-databases.md](docs/specs/remove-databases.md).)
 
 Other targets: `make up-d` (background), `make logs`, `make ps`, `make down` (stop and
 remove), `make test-e2e`. Each maps to one `docker compose` command in the [Makefile](Makefile).
 
-### Option B — native (faster iteration; RAG grounding gracefully disabled)
+### Option B — native (faster iteration; full functionality)
 
 One-time setup per service:
 
@@ -139,28 +130,22 @@ cd frontend && npm install
 
 On **Windows + Python 3.13**, that `pip install` needs
 [Microsoft C++ Build Tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/)
-installed first, because `shap` and `chroma-hnswlib` have to compile from source there. If
-you'd rather not do that system install, drop those two and install the rest — the app runs
-fine without them (`shap` is never imported; `chromadb` only affects RAG citations):
+installed first, because `shap` has to compile from source there. If you'd rather not do that
+system install, drop it and install the rest — it's never imported:
 
 ```powershell
-Get-Content requirements.txt | Where-Object { $_ -notmatch '^(shap|chromadb)' } |
+Get-Content requirements.txt | Where-Object { $_ -notmatch '^shap' } |
   Set-Content -Encoding utf8 requirements-local.txt
 pip install -r requirements-local.txt
 ```
 
 ```bash
 # macOS/Linux equivalent (not normally needed — the full install works there)
-grep -vE '^(shap|chromadb)' requirements.txt > requirements-local.txt
+grep -v '^shap' requirements.txt > requirements-local.txt
 pip install -r requirements-local.txt
 ```
 
-`backend` needs no setup step beyond a reachable Postgres, but it does need one running:
-
-```bash
-docker run -d --name cattlecare-db -e POSTGRES_DB=cattlecare -e POSTGRES_USER=cattlecare \
-  -e POSTGRES_PASSWORD=cattlecare -p 5432:5432 postgres:16-alpine
-```
+`backend` needs no setup at all — it's stateless, with no database to provision.
 
 Then run each service in its own terminal:
 
@@ -170,13 +155,12 @@ cd backend && mvn spring-boot:run                                          # :80
 cd frontend && npm run dev                                                 # :5173
 ```
 
-Without `chromadb` installed, `ml-service` still diagnoses correctly — the RAG retrieval
-step catches the missing dependency and degrades to `sources: []`, the same graceful
-fallback used for any other retrieval failure. You only lose M6's citation feature, nothing
-else breaks.
+This is full functionality, not a reduced mode: precautions, next steps and grounded
+citations all work, because the reference documents are read straight from
+`ml-service/data/veterinary-reference/`. Only LLM-written explanations need anything extra
+(Ollama), and without it the deterministic template takes over.
 
-Full instructions (including how to run ml-service's RAG-dependent tests, which also need
-Docker): [agents/playbooks/run-stack.md](agents/playbooks/run-stack.md) and
+Full instructions: [agents/playbooks/run-stack.md](agents/playbooks/run-stack.md) and
 [ml-service/AGENTS.md](ml-service/AGENTS.md).
 
 ## Testing the application
@@ -300,9 +284,8 @@ Strategy and per-service conventions: [docs/TESTING.md](docs/TESTING.md).
 | Suite | Command | Also needs |
 |---|---|---|
 | `frontend` (Vitest) | `cd frontend && npm ci && npm test` | Node 22.12+ — Vitest 5 refuses to run on older versions even though Vite itself allows 20.19+ |
-| `backend` (JUnit) | `cd backend && mvn -B verify` | a reachable Postgres — the tests boot the real Spring context against `localhost:5432` (`cattlecare`/`cattlecare`/`cattlecare`). `make up`, or the `docker run` one-liner in Option B, gives you one |
-| `ml-service` — full suite | `docker build -t ml-service-test ./ml-service` then run `pytest` in it — exact commands in [ml-service/AGENTS.md](ml-service/AGENTS.md) | Docker. This is the only way to exercise the RAG tests on Windows |
-| `ml-service` — native subset | `cd ml-service && pytest` | the venv. Without `chromadb` the RAG tests skip themselves cleanly (`importorskip`) rather than failing — a green run here is *not* full coverage |
+| `backend` (JUnit) | `cd backend && mvn -B verify` | nothing — the backend is stateless, so the full Spring context boots without a database |
+| `ml-service` (pytest) | `cd ml-service && pytest` | the venv. The whole suite runs natively with no skips — Docker is no longer needed for any of it |
 | e2e (Playwright) | `make test-e2e` | all three services running, plus one-time `cd tests/e2e && npm install && npx playwright install --with-deps chromium`. The smoke test posts a real symptom diagnosis, so the Cow symptom model must be trained first |
 
 ## Roadmap

@@ -31,7 +31,6 @@ describe('DiagnosisIntake', () => {
     const user = userEvent.setup()
     fetchMock.mockResolvedValueOnce(
       jsonResponse(true, {
-        id: 7,
         species: 'COW',
         diagnosis: 'Foot and Mouth Disease',
         confidence: 0.81,
@@ -64,7 +63,7 @@ describe('DiagnosisIntake', () => {
     const user = userEvent.setup()
     fetchMock.mockResolvedValueOnce(
       jsonResponse(true, {
-        id: 1, species: 'COW', diagnosis: 'Healthy', confidence: 0.95,
+        species: 'COW', diagnosis: 'Healthy', confidence: 0.95,
         explanation: 'Predicted Healthy.', recommendedAction: 'monitor',
         precautions: [], nextSteps: [], createdAt: '2026-01-01T00:00:00Z',
       })
@@ -99,7 +98,6 @@ describe('DiagnosisIntake', () => {
       jsonResponse(true, {
         results: [
           {
-            id: 9,
             species: 'COW',
             diagnosis: 'Healthy',
             confidence: 0.5,
@@ -140,12 +138,12 @@ describe('DiagnosisIntake', () => {
       jsonResponse(true, {
         results: [
           {
-            id: 1, species: 'CAT', diagnosis: 'Ringworm', confidence: 0.9,
+            species: 'CAT', diagnosis: 'Ringworm', confidence: 0.9,
             explanation: 'Predicted Ringworm.', recommendedAction: 'consult_vet',
             precautions: [], nextSteps: [], createdAt: '2026-01-01T00:00:00Z',
           },
           {
-            id: 2, species: 'CAT', diagnosis: 'Scabies', confidence: 0.8,
+            species: 'CAT', diagnosis: 'Scabies', confidence: 0.8,
             explanation: 'Predicted Scabies.', recommendedAction: 'consult_vet',
             precautions: [], nextSteps: [], createdAt: '2026-01-01T00:00:00Z',
           },
@@ -179,12 +177,12 @@ describe('DiagnosisIntake', () => {
       jsonResponse(true, {
         results: [
           {
-            id: 3, species: 'CAT', diagnosis: 'Ringworm', confidence: 0.9,
+            species: 'CAT', diagnosis: 'Ringworm', confidence: 0.9,
             explanation: 'Predicted Ringworm.', recommendedAction: 'consult_vet',
             precautions: [], nextSteps: [], createdAt: '2026-01-01T00:00:00Z',
           },
           {
-            id: 4, species: 'CAT', diagnosis: 'invalid_image', confidence: 0.0,
+            species: 'CAT', diagnosis: 'invalid_image', confidence: 0.0,
             explanation: "This doesn't look like a photo of an animal — please upload a clear photo of the animal itself.",
             recommendedAction: 'retry_upload', precautions: [], nextSteps: [], createdAt: '2026-01-01T00:00:00Z',
           },
@@ -272,7 +270,7 @@ describe('DiagnosisIntake', () => {
     const user = userEvent.setup()
     fetchMock.mockResolvedValueOnce(
       jsonResponse(true, {
-        id: 7, species: 'COW', diagnosis: 'Foot and Mouth Disease', confidence: 0.81,
+        species: 'COW', diagnosis: 'Foot and Mouth Disease', confidence: 0.81,
         explanation: 'Predicted FMD.', recommendedAction: 'escalate_to_vet',
         precautions: [], nextSteps: [], createdAt: '2026-01-01T00:00:00Z',
       })
@@ -295,7 +293,7 @@ describe('DiagnosisIntake', () => {
   it('shows the disclaimer once for a multi-photo result, not once per card', async () => {
     const user = userEvent.setup()
     const card = (id, diagnosis) => ({
-      id, species: 'CAT', diagnosis, confidence: 0.9, explanation: 'x',
+      species: 'CAT', diagnosis, confidence: 0.9, explanation: 'x',
       recommendedAction: 'consult_vet', precautions: [], nextSteps: [],
       createdAt: '2026-01-01T00:00:00Z',
     })
@@ -323,7 +321,7 @@ describe('DiagnosisIntake', () => {
     fetchMock.mockResolvedValueOnce(
       jsonResponse(true, {
         results: [{
-          id: 1, species: 'DOG', diagnosis: 'Mange', confidence: 0.53, explanation: 'x',
+          species: 'DOG', diagnosis: 'Mange', confidence: 0.53, explanation: 'x',
           recommendedAction: 'consult_vet', precautions: [], nextSteps: [],
           createdAt: '2026-01-01T00:00:00Z',
         }],
@@ -344,7 +342,7 @@ describe('DiagnosisIntake', () => {
     const user = userEvent.setup()
     fetchMock.mockResolvedValueOnce(
       jsonResponse(true, {
-        id: 1, species: 'COW', diagnosis: 'Healthy', confidence: 0.95, explanation: 'x',
+        species: 'COW', diagnosis: 'Healthy', confidence: 0.95, explanation: 'x',
         recommendedAction: 'monitor', precautions: [], nextSteps: [],
         createdAt: '2026-01-01T00:00:00Z',
       })
@@ -399,7 +397,7 @@ describe('DiagnosisIntake', () => {
     const user = userEvent.setup()
     fetchMock.mockResolvedValueOnce(
       jsonResponse(true, {
-        id: 10,
+
         species: 'SHEEP',
         diagnosis: 'PPR (Peste des Petits Ruminants)',
         confidence: 0.93,
@@ -467,7 +465,6 @@ describe('DiagnosisIntake', () => {
       jsonResponse(true, {
         results: [
           {
-            id: 20,
             species: 'CAT',
             diagnosis: 'Ringworm',
             confidence: 0.91,

@@ -560,3 +560,36 @@ with its own dedicated, non-diagnosis card style (no confidence percentage, no v
 badge), not reusing the normal diagnosis-result layout. Multi-photo batches exclude
 `invalid_image` results from the `diagnosesAgree` comparison (backend-side) — it isn't a
 competing diagnosis to agree or disagree with the real ones in the same batch.
+
+## Removed both databases: Postgres and Chroma (2026-09-23)
+
+**Decision**: delete Postgres (and JPA/Flyway with it) and replace Chroma with direct reads
+of the markdown reference documents. The backend is now stateless; `ml-service` keeps RAG but
+retrieves from the filesystem. Spec:
+[docs/specs/remove-databases.md](specs/remove-databases.md).
+
+**Why**, measured rather than assumed, with both absent:
+
+- Symptom diagnosis was **6/6 correct** across the disease profiles, image diagnosis **5/5**
+  on real labelled photos, escalation correct for both reportable diseases, and the M15
+  non-animal gate still rejected a non-animal photo. Neither database is anywhere near the
+  prediction path — that's XGBoost and PyTorch reading model files.
+- **Postgres was write-only**: two `save()` calls, zero queries, no history endpoint. It was
+  nonetheless a hard startup dependency (Flyway failed context initialisation, so the backend
+  did not boot without it), and a `save()` failure would have turned a successful diagnosis
+  into a 500. Maximum coupling, no payoff.
+- **Chroma was a vector index over 10.8 KB** — six documents, 40 blocks — addressed by exact
+  key in both call sites: `get_precautions()` was always a metadata lookup, and `retrieve()`
+  was called with a diagnosis name that `DIAGNOSIS_TO_DOC_SLUG` already maps to one document.
+  It cost `chroma-hnswlib`, which has no cp313 wheel, which is why this service's tests could
+  only run in Docker.
+
+**What was explicitly given up**: diagnosis history. Nothing recorded it in a readable way
+anyway. If it returns it returns with a read path, as a new spec.
+
+**Consequences**: `ml-service`'s full suite now runs natively (79 passed, 0 skipped — it was
+63 passed / 2 skipped, with the RAG file entirely skipped outside Docker). `mvn verify` needs
+no database, and CI's backend job no longer provisions one. `retrieve()` is an exact lookup
+rather than a similarity search, which is strictly narrower: it can no longer surface a
+different disease's text. `DiagnosisCaseResponse.id` is gone — there is no row to identify,
+and offering an id for something unlookupable would be a lie.

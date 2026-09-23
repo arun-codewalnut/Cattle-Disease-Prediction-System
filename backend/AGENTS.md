@@ -11,13 +11,14 @@
   'spring-boot'` (or `there is no POM in this directory`), which reads like a broken setup
   but just means the wrong working directory.
 - **Tests**: JUnit under `src/test/java`, mirroring the package under test. `mvn -q test`
-  runs them (`mvn -q verify` runs tests as part of the build). **Needs a real Postgres
-  running on `localhost:5432`** (matching `.env.example`'s defaults) — `BackendApplicationTests`
-  boots the full Spring context, which runs Flyway on startup. Quickest way:
-  `docker run -d -e POSTGRES_DB=cattlecare -e POSTGRES_USER=cattlecare -e POSTGRES_PASSWORD=cattlecare -p 5432:5432 postgres:16-alpine`,
-  or just `make up` first. CI provides this as a service container (see `.github/workflows/ci.yml`).
-- **DB migrations**: Flyway, `src/main/resources/db/migration/V<n>__description.sql`. Never
-  edit a migration that may have already run — add a new one.
+  runs them (`mvn -q verify` runs tests as part of the build). **No database needed** —
+  the backend is stateless as of `docs/specs/remove-databases.md`, so
+  `BackendApplicationTests` boots the full context without one and CI needs no service
+  container.
+- **No persistence layer**: no JPA, no Flyway, no datasource. The backend validates a
+  request, calls `ml-service`, and returns the result. Nothing is stored. If persistence
+  comes back, it comes back with something that reads it — the last one had two writes and
+  zero reads.
 - **Correlation ID**: handled by `config/CorrelationIdFilter.java` — reads/generates
   `X-Correlation-Id`, puts it in the SLF4J MDC (`correlationId` key) so it's in every log line
   automatically (see the `logging.pattern.console` in `application.yml`).

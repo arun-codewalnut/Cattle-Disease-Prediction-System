@@ -28,8 +28,8 @@ concrete examples, "not in scope," and checkable acceptance criteria. Mirror the
 | Service | Stack | Responsibility | Conventions |
 |---|---|---|---|
 | `frontend/` | React (Vite) | UI for symptom/image intake, results display | [frontend/AGENTS.md](frontend/AGENTS.md) |
-| `backend/` | Java 21 + Spring Boot | Auth, case history, notifications, API gateway to ml-service | [backend/AGENTS.md](backend/AGENTS.md) |
-| `ml-service/` | Python + FastAPI + LangGraph | ML models, agent orchestration, RAG | [ml-service/AGENTS.md](ml-service/AGENTS.md) |
+| `backend/` | Java 21 + Spring Boot | Request validation, species rules, API gateway to ml-service (stateless — no database) | [backend/AGENTS.md](backend/AGENTS.md) |
+| `ml-service/` | Python + FastAPI + LangGraph | ML models, agent orchestration, RAG over local markdown | [ml-service/AGENTS.md](ml-service/AGENTS.md) |
 
 Always read the relevant service-level `AGENTS.md` before making changes inside that folder —
 this root file only covers what's shared across all three. For "where do I start / where does

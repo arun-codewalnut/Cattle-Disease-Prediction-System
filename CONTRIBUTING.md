@@ -20,7 +20,7 @@ to run this once.
    [docs/ROADMAP.md](docs/ROADMAP.md) (M1–M8).
 2. Branch per issue/task: `<type>/<short-description>` — e.g. `feat/xgboost-baseline-model`,
    `fix/correlation-id-not-forwarded`, `docs/update-api-contract`.
-3. Commit messages: small, focused, imperative mood (`Add Flyway migration for cattle table`,
+3. Commit messages: small, focused, imperative mood (`Add sheep symptom model`,
    not `Added stuff`). Reference the issue number when one exists (`Fixes #12`).
 4. Open a PR against `main` using the PR template — it's filled in automatically.
 5. **Before merging, run `/code-review` on the diff** — even for solo-authored PRs. Read it

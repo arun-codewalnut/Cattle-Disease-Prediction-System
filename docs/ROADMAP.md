@@ -8,7 +8,10 @@ Tracked as GitHub Milestones + Issues on the repo.
 - [x] **M2** — FastAPI inference endpoints wrapping the model(s) — spec:
       [docs/specs/M2-wire-model-into-agent.md](specs/M2-wire-model-into-agent.md) — issue:
       [#2](https://github.com/arun-codewalnut/Cattle-Disease-Prediction-System/issues/2)
-- [x] **M3** — Spring Boot domain model + Flyway migrations + Postgres — spec:
+- [x] **M3** — Spring Boot domain model + Flyway migrations + Postgres — **the persistence
+      this milestone added was later removed** (2026-09-23): nothing ever read it, and it was
+      a hard startup dependency. See
+      [docs/specs/remove-databases.md](specs/remove-databases.md). Spec:
       [docs/specs/M3-backend-domain-model.md](specs/M3-backend-domain-model.md) — issue:
       [#3](https://github.com/arun-codewalnut/Cattle-Disease-Prediction-System/issues/3)
 - [x] **M4** — React symptom-intake UI, calling the backend — spec:
@@ -17,7 +20,10 @@ Tracked as GitHub Milestones + Issues on the repo.
 - [x] **M5** — LangGraph agent wiring: intake → route to model(s) → predict → explain — spec:
       [docs/specs/M5-langgraph-agent-orchestration.md](specs/M5-langgraph-agent-orchestration.md) — issue:
       [#5](https://github.com/arun-codewalnut/Cattle-Disease-Prediction-System/issues/5)
-- [x] **M6** — RAG knowledge base (Chroma) for grounded explanations — spec:
+- [x] **M6** — RAG knowledge base for grounded explanations — **Chroma was later replaced
+      by direct markdown reads** (2026-09-23) for a 10.8 KB corpus addressed by exact key;
+      the RAG behaviour is unchanged. See
+      [docs/specs/remove-databases.md](specs/remove-databases.md). Spec:
       [docs/specs/M6-rag-knowledge-base.md](specs/M6-rag-knowledge-base.md) — issue:
       [#6](https://github.com/arun-codewalnut/Cattle-Disease-Prediction-System/issues/6)
 - [ ] **M7** — Notifications (email or WhatsApp Cloud API free tier) for escalation — issue:

@@ -21,10 +21,12 @@ torch==2.14.0+cpu
 torchvision==0.29.0+cpu
 
 # Agent / RAG
+# No vector store: retrieval reads the markdown reference docs directly — see
+# docs/specs/remove-databases.md. That also removed chroma-hnswlib, which had no cp313
+# wheel and was the reason this service's tests had to run in Docker.
 langgraph==0.2.60
 langchain-core==0.3.28
 langchain-ollama==0.2.2
-chromadb==0.5.23
 
 # Dev/test
 pytest==8.3.4

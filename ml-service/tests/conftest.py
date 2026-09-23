@@ -1,15 +1,16 @@
 """
-Session-wide fixtures: trains a real symptom model and ingests the real RAG reference docs
-once per test run, pointing the app's default paths at them, so any test hitting the API
-works without needing committed model/Chroma artifacts. test_symptom_model.py's own
-fixture trains a separate model and passes it explicitly — that's deliberate, not
-redundant: it's testing predict()'s model_path parameter directly.
+Session-wide fixture: trains a real symptom model once per test run and points the app's
+default path at it, so any test hitting the API works without a committed model artifact.
+test_symptom_model.py's own fixture trains a separate model and passes it explicitly —
+that's deliberate, not redundant: it's testing predict()'s model_path parameter directly.
+
+There is no RAG fixture any more. Retrieval reads the checked-in markdown documents
+directly (docs/specs/remove-databases.md), so there is nothing to ingest and nothing to
+point at a temporary directory.
 """
 import app.agent.graph as graph_module
 import app.models.symptom_model as symptom_model_module
-import app.rag.retrieval as retrieval_module
 import pytest
-from app.rag.ingest import ingest as ingest_rag_docs
 from training.generate_synthetic_data import main as generate_dataset
 from training.symptom_model_train import train
 
@@ -25,21 +26,6 @@ def _trained_default_model(tmp_path_factory):
     symptom_model_module.DEFAULT_MODEL_PATH = model_path
     return model_path
 
-
-@pytest.fixture(scope="session", autouse=True)
-def _ingested_rag_knowledge_base(tmp_path_factory):
-    """Best-effort — `chromadb` has no cp313 wheel on Windows (see ml-service/AGENTS.md), so
-    this must not fail the whole session when it's unavailable natively. Non-RAG tests don't
-    need this to succeed at all (retrieve() itself degrades to [] gracefully when chromadb
-    can't be imported); RAG-specific tests skip themselves individually via
-    `pytest.importorskip("chromadb")` when it's genuinely missing."""
-    try:
-        persist_dir = tmp_path_factory.mktemp("chroma_db")
-        ingest_rag_docs(persist_dir=persist_dir)
-        retrieval_module.DEFAULT_PERSIST_DIR = persist_dir
-        return persist_dir
-    except ImportError:
-        return None
 
 
 @pytest.fixture(autouse=True)

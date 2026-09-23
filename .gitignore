@@ -39,7 +39,6 @@ ml-service/data/dog-images/*
 !ml-service/data/sheep-symptoms/
 ml-service/data/sheep-symptoms/*
 !ml-service/data/sheep-symptoms/SOURCE.md
-ml-service/data/chroma_db/
 ml-service/models/*.pkl
 ml-service/models/*.pt
 ml-service/models/*.onnx

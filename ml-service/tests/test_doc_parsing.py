@@ -1,7 +1,7 @@
-# Pure parsing logic — no chromadb needed, so unlike test_rag_retrieval.py this runs
-# natively on Windows too (ingest.py's chromadb usage is confined to _get_collection,
-# called only from ingest(), never from _parse_sections/_slugify).
-from app.rag.ingest import _parse_sections, _slugify
+# The markdown block/section parser that retrieval is built on. It used to live in
+# app/rag/ingest.py, which fed Chroma; it now backs the direct file reads that replaced it
+# (docs/specs/remove-databases.md). The parsing rules are unchanged.
+from app.rag.retrieval import _parse_sections, _slugify
 
 SAMPLE_DOC = """# Sample Disease
 

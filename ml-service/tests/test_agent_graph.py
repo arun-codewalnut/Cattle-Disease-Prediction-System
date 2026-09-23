@@ -329,24 +329,18 @@ def test_recommended_action_still_escalates_for_reportable_disease():
 
 
 def test_sources_populated_when_llm_and_retrieval_both_succeed(monkeypatch):
-    # chromadb has no cp313 wheel on Windows (see ml-service/AGENTS.md) — this test needs
-    # real retrieval to be meaningful, so skip cleanly (not an error) without it; run via
-    # Docker instead. The other tests here don't need real chromadb (retrieve() itself
-    # degrades to [] gracefully when it's unavailable), so only this one skips.
-    pytest.importorskip("chromadb")
-
+    # This used to need chromadb, and therefore Docker. Retrieval reads the checked-in
+    # markdown directly now (docs/specs/remove-databases.md), so it runs natively.
     fake_response = SimpleNamespace(content="Grounded explanation using the reference material.")
     monkeypatch.setattr(graph_module, "get_llm", lambda: SimpleNamespace(invoke=lambda messages: fake_response))
 
     result = run_diagnosis(CONFIDENT_SYMPTOMS)
 
     assert result["explanation"] == fake_response.content
-    # Semantic retrieval over small, thematically-similar documents can legitimately surface
-    # more than one source (e.g. another viral-disease doc sharing similar language) — the
-    # meaningful assertion is that the correct primary document was retrieved, not that it's
-    # the only one.
-    assert "foot-and-mouth-disease" in result["sources"]
-    assert len(result["sources"]) >= 1
+    # Exact lookup, so this is now stricter than it could be under similarity search: the
+    # diagnosis maps to exactly one document and no thematically-similar neighbour can be
+    # dragged in with it.
+    assert result["sources"] == ["foot-and-mouth-disease"]
 
 
 def test_sources_empty_when_llm_falls_back_to_template():
@@ -380,9 +374,9 @@ def test_uncertain_diagnosis_never_calls_retrieval(monkeypatch):
 
 
 def test_uncertain_diagnosis_gets_hardcoded_precautions():
-    # "uncertain" isn't a disease, so get_precautions() short-circuits before touching
-    # Chroma at all (see app/rag/retrieval.py) — this runs natively, no chromadb needed,
-    # unlike the real-disease precautions tests in test_rag_retrieval.py.
+    # "uncertain" isn't a disease, so get_precautions() short-circuits before it looks for
+    # a reference document at all (see app/rag/retrieval.py) — this guidance is hardcoded,
+    # unlike the real-disease precautions read from markdown in test_rag_retrieval.py.
     result = run_diagnosis({})
 
     assert result["diagnosis"] == "uncertain"

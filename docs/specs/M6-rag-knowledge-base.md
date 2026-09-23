@@ -1,7 +1,16 @@
 # Spec: RAG knowledge base (Chroma)
 
 **Milestone**: M6
-**Status**: done
+**Status**: superseded in part — Chroma replaced by direct file reads (2026-09-23)
+
+> **The RAG behaviour this milestone specified still stands; the vector store does not.**
+> Chroma was replaced with direct reads of the same markdown documents — see
+> [remove-databases.md](remove-databases.md). The corpus is 10.8 KB across six documents and
+> both callers address it by exact key, so the index earned nothing while costing a native
+> dependency (`chroma-hnswlib`, no cp313 wheel) that forced this service's tests through
+> Docker. Grounded explanations, `sources`, and the overview-only restriction are unchanged;
+> `get_precautions()` returns byte-identical text, locked in by a golden-output test. Kept
+> as-is rather than rewritten, per this repo's convention of not editing history.
 
 ## Actor + goal
 
