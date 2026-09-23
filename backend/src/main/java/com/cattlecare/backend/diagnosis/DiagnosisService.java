@@ -53,7 +53,10 @@ public class DiagnosisService {
     // symptom models) — see ml-service/app/models/cat_image_model.py and dog_image_model.py.
     // Image diagnosis is supported for these in addition to DIAGNOSIS_SUPPORTED_SPECIES;
     // symptom diagnosis stays rejected for them (no symptom model exists for either).
-    static final Set<Species> IMAGE_ONLY_SUPPORTED_SPECIES = Set.of(Species.CAT, Species.DOG);
+    // M16: Goat joins the same set — its model is binary (Healthy/Unhealthy only, no
+    // disease-specific goat image data exists) but is still a real, trained model, not an
+    // approximation borrowed from another species.
+    static final Set<Species> IMAGE_ONLY_SUPPORTED_SPECIES = Set.of(Species.CAT, Species.DOG, Species.GOAT);
 
     private final MlServiceClient mlServiceClient;
 

@@ -257,6 +257,17 @@ class DiagnosisServiceTest {
         verifyNoInteractions(mlServiceClient);
     }
 
+    // M16: Goat gets the same treatment as Cat/Dog — a real IMAGE model, no symptom model.
+
+    @Test
+    void submitSymptoms_goatSpecies_rejectedBeforeMlServiceCall() {
+        ApiException ex =
+                assertThrows(ApiException.class, () -> diagnosisService.submitSymptoms(Species.GOAT, Map.of()));
+
+        assertEquals("DIAGNOSIS_NOT_SUPPORTED_FOR_SPECIES", ex.getCode());
+        verifyNoInteractions(mlServiceClient);
+    }
+
     // M13/M14 follow-up: Cat/Dog now have their own real, trained IMAGE models (not symptom
     // models) — image diagnosis succeeds for them and forwards species so ml-service can pick
     // the right model. Symptom diagnosis (above) stays rejected — no symptom model exists.
@@ -278,14 +289,28 @@ class DiagnosisServiceTest {
     @Test
     void submitImage_dogSpecies_succeedsAndForwardsSpecies() {
         DiagnosisResult mlResult = new DiagnosisResult(
-                "Mange", 0.99, "Predicted Mange with 99% confidence.", "consult_vet",
+                "Fungal Infection", 0.81, "Predicted Fungal Infection with 81% confidence.", "consult_vet",
                 List.of(), List.of(), List.of());
         when(mlServiceClient.diagnose(eq(Map.of()), isNull(), anyString(), eq("DOG"))).thenReturn(mlResult);
         MultipartFile image = new MockMultipartFile("image", "dog.jpg", "image/jpeg", new byte[] {1});
 
         ImageDiagnosisBatchResponse response = diagnosisService.submitImage(Species.DOG, List.of(image));
 
-        assertEquals("Mange", response.results().get(0).diagnosis());
+        assertEquals("Fungal Infection", response.results().get(0).diagnosis());
         verify(mlServiceClient).diagnose(eq(Map.of()), isNull(), anyString(), eq("DOG"));
+    }
+
+    @Test
+    void submitImage_goatSpecies_succeedsAndForwardsSpecies() {
+        DiagnosisResult mlResult = new DiagnosisResult(
+                "Unhealthy", 0.72, "Predicted Unhealthy with 72% confidence.", "consult_vet",
+                List.of(), List.of(), List.of());
+        when(mlServiceClient.diagnose(eq(Map.of()), isNull(), anyString(), eq("GOAT"))).thenReturn(mlResult);
+        MultipartFile image = new MockMultipartFile("image", "goat.jpg", "image/jpeg", new byte[] {1});
+
+        ImageDiagnosisBatchResponse response = diagnosisService.submitImage(Species.GOAT, List.of(image));
+
+        assertEquals("Unhealthy", response.results().get(0).diagnosis());
+        verify(mlServiceClient).diagnose(eq(Map.of()), isNull(), anyString(), eq("GOAT"));
     }
 }

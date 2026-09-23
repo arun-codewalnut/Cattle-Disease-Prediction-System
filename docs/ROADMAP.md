@@ -54,7 +54,14 @@ Tracked as GitHub Milestones + Issues on the repo.
       from livestock — issue:
       [#22](https://github.com/arun-codewalnut/Cattle-Disease-Prediction-System/issues/22)
 - [ ] **M14** — Dog disease detection — issue:
-      [#23](https://github.com/arun-codewalnut/Cattle-Disease-Prediction-System/issues/23)
+      [#23](https://github.com/arun-codewalnut/Cattle-Disease-Prediction-System/issues/23).
+      Follow-up (2026-09-23): retrained on a new skin-disease dataset — 70.5% accuracy, 0.683
+      macro F1, and a real Healthy class for the first time — see that spec's "Follow-up:
+      Dog image model v2" section.
+- [x] **M16** — Goat disease detection (direct user request) — image-only, binary
+      Healthy/Unhealthy (no disease-specific goat image dataset exists anywhere found) —
+      80.1% accuracy, 0.800 macro F1. Spec:
+      [docs/specs/M16-goat-disease-detection.md](specs/M16-goat-disease-detection.md).
 
 **Deployment is explicitly out of scope** — this stays a local/learning project, not
 something hosted for real users. Don't add a deployment milestone back without checking
@@ -67,8 +74,8 @@ colorful, icon-driven) — issue:
 **Target species** (per user request, 2026-09-18): Cow (done), Buffalo, Sheep, Cat, Dog —
 sequenced M11→M14 above. M11 is where the domain model first generalizes beyond cattle; see
 that issue's "open design question" before assuming the shape of anything downstream.
-**Buffalo was later removed (2026-09-22)** — currently-supported species are Cow, Sheep,
-Cat, Dog.
+**Buffalo was later removed (2026-09-22)**. **Goat was added (2026-09-23, M16, direct user
+request)** — currently-supported species are Cow, Sheep, Goat, Cat, Dog.
 
 Stretch (post-MVP): IoT sensor anomaly detection, herd-level risk view, offline-first mobile
 client.

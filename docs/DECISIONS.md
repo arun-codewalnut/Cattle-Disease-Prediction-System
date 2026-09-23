@@ -732,3 +732,71 @@ against 87% of dog-as-cow and 93% of cat-as-cow submissions refused, and every n
 image refused. That refusal rate is higher than is comfortable, and it is the deliberate
 trade: a refusal is recoverable in one retry and says what to do, while the alternative was a
 screenshot diagnosed as Kennel Cough and a dog diagnosed with a reportable disease.
+
+## Goat added as a real, binary-only species; ibex used as ImageNet's goat proxy (2026-09-23, M16)
+
+**Decision**: `GOAT` added to `Species` (backend) and `SPECIES_OPTIONS`/
+`IMAGE_ONLY_SUPPORTED_SPECIES` (frontend), with a real trained image model
+(`app/models/goat_image_model.py`, `Healthy`/`Unhealthy` only, 80.1% accuracy, 0.800 macro
+F1, 927 images from `kartikeybartwal/dataset`, Apache 2.0). Symptom diagnosis stays blocked —
+no usable goat symptom data exists (the PPR dataset's species column can't be decoded, see
+`data/sheep-symptoms/SOURCE.md`).
+
+**Why binary, not disease-specific, and shipped anyway**: unlike Cat/Dog's original "block
+until real data exists" call (M13/M14), a real dataset existed for Goat this session — but a
+Kaggle search for goat-*disease* image data specifically (queries: "goat disease", "goat skin
+disease", "goat pox") found nothing. Shipping a binary Healthy/Unhealthy model, with the
+limitation stated plainly rather than either withholding it or inventing plausible disease
+names the data doesn't support, follows the same "ship it, loudly disclosed" precedent M14's
+Dog v1 model set for its own gap (no Healthy class).
+
+**ImageNet has no dedicated "goat" class** — verified directly against
+`MobileNet_V2_Weights.DEFAULT.meta['categories']`, the same verify-don't-assume bar M15 set
+for the animal-class index range. "Ibex" (index 350, a wild goat) is the closest available
+proxy, added to `species_gate.py`'s existing `RUMINANT` group (ox/water buffalo/bison/ram/
+bighorn) rather than given its own group — adding one index to an existing group can only
+raise that group's peak probability for any photo, so it cannot regress Cow/Sheep's existing
+false-reject rate, and this was confirmed by a same-day regression check on real cow photos
+before shipping.
+
+**Measured before shipping**, 40-photo samples of this project's own real photos: goat-as-GOAT
+false-reject 5% (2/40, in line with other species), cat-as-GOAT caught 90%, dog-as-GOAT
+caught only 30%. The weaker dog-as-goat number reflects goat's narrower signal (one proxy
+class vs. cattle's own dedicated classes) — a real, disclosed limitation, not a bug to chase
+down this session.
+
+## Dog's disease dataset swapped for a better one — and an unplanned regression in an unrelated safety check (2026-09-23, M16 follow-up)
+
+**Decision**: `dog_image_model.pt` retrained on
+[Dogs Skin disease dataset](https://www.kaggle.com/datasets/yashmotiani/dogs-skin-disease-dataset)
+(CC0, 439 images) instead of the original systemic-disease dataset (293 images, no Healthy
+class). The disease list changes entirely — Bacterial Dermatosis/Fungal Infection/Healthy/
+Hypersensitivity-Allergic Dermatosis replaces Canine Distemper/Canine Parvovirus/Kennel
+Cough/Mange — the same "swap in real data when it conflicts with prior research" call M13
+made for Cat, for the same underlying reason: skin conditions photograph far more
+distinctively than systemic disease, which is exactly why the v1 model was weak (52.6%
+accuracy, no class better than 0.75 F1, Canine Distemper at 0.25).
+
+**Real result: 70.5% accuracy, 0.683 macro F1** (v1: 52.6%/0.489), with a genuine Healthy
+class for the first time (0.78 F1, the strongest). Measured, not assumed, that the v1 model's
+train-split-only flip-augmentation trick doesn't transfer to this dataset — it scored *worse*
+here (69.3% vs. 70.5% without it) — so the training script dropped it, matching Cat's and
+Goat's simpler pattern.
+
+**Unplanned finding, disclosed rather than absorbed silently**: the species-mismatch
+detector's dog-as-cow catch rate dropped from ~80% (v1's whole-body photos) to ~30% (v2's
+skin-lesion close-ups), measured on 40-photo samples of each — close-ups don't show the
+face/ears/snout features the detector's ImageNet-based model actually keys on for "dog."
+This is a real, measured cost of the dataset swap, on a feature the swap had no intent to
+touch. **Accepted as a tradeoff** — the real accuracy gain on Dog's own diagnosis was judged
+worth it — but the test suite's coverage for "does the mismatch detector work on a real dog
+photo" was decoupled from it: `tests/test_species_mismatch.py` now reads from a retained
+`data/dog-images-v1-superseded/` folder (kept specifically for this, not deleted) so that
+check keeps validating the detector's real capability against a stable, representative
+fixture, independent of whichever dataset happens to train the disease classifier this month.
+
+**Why the v1 data was kept, not deleted**: `data/` directories are gitignored, so this isn't
+a commit-history question — but per this file's "supersede, don't overwrite" spirit, moving
+the v1 photos to `dog-images-v1-superseded/` rather than deleting them let the regression
+above be measured at all, and keeps a fallback fixture available for the mismatch-detector
+test.

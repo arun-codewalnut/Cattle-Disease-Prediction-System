@@ -44,11 +44,20 @@ def test_real_cat_photo_passes():
 
 
 def test_real_dog_photo_passes():
-    photo = _sample_species_photo("dog-images", "mange")
+    photo = _sample_species_photo("dog-images", "healthy")
     if photo is None:
         import pytest
 
         pytest.skip("no local ml-service/data/dog-images — see its SOURCE.md")
+    assert is_animal_photo(photo) is True
+
+
+def test_real_goat_photo_passes():
+    photo = _sample_species_photo("goat-images", "healthy")
+    if photo is None:
+        import pytest
+
+        pytest.skip("no local ml-service/data/goat-images — see its SOURCE.md")
     assert is_animal_photo(photo) is True
 
 

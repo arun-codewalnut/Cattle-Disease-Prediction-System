@@ -16,14 +16,17 @@ package com.cattlecare.backend.diagnosis;
  *
  * <p>Not every species here supports diagnosis yet — see
  * {@link DiagnosisService#DIAGNOSIS_SUPPORTED_SPECIES}.
- * Cat (M13) and Dog (M14) are recorded but diagnosis is deliberately blocked for both: the
- * cattle-trained model's disease list and symptom vocabulary don't apply to a companion
- * animal at all, unlike Sheep, where a real sheep/goat-trained model exists (M12 follow-up)
- * for symptom diagnosis specifically. See docs/specs/M13-cat-disease-detection.md and
- * docs/specs/M14-dog-disease-detection.md. */
+ * Cat (M13), Dog (M14) and Goat (M16) are recorded but SYMPTOM diagnosis is deliberately
+ * blocked for all three: the cattle-trained model's disease list and symptom vocabulary
+ * don't apply to any of them, unlike Sheep, where a real sheep/goat-trained model exists
+ * (M12 follow-up) for symptom diagnosis specifically. Cat/Dog/Goat all get real, trained
+ * IMAGE models instead — see {@link DiagnosisService#IMAGE_ONLY_SUPPORTED_SPECIES}. See
+ * docs/specs/M13-cat-disease-detection.md, docs/specs/M14-dog-disease-detection.md and
+ * docs/specs/M16-goat-disease-detection.md. */
 public enum Species {
     COW,
     SHEEP,
     CAT,
     DOG,
+    GOAT,
 }

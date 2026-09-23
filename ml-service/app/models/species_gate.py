@@ -104,18 +104,21 @@ def is_animal_photo(image_bytes: bytes) -> bool:
 # *normalised probability mass per group* instead, with a floor below which the model is
 # treated as having no opinion, measured 6% false warnings at 95% of real mismatches caught.
 _SPECIES_CLASS_INDICES = {
-    # Cow and sheep share one group. There is no sheep image model — sheep photos are routed
-    # to the cattle model as a disclosed approximation (docs/DISCLAIMER.md) — so refusing a
-    # sheep photo for looking bovine would reject something the app supports by design.
-    "RUMINANT": (345, 346, 347, 348, 349),   # ox, water buffalo, bison, ram, bighorn
+    # Cow, sheep and goat share one group. There is no sheep or goat-disease image model —
+    # those photos are routed to the cattle (sheep) or a binary (goat) model as disclosed
+    # approximations/limitations — so refusing one for looking bovine/ruminant would reject
+    # something the app supports by design. ImageNet-1k has no dedicated "goat" class (verified
+    # directly against the weights' category list, M16) — "ibex" (350, a wild goat) is the
+    # closest available proxy, added here.
+    "RUMINANT": (345, 346, 347, 348, 349, 350),  # ox, water buffalo, bison, ram, bighorn, ibex
     "CAT": (281, 282, 283, 284, 285),        # 383 "Madagascar cat" is a lemur — excluded
     "DOG": tuple(range(151, 269)),
 }
 
-_SPECIES_TO_GROUP = {"COW": "RUMINANT", "SHEEP": "RUMINANT", "CAT": "CAT", "DOG": "DOG"}
+_SPECIES_TO_GROUP = {"COW": "RUMINANT", "SHEEP": "RUMINANT", "GOAT": "RUMINANT", "CAT": "CAT", "DOG": "DOG"}
 
 # Each group scores by its PEAK class probability, not its sum or mean. This choice matters
-# more than the threshold, because ImageNet carries 118 dog classes against 5 ruminant and 5
+# more than the threshold, because ImageNet carries 118 dog classes against 6 ruminant and 5
 # cat:
 #   - summing gives dog a structural advantage and refused 7.5% of genuine cattle photos;
 #   - dividing by class count over-corrects the other way (a dog photo concentrates on one

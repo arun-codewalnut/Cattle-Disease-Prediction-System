@@ -21,10 +21,14 @@ the diagnosis.
 request picks which trained model runs — Cat and Dog get their own models
 (`app/models/cat_image_model.py`/`dog_image_model.py`), everything else (Cow/Sheep, or no
 species given) falls back to the cattle model above, unchanged. The Cat model is solid
-(83% accuracy). **The Dog model is genuinely weak (52.6% accuracy, 0.25 F1 for Canine
-Distemper specifically)** — shipped anyway per an explicit decision to disclose loudly rather
-than withhold, not silently trusted. Nothing here softens that; the caveat lives in the
-frontend and `docs/DISCLAIMER.md`, not swept into a confidence number alone.
+(83% accuracy). **The Dog model was retrained on a new dataset (M16 follow-up)** — now
+70.5% accuracy with a real Healthy class, replacing the original 52.6%/no-Healthy version.
+See `docs/specs/M14-dog-disease-detection.md`'s "Follow-up: Dog image model v2" section.
+
+`predict_image` also routes **Goat** (M16, `app/models/goat_image_model.py`) — the only
+dataset found is binary Healthy/Unhealthy, no disease-specific goat image data exists
+anywhere, so this model can flag that a goat looks off but never name what's wrong. See
+`docs/specs/M16-goat-disease-detection.md`.
 
 `predict_symptoms` is now species-aware too (M12 follow-up): Sheep routes to its own real,
 trained binary PPR (Peste des Petits Ruminants) screen (`app/models/sheep_symptom_model.py`)
@@ -55,7 +59,7 @@ from langgraph.graph import END, StateGraph
 
 from app.agent.llm import get_llm
 from app.errors import ApiError
-from app.models import cat_image_model, dog_image_model, species_gate
+from app.models import cat_image_model, dog_image_model, goat_image_model, species_gate
 from app.models import image_model as cattle_image_model
 from app.models import sheep_symptom_model
 from app.models import symptom_model as cattle_symptom_model
@@ -74,7 +78,7 @@ REPORTABLE_DISEASES = {
 # Which trained image model handles which species — anything not listed (Cow/Sheep, or no
 # species given) falls back to the cattle model, same as before species-aware routing
 # existed. See the module docstring above for each model's real accuracy.
-_IMAGE_MODEL_BY_SPECIES = {"CAT": cat_image_model, "DOG": dog_image_model}
+_IMAGE_MODEL_BY_SPECIES = {"CAT": cat_image_model, "DOG": dog_image_model, "GOAT": goat_image_model}
 
 # Which trained symptom model handles which species — anything not listed falls back to the
 # cattle model, same fallback pattern as the image side above.
@@ -105,7 +109,7 @@ class DiagnosisState(TypedDict, total=False):
 
 
 # Human-readable species names for the mismatch message — "cow", not "COW".
-SPECIES_LABELS = {"COW": "cow", "SHEEP": "sheep", "CAT": "cat", "DOG": "dog"}
+SPECIES_LABELS = {"COW": "cow", "SHEEP": "sheep", "CAT": "cat", "DOG": "dog", "GOAT": "goat"}
 
 
 def _species_mismatch_message(selected: str | None) -> str:

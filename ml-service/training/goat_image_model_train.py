@@ -1,19 +1,14 @@
 """
-Trains the M16 follow-up (dataset v2) real dog image classifier.
+Trains the M16 real goat image classifier.
 
-See docs/specs/M14-dog-disease-detection.md's "Follow-up: Dog image model v2" section. Run
-from ml-service/ (venv active, torch/torchvision installed):
+See docs/specs/M16-goat-disease-detection.md. Run from ml-service/ (venv active, torch/
+torchvision installed):
 
-    python -m training.dog_image_model_train
+    python -m training.goat_image_model_train
 
 Same feature-extraction-once + linear-head-fine-tune approach as training/cat_image_model_train.py
 — see that file's docstring for the full rationale. Only the data path, disease list, and
 folder mapping differ.
-
-**No augmentation, unlike the v1 dog model** — measured, not assumed: on this dataset the v1
-model's train-split-only horizontal-flip trick scored *worse* (69.3% acc / 0.671 macro F1)
-than the plain approach below (70.5% acc / 0.683 macro F1), the opposite of what it did for
-v1's smaller, more imbalanced dataset. Kept simple, matching Cat's and Goat's training scripts.
 """
 from __future__ import annotations
 
@@ -29,19 +24,17 @@ from sklearn.model_selection import train_test_split
 from torch import nn
 from torchvision.models import MobileNet_V2_Weights, mobilenet_v2
 
-from app.models.dog_image_model import DISEASES
+from app.models.goat_image_model import DISEASES
 from app.models.image_model import PREPROCESS, build_model
 
-DATA_PATH = Path(__file__).resolve().parents[1] / "data" / "dog-images"
-MODEL_PATH = Path(__file__).resolve().parents[1] / "models" / "dog_image_model.pt"
+DATA_PATH = Path(__file__).resolve().parents[1] / "data" / "goat-images"
+MODEL_PATH = Path(__file__).resolve().parents[1] / "models" / "goat_image_model.pt"
 REGISTRY_PATH = Path(__file__).resolve().parents[1] / "models" / "REGISTRY.md"
 
 # Folder name (as the Kaggle dataset ships it) -> canonical DISEASES label.
 FOLDER_TO_DISEASE = {
-    "bacterial-dermatosis": "Bacterial Dermatosis",
-    "fungal-infection": "Fungal Infection",
     "healthy": "Healthy",
-    "hypersensitivity-allergic-dermatosis": "Hypersensitivity/Allergic Dermatosis",
+    "unhealthy": "Unhealthy",
 }
 
 VAL_FRACTION = 0.2
@@ -182,9 +175,9 @@ def train(data_path: Path = DATA_PATH, model_path: Path = MODEL_PATH) -> dict:
 
 def update_registry(metrics: dict, model_path: Path = MODEL_PATH, registry_path: Path = REGISTRY_PATH) -> None:
     entry = (
-        f"| `{model_path.name}` | Bacterial Dermatosis / Fungal Infection / Healthy / "
-        f"Hypersensitivity-Allergic Dermatosis (v2 dataset, replaces the v1 systemic-disease "
-        f"list — see SOURCE.md) | dog-images ({metrics['n_samples']} images) | "
+        f"| `{model_path.name}` | Healthy / Unhealthy (binary — no disease-specific goat "
+        f"image data exists, see SOURCE.md) | "
+        f"goat-images ({metrics['n_samples']} images) | "
         f"acc={metrics['val_accuracy']:.3f}, f1_macro={metrics['val_f1_macro']:.3f} | "
         f"{datetime.now(timezone.utc).strftime('%Y-%m-%d')} |\n"
     )

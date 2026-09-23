@@ -45,16 +45,38 @@ at all.
 **Real accuracy, stated plainly, not softened**:
 - **Cat's image model is solid**: 83.0% validation accuracy across Flea Allergy, Healthy,
   Ringworm, Scabies.
-- **Dog's image model is real but meaningfully weak**: 52.6% validation accuracy, and only
-  0.25 F1 for Canine Distemper specifically — wrong more often than right for that disease.
-  Mange is the one class it's actually decent at (0.75 F1). **It has no Healthy class at
-  all** — a Dog image diagnosis always names one of Canine Distemper, Canine Parvovirus,
-  Kennel Cough, or Mange, even for a perfectly healthy dog. Shipped anyway, per an explicit
-  decision to disclose loudly rather than withhold — the frontend states this before a photo
-  is even uploaded, not just here.
+- **Dog's image model was retrained (M16 follow-up)** on a new skin-disease dataset: 70.5%
+  validation accuracy, 0.683 macro F1, across Bacterial Dermatosis, Fungal Infection, Healthy,
+  and Hypersensitivity/Allergic Dermatosis — a substantial improvement over the original
+  52.6%/no-Healthy-class model. Bacterial Dermatosis is still the weakest class (0.52 F1) —
+  wrong more often than the others, though far above the old model's worst class (0.25 F1).
+  **It now has a real Healthy class** (0.78 F1, the strongest one).
 
 The rest of this document's guarantees (probabilistic estimate, not a diagnosis; never the
 sole basis for a real decision) apply identically regardless of audience — a pet owner needs
 the same honesty a farmer/vet does, just framed for a different context and different stakes
-(an individual companion animal, not herd economics). That honesty is exactly what makes the
-Dog caveat above non-negotiable to state clearly, not just technically true somewhere.
+(an individual companion animal, not herd economics). That honesty is exactly what makes
+per-class accuracy caveats like Dog's non-negotiable to state clearly, not just technically
+true somewhere.
+
+## Goat (M16)
+
+Goat has a real, trained image model — but a **binary** one: `Healthy` or `Unhealthy`, 80.1%
+validation accuracy. No disease-specific goat image dataset was found anywhere in this
+session's search, so **the model can flag that a goat photo looks off, but it can never say
+what's wrong**. An `Unhealthy` result gets generic guidance (isolate the animal, consult a
+vet, take a closer photo of the area of concern) rather than disease-specific precautions,
+because there is no specific disease identified. Goat has no symptom model either — the
+closest candidate data (the PPR dataset Sheep's symptom model uses) can't be reliably split
+by species (see `ml-service/data/sheep-symptoms/SOURCE.md`), so symptom-based diagnosis stays
+blocked for Goat, same as Cat and Dog.
+
+**A real, measured side effect of the Dog dataset swap above, unrelated to Goat itself**: the
+species-mismatch detector (which flags a dog photo submitted with Cow selected, etc.) got
+measurably weaker at catching dog-as-cow specifically — from ~80% to ~30% caught on 40-photo
+samples — because Dog's new disease dataset is skin-lesion close-ups, which don't show the
+face/ears/snout features the detector's underlying model keys on. This was judged an
+acceptable tradeoff for the real accuracy gain on Dog's actual diagnosis, but it is a real,
+disclosed change in how well that unrelated safety guard performs specifically for dog
+photos — see `docs/specs/M16-goat-disease-detection.md` and `docs/DECISIONS.md` for the full
+measurement.

@@ -3,7 +3,7 @@
 Living snapshot of project state. Update this whenever you finish a meaningful chunk of work —
 this is what an agent (or you) reads first when resuming.
 
-_Last updated: 2026-09-23 (session 14)_
+_Last updated: 2026-09-23 (session 15 — M16 Goat + Dog v2)_
 
 ## Known gaps
 
@@ -526,52 +526,49 @@ _Last updated: 2026-09-23 (session 14)_
     no reference documents, so they return no guidance. The diagnosis→document map is
     byte-identical to before, so this predates the change.
 
-- **Species-mismatch guard and action-first results**
-  (spec [docs/specs/species-mismatch-and-actionable-results.md](docs/specs/species-mismatch-and-actionable-results.md),
-  PR #39 merged, follow-up fix in PR #40). Shipped in three passes, each corrected by
-  evidence rather than argument:
-  1. **The deferral was wrong.** `docs/DECISIONS.md` had twice deferred checking the photo
-     against the selected species, reasoning that a wrong-species photo "most likely comes
-     back `uncertain`". Measured: 15 cat photos through the cattle model returned
-     `uncertain` **0 times**, averaged 71% confidence, and included **"Foot and Mouth
-     Disease, 85%"** — a reportable disease, confidently, from a photo of a cat.
-  2. **Warning was not enough.** Shipped as an advisory banner first; the user immediately
-     hit a dog photo with Cow selected that showed the warning *and* "Likely: Foot and Mouth
-     Disease (60%)" with full escalation guidance beneath it. Now `species_mismatch` is a
-     diagnosis value of its own (mirroring `invalid_image`): the disease model never runs,
-     no confidence, no guidance, excluded from batch agreement.
-  3. **The not-an-animal gate was the real hole.** A screenshot of text with Dog selected
-     returned "Kennel Cough, 42%". M15's gate accepted a photo if *any* of its top-5 classes
-     was an animal — and **398 of ImageNet's 1000 classes are animals**, so cluttered images
-     passed by chance. It scores total animal probability mass (≥ 0.30) now: 0/12 non-animal
-     test images let through, versus 2/12 before, at the same 2/90 cost in valid photos.
-  - Choosing the species statistic took three attempts, all measured: summing class
-    probabilities gave dog a structural advantage (118 classes against 5) and refused 7.5%
-    of genuine cattle photos; dividing by class count over-corrected and dropped detection
-    to 7%; **peak class probability** is scale-free and does neither. Threshold 25, taken
-    from the gap between valid photos (p95 ≈ 24) and genuine mismatches (median 98–170).
-  - **Measured end state**: 7.5% of valid photos refused, 87% of dog-as-cow and 93% of
-    cat-as-cow refused, 100% of non-animal images refused.
-  - Result cards also restructured: the confidence percentage appears **once** (the heading,
-    where `docs/DISCLAIMER.md` requires it — it was stated three times), the recommended
-    action and numbered next steps moved above the explanation, and the template explanation
-    stopped repeating the percentage and stopped printing raw feature keys
-    (`mouth_lesions` → "mouth lesions").
-
-- **Kaggle dataset survey** (no code change). Kaggle's site won't render in the in-app
-  browser — its JS bundles are blocked (`ERR_BLOCKED_BY_CLIENT`) — but the public API works
-  unauthenticated for both search and download, confirmed by pulling a real 11 MB dataset.
-  No sign-in is needed for public datasets, matching what
-  `data/sheep-symptoms/SOURCE.md` already documents. 175 datasets surveyed, 113 openly
-  licensed. Candidates worth following up, none verified beyond metadata:
-  - *Healthy and Unhealthy Goat Images* (Apache 2.0, 278 MB) — closest thing to the missing
-    sheep disease image set; the PPR symptom model already combines goat+sheep data.
-  - *Dog's skin diseases* (Apache 2.0 / CC0, ~200 MB each) — candidates to replace the weak
-    52.6% dog model.
-  - *Sheep Breed Classification* (CC BY 4.0, 1,680 real sheep photos across 4 breeds,
-    downloaded and verified), *Indian Bovine breeds* (CC0), *Cows and Buffalo* (MIT) —
-    together these could train a real 4-class species classifier and retire the ImageNet
-    workaround the species guard currently depends on.
+- **M16: Goat added as a real, image-only species; Dog's model retrained on a better dataset**
+  (2026-09-23, branch `feat/m16-goat-species-and-dog-v2`, direct user request: "download the
+  goat dataset and integrate it... if datasets for other species are available, include them
+  as well"). Scope was confirmed with the user first (`AskUserQuestion`): Goat becomes a full
+  new species rather than folding into Sheep, and "other species" work means replacing the
+  weak Dog model specifically.
+  - **Goat**: real trained image model, `app/models/goat_image_model.py` — but **binary
+    only** (`Healthy`/`Unhealthy`, 80.1% accuracy, 0.800 macro F1, 927 images from
+    `kartikeybartwal/dataset`, Apache 2.0). No disease-specific goat image dataset exists
+    anywhere found (searched "goat disease", "goat skin disease", "goat pox" against Kaggle's
+    public API) — the model can flag that a goat looks off, never name what's wrong. No goat
+    symptom model either (the PPR dataset's species column is undecodable, same wall Sheep's
+    model already documents). `GOAT` added to `Species` (backend) and
+    `IMAGE_ONLY_SUPPORTED_SPECIES` (both services), same pattern as Cat/Dog. ImageNet has no
+    dedicated goat class (verified against the model's own category list) — "ibex" used as
+    the closest proxy, added to `species_gate.py`'s existing `RUMINANT` group. Spec:
+    [docs/specs/M16-goat-disease-detection.md](docs/specs/M16-goat-disease-detection.md).
+  - **Dog v2**: retrained on
+    [Dogs Skin disease dataset](https://www.kaggle.com/datasets/yashmotiani/dogs-skin-disease-dataset)
+    (CC0, 439 images) — disease list changes entirely, from the old systemic-disease list
+    (Canine Distemper/Parvovirus/Kennel Cough/Mange, no Healthy class) to a skin-disease list
+    (Bacterial Dermatosis/Fungal Infection/Healthy/Hypersensitivity-Allergic Dermatosis), the
+    same "swap in real data over prior research" call M13 made for Cat. **Real result: 70.5%
+    accuracy, 0.683 macro F1** (was 52.6%/0.489), with a genuine Healthy class for the first
+    time. Measured that the v1 model's flip-augmentation trick doesn't help this dataset (69.3%
+    with it vs. 70.5% without) — training script simplified to match Cat/Goat's plain pattern.
+  - **A real, unplanned regression, measured and disclosed**: the species-mismatch detector's
+    dog-as-cow catch rate dropped from ~80% (v1's whole-body photos) to ~30% (v2's skin
+    close-ups) — close-ups don't show the face/ears/snout signal the detector needs. Judged an
+    acceptable tradeoff, not silently absorbed: logged in `docs/DECISIONS.md` with the real
+    numbers, and `tests/test_species_mismatch.py` now reads the retained
+    `data/dog-images-v1-superseded/` folder for that specific check so the test still validates
+    the detector's real capability independent of which dataset trains the current model.
+  - Also fixed along the way: Cat and Dog's `REGISTRY.md` rows were de-duplicated (the training
+    script appends, doesn't replace — same class of issue PR #32 hit before), and 4 new
+    hand-written reference docs were added (`bacterial-dermatosis.md`, `fungal-infection.md`,
+    `hypersensitivity-allergic-dermatosis.md`, `unhealthy-goat.md`) so these new diagnoses get
+    real precautions/next-steps instead of silently falling into the known Cat-only gap below.
+  - `docs/DISCLAIMER.md`, `docs/API_CONTRACTS.md`, `docs/ROADMAP.md`, and
+    `frontend/src/features/diagnosis/species.js`'s `SPECIES_SUMMARIES` all updated to reflect
+    the real new numbers and the new species.
+  - **Validated**: ml-service 94/1 (skipped), backend 32/32, frontend lint + 27/27 + build all
+    green, plus live end-to-end verification against the real running stack (see HANDOFF.md).
 
 ## In Progress
 

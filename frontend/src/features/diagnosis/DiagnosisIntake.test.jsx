@@ -315,13 +315,14 @@ describe('DiagnosisIntake', () => {
   })
 
   // docs/DISCLAIMER.md requires "likely X, confidence Y%" wording — the meter reinforces the
-  // number, it must never replace it. The Dog model sits near this band in reality.
+  // number, it must never replace it. Arbitrary mocked confidence — this is a UI rendering
+  // test, not a claim about any specific model's real accuracy.
   it('flags a low-confidence result while keeping the required wording', async () => {
     const user = userEvent.setup()
     fetchMock.mockResolvedValueOnce(
       jsonResponse(true, {
         results: [{
-          species: 'DOG', diagnosis: 'Mange', confidence: 0.53, explanation: 'x',
+          species: 'DOG', diagnosis: 'Fungal Infection', confidence: 0.53, explanation: 'x',
           recommendedAction: 'consult_vet', precautions: [], nextSteps: [],
           createdAt: '2026-01-01T00:00:00Z',
         }],
@@ -334,7 +335,7 @@ describe('DiagnosisIntake', () => {
     await user.upload(screen.getByLabelText(/add photos/i), new File(['a'], 'a.jpg', { type: 'image/jpeg' }))
     await user.click(screen.getByRole('button', { name: /diagnose from photo/i }))
 
-    expect(await screen.findByText(/likely: mange \(53% confidence\)/i)).toBeInTheDocument()
+    expect(await screen.findByText(/likely: fungal infection \(53% confidence\)/i)).toBeInTheDocument()
     expect(screen.getByText(/low confidence/i)).toBeInTheDocument()
   })
 
@@ -530,13 +531,27 @@ describe('DiagnosisIntake', () => {
     expect(fetchMock).not.toHaveBeenCalled()
   })
 
-  it('shows image-only diagnosis for Dog, with the weak-accuracy caveat in its one-line summary', async () => {
+  it('shows image-only diagnosis for Dog, with the retrained skin-disease model summary', async () => {
     const user = userEvent.setup()
 
     render(<DiagnosisIntake />)
     await user.selectOptions(screen.getByLabelText(/species/i), 'DOG')
 
-    expect(screen.getByText(/photo only.*weak.*no healthy option/i)).toBeInTheDocument()
+    expect(screen.getByText(/photo only.*dog-specific skin-disease model/i)).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /get diagnosis/i })).not.toBeInTheDocument()
+    expect(screen.queryByLabelText(/fever/i)).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /diagnose from photo/i })).toBeInTheDocument()
+
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('shows image-only diagnosis for Goat — binary Healthy/Unhealthy model, no symptom form', async () => {
+    const user = userEvent.setup()
+
+    render(<DiagnosisIntake />)
+    await user.selectOptions(screen.getByLabelText(/species/i), 'GOAT')
+
+    expect(screen.getByText(/photo only.*binary.*can.t name a specific disease/i)).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /get diagnosis/i })).not.toBeInTheDocument()
     expect(screen.queryByLabelText(/fever/i)).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: /diagnose from photo/i })).toBeInTheDocument()

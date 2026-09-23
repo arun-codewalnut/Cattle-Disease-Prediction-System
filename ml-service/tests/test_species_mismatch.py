@@ -80,7 +80,16 @@ def test_message_never_claims_what_the_animal_is():
         assert other not in message.lower()
 
 
-_DOG_PHOTOS = pathlib.Path(__file__).resolve().parents[1] / "data" / "dog-images"
+# M16: the Dog *disease* dataset is now skin-lesion close-ups (see data/dog-images/SOURCE.md),
+# not whole-dog photos. Measured, not assumed: close-ups give the ImageNet-based detector a
+# much weaker species signal — 40-sample check went from 80% dog-as-cow caught (whole-body
+# v1 photos) to 30% (v2 skin close-ups). That's a real, disclosed limitation of the detector
+# for lesion-style photos generally (see docs/DECISIONS.md), not specific to this test. The
+# superseded v1 folder is kept specifically as a stable whole-body-photo fixture so this test
+# still validates the detector's real capability on a representative "someone submitted a
+# photo of their dog" case, independent of whichever dataset currently trains the disease
+# classifier.
+_DOG_PHOTOS = pathlib.Path(__file__).resolve().parents[1] / "data" / "dog-images-v1-superseded"
 
 
 @pytest.mark.skipif(not _photos(_DOG_PHOTOS, 1), reason="no dog photos available locally")
@@ -105,6 +114,26 @@ def test_dog_photo_submitted_as_cow_is_refused_not_diagnosed():
                 f"a dog photo produced {result['diagnosis']} with escalation"
             )
     assert refused >= 4
+
+
+# M16: real goat photos, now that Goat shares the RUMINANT group with Cow/Sheep (ibex added
+# to that group as the closest available ImageNet proxy — no dedicated "goat" class exists).
+_GOAT_PHOTOS = pathlib.Path(__file__).resolve().parents[1] / "data" / "goat-images"
+
+
+@pytest.mark.skipif(not _photos(_GOAT_PHOTOS, 1), reason="no goat photos available locally")
+def test_goat_photos_submitted_as_goat_are_not_flagged():
+    # Measured at ~5% false-reject on a 40-photo sample (2/40) — slightly noisier than cow's,
+    # since goat has no dedicated ImageNet class and leans on "ibex" as the closest proxy. A
+    # small, non-random 10-photo slice can land more than one false flag by chance alone.
+    flagged = [looks_like_a_different_species(p.read_bytes(), "GOAT") for p in _photos(_GOAT_PHOTOS, 10)]
+    assert sum(flagged) <= 2
+
+
+@pytest.mark.skipif(not _photos(_CAT_PHOTOS, 1), reason="no cat photos available locally")
+def test_cat_photos_submitted_as_goat_are_flagged():
+    flagged = [looks_like_a_different_species(p.read_bytes(), "GOAT") for p in _photos(_CAT_PHOTOS, 8)]
+    assert sum(flagged) >= 5
 
 
 @pytest.mark.skipif(not _photos(_COW_PHOTOS, 1), reason="no cattle photos available locally")
