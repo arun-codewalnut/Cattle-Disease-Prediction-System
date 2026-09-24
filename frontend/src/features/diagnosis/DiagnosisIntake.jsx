@@ -20,6 +20,7 @@ export default function DiagnosisIntake() {
   // — mounting an aria-live node together with its content is the classic way to get silence.
   const [announcement, setAnnouncement] = useState('')
   const resultRef = useRef(null)
+  const speciesFieldRef = useRef(null)
 
   // Sighted users on a phone had the same problem from the other direction: the result lands
   // below the fold, so submitting looked like nothing happened. Moving focus fixes the
@@ -50,6 +51,20 @@ export default function DiagnosisIntake() {
     setError(null)
     setStatus('idle')
     setAnnouncement('Form cleared. Ready for a new check.')
+  }
+
+  // For when the result looks wrong for a reason other than the disease model itself — the
+  // photo may have been the wrong species and the automatic check didn't catch it (that check
+  // is a disclosed, imperfect heuristic — see docs/DISCLAIMER.md). Unlike handleReset, this
+  // keeps the uploaded photo(s) so the user doesn't have to re-attach anything: only the
+  // result/species selection clear, then focus moves to the species picker so the next step
+  // is obvious.
+  function handleTryDifferentSpecies() {
+    setResult(null)
+    setError(null)
+    setStatus('idle')
+    setAnnouncement('Pick the correct species and analyze the same photo again.')
+    speciesFieldRef.current?.focus()
   }
 
   function handleSymptomChange(key, checked) {
@@ -120,7 +135,12 @@ export default function DiagnosisIntake() {
       </header>
 
       <main className="diagnosis-card">
-        <SpeciesField species={species} onSpeciesChange={handleSpeciesChange} disabled={disabled} />
+        <SpeciesField
+          ref={speciesFieldRef}
+          species={species}
+          onSpeciesChange={handleSpeciesChange}
+          disabled={disabled}
+        />
 
         {diagnosisSupported && (
           <>
@@ -171,9 +191,16 @@ export default function DiagnosisIntake() {
         {status === 'success' && result && (
           <div className="diagnosis-outcome" ref={resultRef} tabIndex={-1}>
             <DiagnosisResult result={result} />
-            <button type="button" className="reset-button" onClick={handleReset}>
-              <span aria-hidden="true">↺</span> Start a new check
-            </button>
+            <div className="diagnosis-outcome__actions">
+              {images.length > 0 && (
+                <button type="button" className="retry-species-button" onClick={handleTryDifferentSpecies}>
+                  <span aria-hidden="true">🔁</span> Analyze with a different species
+                </button>
+              )}
+              <button type="button" className="reset-button" onClick={handleReset}>
+                <span aria-hidden="true">↺</span> Start a new check
+              </button>
+            </div>
           </div>
         )}
       </main>

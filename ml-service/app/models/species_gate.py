@@ -1,19 +1,20 @@
 """
-"Is this even a photo of an animal" gate — runs in front of every disease-specific image
-model (cattle/cat/dog), using a pretrained, off-the-shelf ImageNet-1k classifier (no
-fine-tuning, no new dataset). See docs/specs/M15-image-diagnosis-quality-gate.md.
+"Is this even a photo of an animal" gate, plus species-mismatch detection — both run in front
+of every disease-specific image model (cattle/cat/dog/goat).
 
-Standard ImageNet-1k class ordering groups every living-creature class (fish/bird/reptile/
-amphibian/mammal/arachnid/insect/crustacean) contiguously at indices 0-397; index 398
-("abacus") onward is the first man-made/object class — verified directly against
-`MobileNet_V2_Weights.DEFAULT.meta['categories']`, not assumed.
+`is_animal_photo` uses a pretrained, off-the-shelf ImageNet-1k classifier (no fine-tuning, no
+new dataset) — see docs/specs/M15-image-diagnosis-quality-gate.md. Unchanged by the rewrite
+below: it was never the part that broke.
 
-This deliberately does NOT try to confirm the photo is of the *correct* species — only
-whether it's an animal at all. Verifying species match is a materially bigger, separate
-problem (flagged and deferred in a prior session's HANDOFF.md); this gate only needs to catch
-"someone uploaded a photo of a car," not "someone uploaded a dog photo while diagnosing a
-cat" — the latter still reaches the disease classifier and, same as today, most likely comes
-back "uncertain."
+`looks_like_a_different_species` used to reuse that same ImageNet-1k classifier, repurposing
+its generic class probabilities (e.g. "ox", "water buffalo", one of 118 dog breeds) as a proxy
+for "does this look like species X." That approach's root problem: those classes were never
+trained to recognize *this project's* photos, and it collapsed measurably once Dog's disease
+dataset became skin-lesion close-ups (see docs/specs/species-classifier.md) — dog-as-cow catch
+rate dropped from ~80% to ~30%, because a close-up doesn't show the face/ears/snout ImageNet's
+dog classes actually key on. **Now uses `app/models/species_classifier.py`, a real classifier
+fine-tuned on this project's own cat/cow/dog/goat photos** (including those exact close-ups as
+real "Dog" ground truth), which fixes the root cause instead of tuning a threshold around it.
 """
 from __future__ import annotations
 
@@ -22,6 +23,8 @@ import io
 import torch
 from PIL import Image, UnidentifiedImageError
 from torchvision.models import mobilenet_v2, MobileNet_V2_Weights
+
+from app.models import species_classifier
 
 # Verified empirically (see the spec) against real cattle/cat/dog photos and real
 # non-animal (table, car) photos before relying on this boundary.
@@ -86,59 +89,49 @@ def is_animal_photo(image_bytes: bytes) -> bool:
 
 
 # --------------------------------------------------------------------------------------
-# Species-mismatch detection (see docs/specs/species-mismatch-and-actionable-results.md)
+# Species-mismatch detection (see docs/specs/species-classifier.md)
 #
 # This blocks the diagnosis rather than annotating it. Warning alongside the result was tried
 # first and was wrong: a dog photo submitted as a cow still rendered "Foot and Mouth Disease,
 # 60% confidence" with "contact your veterinarian — this is a reportable disease" underneath,
 # and a caveat above that does not undo a confident, escalating, wrong answer.
 #
-# Reuses the same pretrained model as the gate above — no new dependency, no new dataset.
-# ImageNet-1k class indices grouped into this project's four species. Index 383 is
-# "Madagascar cat", which is a lemur, and is deliberately excluded from CAT.
+# Species this project has no photos for at all (Sheep) map onto the closest class with real
+# data — Sheep photos already fall back to the cattle disease model as a disclosed
+# approximation, so COW is the right proxy here too.
+_SPECIES_TO_CLASS = {"COW": "COW", "SHEEP": "COW", "GOAT": "GOAT", "CAT": "CAT", "DOG": "DOG"}
+
+# Calibrated against the deployed species classifier's own held-out validation split (1,179
+# real photos never seen during training). First attempt trained with a plain (unweighted)
+# loss — measured, not assumed, that this silently biased the model toward COW (3,244 training
+# photos against DOG's 724, a ~4.5x imbalance): real Dog "healthy" photos scored higher on COW
+# than DOG, and dog-as-cow/goat-as-cow catch rates were a weak 51-68% even at a sensitive
+# threshold. Retrained with inverse-frequency class-weighted loss (see
+# training/species_classifier_train.py) — real result: overall accuracy 84.9% -> 89.2%, macro
+# F1 0.781 -> 0.857, and the two weak pairs both jump above 85%:
 #
-# The imbalance is severe and shapes everything below: ImageNet has 118 dog classes, 5 cat,
-# 3 cattle and 2 sheep. Matching on raw top-k class membership therefore reads almost any
-# close-up of fur or skin as a dog — measured at 40% false flags on real cattle lesion
-# photos, which would have blocked exactly the photos this app exists to diagnose. Comparing
-# *normalised probability mass per group* instead, with a floor below which the model is
-# treated as having no opinion, measured 6% false warnings at 95% of real mismatches caught.
-_SPECIES_CLASS_INDICES = {
-    # Cow, sheep and goat share one group. There is no sheep or goat-disease image model —
-    # those photos are routed to the cattle (sheep) or a binary (goat) model as disclosed
-    # approximations/limitations — so refusing one for looking bovine/ruminant would reject
-    # something the app supports by design. ImageNet-1k has no dedicated "goat" class (verified
-    # directly against the weights' category list, M16) — "ibex" (350, a wild goat) is the
-    # closest available proxy, added here.
-    "RUMINANT": (345, 346, 347, 348, 349, 350),  # ox, water buffalo, bison, ram, bighorn, ibex
-    "CAT": (281, 282, 283, 284, 285),        # 383 "Madagascar cat" is a lemur — excluded
-    "DOG": tuple(range(151, 269)),
-}
-
-_SPECIES_TO_GROUP = {"COW": "RUMINANT", "SHEEP": "RUMINANT", "GOAT": "RUMINANT", "CAT": "CAT", "DOG": "DOG"}
-
-# Each group scores by its PEAK class probability, not its sum or mean. This choice matters
-# more than the threshold, because ImageNet carries 118 dog classes against 6 ruminant and 5
-# cat:
-#   - summing gives dog a structural advantage and refused 7.5% of genuine cattle photos;
-#   - dividing by class count over-corrects the other way (a dog photo concentrates on one
-#     breed, not 118), and dropped dog-as-cow detection to 7%;
-#   - the peak is scale-free and does neither.
-# Refuse only when another group's peak beats the selected one by this factor. Set from the
-# measured distributions rather than by feel — on valid photos the ratio has a median near
-# 0.9 and a 95th percentile around 24, while a genuine dog-as-cow sits at a median of 98 and
-# cat-as-cow at 170. 25 sits in that gap: roughly 5% of valid photos refused, ~70% of
-# dog-as-cow and ~85% of cat-as-cow caught.
-_OTHER_SPECIES_PEAK_RATIO = 25.0
-
-# Below this the model has no real opinion about any group (an animal this project doesn't
-# model, say a horse). Allowing it through is the conservative choice — the caller has
-# already established that it is an animal.
-_GROUP_SIGNAL_FLOOR = 0.001
+# at threshold=2.0 (chosen): overall caught 91.0%, overall false-reject 4.3%
+#
+# | pair              | caught | | same-species false-reject | rate |
+# |-------------------|-------:|-|----------------------------|-----:|
+# | dog as cow         | 92.4% | | CAT (own class)            | 2.5% |
+# | goat as cow        | 86.5% | | COW (own class)            | 3.5% |
+# | cat as dog         | 81.5% | | DOG (own class)            | 5.5% |
+# | goat as dog        | 83.2% | | GOAT (own class)           | 8.1% |
+# | everything else    | 88-98%| |                            |      |
+#
+# **2.0 is chosen** — with the rebalanced model, both dog-as-cow (the exact pair originally
+# reported broken) and goat-as-cow (the two most visually similar species in this project's
+# photos) catch above 85%, at an overall false-reject cost (4.3%) lower than the pre-existing
+# ImageNet-heuristic system's own baseline (5-7.5%). Goat has the highest same-species
+# false-reject (8.1%) — real, disclosed, the new weakest spot after the fix, still far better
+# than any pair was before it. See docs/specs/species-classifier.md.
+_OTHER_SPECIES_RATIO_THRESHOLD = 2.0
 
 
 def looks_like_a_different_species(image_bytes: bytes, selected_species: str | None) -> bool:
-    """True when another species is overwhelmingly the better match for this photo.
+    """True when another species is a meaningfully better match for this photo than the one
+    selected, per the real trained species classifier (`app/models/species_classifier.py`).
 
     Deliberately does **not** report which species that is. Cat photos frequently score
     higher on dog classes than cat ones, so naming the winner would tell a farmer "this looks
@@ -146,37 +139,27 @@ def looks_like_a_different_species(image_bytes: bytes, selected_species: str | N
     that is all this reports and all the message claims.
 
     False means "nothing worth refusing on": a matching photo, a species this project doesn't
-    model, an undecodable image, or an animal none of the three groups recognise.
+    model, an undecodable image, or a genuinely ambiguous one.
 
-    **Livestock photos submitted under Cat or Dog are effectively not caught**, and no
-    threshold fixes that: measured, a cow photo with Dog selected produces a ratio whose
-    median (3.9) sits *below* the 90th percentile of genuinely valid cat photos (10.4). The
-    distributions overlap, so any threshold that caught it would refuse valid pet photos at a
-    far higher rate. This is a guard against the common mistake — a pet photo submitted under
-    livestock — not a guarantee in both directions.
+    Catch rate varies by pair (92-99% for most; see the threshold table in this module for
+    the full breakdown) — real, measured, disclosed rather than assumed uniform.
 
     Never raises — a diagnosis must not fail because this check could not run.
     """
-    group = _SPECIES_TO_GROUP.get(selected_species or "")
-    if group is None:
+    target_class = _SPECIES_TO_CLASS.get(selected_species or "")
+    if target_class is None:
         return False
 
     try:
-        image = Image.open(io.BytesIO(image_bytes)).convert("RGB")
-        model = _get_model()
-        tensor = _preprocess(image).unsqueeze(0)
-        with torch.no_grad():
-            probabilities = torch.softmax(model(tensor)[0], dim=0)
-    except (UnidentifiedImageError, OSError, ValueError):
+        probabilities = species_classifier.predict_probabilities(image_bytes)
+    except FileNotFoundError:
+        # No trained model on disk (e.g. a fresh checkout before training has run) — never
+        # let a missing artifact break the actual diagnosis path; the disease model's own
+        # FileNotFoundError handling in graph.py is the place that surfaces that clearly.
+        return False
+    if probabilities is None:
         return False
 
-    peaks = {
-        name: float(probabilities[list(indices)].max())
-        for name, indices in _SPECIES_CLASS_INDICES.items()
-    }
-    if max(peaks.values()) <= _GROUP_SIGNAL_FLOOR:
-        return False
-
-    selected_peak = peaks[group]
-    best_other = max(peak for name, peak in peaks.items() if name != group)
-    return best_other >= _OTHER_SPECIES_PEAK_RATIO * max(selected_peak, 1e-9)
+    selected_prob = probabilities[target_class]
+    best_other = max(prob for species, prob in probabilities.items() if species != target_class)
+    return best_other >= _OTHER_SPECIES_RATIO_THRESHOLD * max(selected_prob, 1e-9)

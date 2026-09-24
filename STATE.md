@@ -3,7 +3,7 @@
 Living snapshot of project state. Update this whenever you finish a meaningful chunk of work —
 this is what an agent (or you) reads first when resuming.
 
-_Last updated: 2026-09-23 (session 15 — M16 Goat + Dog v2)_
+_Last updated: 2026-09-24 (session 15, continued — species-mismatch bug fix)_
 
 ## Known gaps
 
@@ -569,6 +569,45 @@ _Last updated: 2026-09-23 (session 15 — M16 Goat + Dog v2)_
     the real new numbers and the new species.
   - **Validated**: ml-service 94/1 (skipped), backend 32/32, frontend lint + 27/27 + build all
     green, plus live end-to-end verification against the real running stack (see HANDOFF.md).
+
+- **Species-mismatch detector was actually broken; rewritten as a real trained classifier**
+  (2026-09-24, same branch, direct user report: "when user select any one species and upload
+  other species image... it giving some output"). Reproduced first, not assumed: 3 of 8 real
+  dog photos submitted as Cow came back a confident **"Foot and Mouth Disease"** with
+  `escalate_to_vet`. Root cause: the detector repurposed an unrelated, off-the-shelf
+  ImageNet-1k classifier's class probabilities, a signal that had already been measured (M16
+  session) to collapse for Dog once its disease dataset became skin-lesion close-ups.
+  - **Fix**: `app/models/species_classifier.py` + `training/species_classifier_train.py`, a
+    real classifier fine-tuned on 5,894 photos this project already had (cattle/cat/goat
+    images plus **both** Dog photo sets — v2 close-ups and the retained v1 whole-body set — so
+    Dog's own close-ups are real training ground truth this time). `is_animal_photo` was left
+    untouched — reproducing the bug first showed it was never broken.
+  - **A second real bug caught during calibration, before shipping**: the first (unweighted)
+    training run was biased toward COW (3,244 photos vs. Dog's 724, ~4.5x) — real Dog photos
+    scored higher on COW than DOG, and any threshold sensitive enough to catch the reported bug
+    well false-rejected 15% of genuine Dog submissions. Fixed with inverse-frequency
+    class-weighted loss, no data discarded. **Final model: 89.2% accuracy, 0.857 macro F1**
+    (up from an initial 84.9%/0.781).
+  - **Measured result at the chosen threshold**: dog-as-cow (the reported pair) now catches
+    92.4% (up from the collapsed ~30%), goat-as-cow 86.5%, everything else 81-98%; overall
+    false-reject on a correctly-selected photo is 4.3% (Goat highest at 8.1%, the new weakest
+    spot, disclosed not hidden). Re-verified directly against the exact photos from the
+    original bug report — all now correctly refused.
+  - **Added a second feature in the same session**: a "🔁 Analyze with a different species"
+    button on the result screen — keeps the uploaded photo(s), clears the result, and focuses
+    the species selector, so a suspected wrong-species result (or one the imperfect detector
+    missed) can be retried without re-attaching anything. Only shown when a photo was actually
+    submitted (`frontend/src/features/diagnosis/DiagnosisIntake.jsx`,
+    `SpeciesField.jsx` now forwards a ref for this).
+  - Specs: [docs/specs/species-classifier.md](docs/specs/species-classifier.md) (new);
+    [docs/specs/species-mismatch-and-actionable-results.md](docs/specs/species-mismatch-and-actionable-results.md)
+    annotated as superseded-mechanism, not rewritten.
+  - **Validated**: ml-service 95/1 (skipped), backend unaffected (rerun clean), frontend lint +
+    29/29 + build all green, plus live end-to-end verification: real dog-as-cow photos from the
+    original bug report now correctly return `species_mismatch` through the actual running
+    backend + ml-service, a Cow symptom submission still works end to end in a real browser,
+    and the retry-species button is covered by two new Vitest tests (file-picker automation
+    isn't available in the built-in browser tool, same limitation prior sessions hit).
 
 ## In Progress
 

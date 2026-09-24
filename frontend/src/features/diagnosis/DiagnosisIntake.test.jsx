@@ -591,4 +591,92 @@ describe('DiagnosisIntake', () => {
     expect(imageCall[1].body.get('species')).toBe('CAT')
     expect(fetchMock).toHaveBeenCalledTimes(1)
   })
+
+  // The species-mismatch detector is a real but imperfect classifier (see
+  // docs/DISCLAIMER.md) — it doesn't catch every wrong-species photo. This button is the
+  // recovery path: keep the photo, pick the right species, analyze again, without having to
+  // re-attach anything.
+  it('lets the user retry the same photo with a different species after a result', async () => {
+    const user = userEvent.setup()
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse(true, {
+        results: [
+          {
+            species: 'COW',
+            diagnosis: 'Foot and Mouth Disease',
+            confidence: 0.6,
+            explanation: 'x',
+            recommendedAction: 'escalate_to_vet',
+            precautions: [],
+            nextSteps: [],
+            createdAt: '2026-01-01T00:00:00Z',
+          },
+        ],
+        diagnosesAgree: true,
+      })
+    )
+
+    render(<DiagnosisIntake />)
+    const file = new File(['fake-image-bytes'], 'maybe-a-dog.jpg', { type: 'image/jpeg' })
+    await user.upload(screen.getByLabelText(/add photos/i), file)
+    await user.click(screen.getByRole('button', { name: /diagnose from photo/i }))
+
+    await screen.findByText(/likely: foot and mouth disease/i)
+
+    const retryButton = screen.getByRole('button', { name: /analyze with a different species/i })
+    await user.click(retryButton)
+
+    // The result clears and the species selector is ready for input again — but the photo is
+    // still attached, not lost the way "Start a new check" would lose it.
+    expect(screen.queryByText(/likely: foot and mouth disease/i)).not.toBeInTheDocument()
+    expect(screen.getByText(/maybe-a-dog\.jpg/i)).toBeInTheDocument()
+    expect(screen.getByLabelText(/species/i)).toHaveFocus()
+
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse(true, {
+        results: [
+          {
+            species: 'DOG',
+            diagnosis: 'Fungal Infection',
+            confidence: 0.7,
+            explanation: 'x',
+            recommendedAction: 'consult_vet',
+            precautions: [],
+            nextSteps: [],
+            createdAt: '2026-01-01T00:00:00Z',
+          },
+        ],
+        diagnosesAgree: true,
+      })
+    )
+    await user.selectOptions(screen.getByLabelText(/species/i), 'DOG')
+    await user.click(screen.getByRole('button', { name: /diagnose from photo/i }))
+
+    await screen.findByText(/likely: fungal infection/i)
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    const [, secondCall] = fetchMock.mock.calls
+    expect(secondCall[1].body.get('species')).toBe('DOG')
+  })
+
+  it('does not show the retry-species button after a symptom-only submission with no photo', async () => {
+    const user = userEvent.setup()
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse(true, {
+        species: 'COW',
+        diagnosis: 'Healthy',
+        confidence: 0.9,
+        explanation: 'x',
+        recommendedAction: 'monitor',
+        precautions: [],
+        nextSteps: [],
+        createdAt: '2026-01-01T00:00:00Z',
+      })
+    )
+
+    render(<DiagnosisIntake />)
+    await fillAndSubmit(user)
+
+    await screen.findByText(/likely: healthy/i)
+    expect(screen.queryByRole('button', { name: /analyze with a different species/i })).not.toBeInTheDocument()
+  })
 })

@@ -178,11 +178,17 @@ precautions and next steps, and excluded from the `diagnosesAgree` comparison, e
 `invalid_image`. It is a refusal, not an annotation: a dog photo submitted as a cow previously
 returned "Foot and Mouth Disease" with escalation guidance. The message says only that the
 photo doesn't match the selected species, never what the animal is — that guess is unreliable
-enough to tell someone their cat looks like a dog. Cow, sheep, and goat count as one group
-(M16 added goat — ImageNet has no dedicated goat class, "ibex" is used as the closest proxy),
-since sheep and goat photos already use non-goat/non-sheep-specific models by design. See
-[docs/specs/species-mismatch-and-actionable-results.md](specs/species-mismatch-and-actionable-results.md)
-and [docs/specs/M16-goat-disease-detection.md](specs/M16-goat-disease-detection.md).
+enough to tell someone their cat looks like a dog.
+
+Detection is a **real classifier trained on this project's own cat/cow/dog/goat photos**
+(`app/models/species_classifier.py`, replacing an earlier version that repurposed an unrelated
+ImageNet-1k classifier — see `docs/specs/species-classifier.md` and `docs/DECISIONS.md` for
+why that was replaced, not just retuned). Sheep has no photos of its own and maps onto the
+`COW` class for this check, since Sheep photos already use the cattle disease model by design.
+Catch rates vary by pair — dog-as-cow (92.4%) and goat-as-cow (86.5%) are the weakest
+directions, every other direction is 81%+ — disclosed in `docs/DISCLAIMER.md`, not uniform.
+See [docs/specs/species-mismatch-and-actionable-results.md](specs/species-mismatch-and-actionable-results.md)
+and [docs/specs/species-classifier.md](specs/species-classifier.md).
 
 Note: **nothing is persisted at all** — the backend holds no database as of
 [docs/specs/remove-databases.md](specs/remove-databases.md). The old `id` field went with the

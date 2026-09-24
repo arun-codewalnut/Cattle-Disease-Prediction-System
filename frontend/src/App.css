@@ -739,8 +739,15 @@ section[data-urgent='true'] [role='alert'] {
 }
 
 
-.reset-button {
+.diagnosis-outcome__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
   margin-top: 16px;
+}
+
+.reset-button {
+  margin-top: 0;
   background: transparent;
   color: var(--text-h);
   border: 1.5px solid var(--border);
@@ -749,6 +756,22 @@ section[data-urgent='true'] [role='alert'] {
 
 .reset-button:hover:not(:disabled) {
   border-color: var(--accent);
+  box-shadow: none;
+}
+
+/* Same visual weight as the symptom/photo submit buttons — this is the action most people
+   should reach for when a result looks like it came from the wrong species, since it doesn't
+   throw away the photo they already picked. */
+.retry-species-button {
+  margin-top: 0;
+  background: transparent;
+  color: var(--accent);
+  border: 1.5px solid var(--accent-border);
+  box-shadow: none;
+}
+
+.retry-species-button:hover:not(:disabled) {
+  background: var(--accent-bg);
   box-shadow: none;
 }
 

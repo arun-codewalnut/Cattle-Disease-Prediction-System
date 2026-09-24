@@ -800,3 +800,71 @@ a commit-history question — but per this file's "supersede, don't overwrite" s
 the v1 photos to `dog-images-v1-superseded/` rather than deleting them let the regression
 above be measured at all, and keeps a fallback fixture available for the mismatch-detector
 test.
+
+## Species-mismatch detector rewritten as a real trained classifier (2026-09-24)
+
+**Supersedes the "accepted as a tradeoff" call in the entry above.** That entry treated the
+dog-as-cow detection regression (~80% → ~30%) as an acceptable cost of the Dog dataset swap.
+It wasn't: the user reported the check "not validating" wrong-species photos, and reproducing
+it directly confirmed something worse than a lower catch rate — 3 of 8 real dog photos
+submitted with `COW` selected came back **"Foot and Mouth Disease"** with `escalate_to_vet`, a
+confident, reportable-disease escalation from a photo of a dog. Documenting a weakened
+detector is not the same as it being acceptable when the failure mode is a confidently wrong,
+escalating diagnosis.
+
+**Decision**: replace `species_gate.looks_like_a_different_species`'s approach entirely.
+The old version repurposed an off-the-shelf ImageNet-1k classifier's raw class probabilities
+(e.g. "ox," one of 118 dog breeds) as a proxy for "does this look like species X" — a signal
+never trained on this project's own photos, which is exactly why it stopped transferring once
+Dog's real photos became skin-lesion close-ups. `app/models/species_classifier.py` (+
+`training/species_classifier_train.py`) is a **real classifier fine-tuned on 5,894 photos this
+project already has** — `cattle-images`, `cat-images`, `goat-images`, and **both** Dog photo
+sets (`dog-images` v2 close-ups and the retained `dog-images-v1-superseded` whole-body set)
+combined, so Dog's own close-ups are real training ground truth this time, not an
+unrelated proxy's blind spot.
+
+**Why keep the animal gate (`is_animal_photo`) unchanged**: reproducing the bug first, before
+changing anything, showed it was never broken — every non-animal fixture was still correctly
+rejected for all 5 species. Rewriting a part that wasn't broken would have been unjustified
+scope creep and a needless risk to something already working.
+
+**A second real bug, caught during calibration, before shipping**: the first trained model
+(plain, unweighted loss) scored 84.9% accuracy — but calibrating the mismatch threshold
+against it showed real Dog "healthy" photos scoring *higher* on COW than DOG (e.g. 0.68 vs
+0.11), and at any threshold that caught the reported dog-as-cow bug well, 15.2% of genuine Dog
+submissions and 10.8% of genuine Goat ones got false-rejected — worse for real users than the
+bug being fixed. Root cause: COW has 3,244 training photos against DOG's 724 (~4.5x
+imbalance), and the unweighted loss let that volume difference bias the model. Fixed with
+inverse-frequency class-weighted loss (`nn.CrossEntropyLoss(weight=...)`, computed from the
+training split's own class counts) — no data discarded. **Final result: 89.2% accuracy, 0.857
+macro F1**, and DOG's per-class F1 went from the weakest by a wide margin (0.628) to broadly
+in line with the others (0.773).
+
+**Threshold chosen for sensitivity, not for the lowest false-reject rate** — measured on the
+final, class-weighted classifier's own held-out validation split (1,179 real photos), at the
+chosen threshold of 2.0: overall catch rate 91.0%, overall false-reject 4.3% (already better
+on both axes than the pre-existing ImageNet-heuristic system's 5-7.5% false-reject baseline).
+
+| pair              | caught | | same-species false-reject | rate |
+|-------------------|-------:|-|----------------------------|-----:|
+| dog as cow         | 92.4% | | CAT (own class)            | 2.5% |
+| goat as cow        | 86.5% | | COW (own class)            | 3.5% |
+| cat as dog         | 81.5% | | DOG (own class)            | 5.5% |
+| goat as dog        | 83.2% | | GOAT (own class)           | 8.1% |
+| everything else    | 88-98%| |                            |      |
+
+Both pairs that mattered most — dog-as-cow (the exact pair originally reported) and goat-as-cow
+(the two most visually similar species in this project's own photos) — now catch above 85%,
+up from the unweighted model's 57-68% at the same threshold. The asymmetry in the design is
+still deliberate: a missed mismatch can become a confident, escalating wrong diagnosis; a
+false reject is a one-retry inconvenience with a clear message.
+
+**Goat now has the highest same-species false-reject (8.1%)** — the new weakest spot in the
+system after the fix, real and disclosed in `docs/DISCLAIMER.md` and
+`docs/specs/species-classifier.md`, still far better than any pair was before the fix existed.
+
+**Consequences**: `tests/test_species_mismatch.py`'s dog-as-cow test now runs against the
+*current* production `dog-images` (v2) photos directly — re-verified this actually fixes the
+reported bug, rather than continuing to validate only the retained v1 fixture. The
+`dog-images-v1-superseded` folder is still kept, now for a different reason: it's real
+training data for the species classifier, not just a test fixture.
