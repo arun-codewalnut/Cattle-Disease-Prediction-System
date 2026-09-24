@@ -8,6 +8,7 @@ import app.models.dog_image_model as dog_image_model_module
 import app.models.goat_image_model as goat_image_model_module
 import app.models.image_model as image_model_module
 import app.models.sheep_symptom_model as sheep_symptom_model_module
+import app.models.species_gate as species_gate_module
 import pytest
 from app.agent.graph import run_diagnosis
 from app.errors import ApiError
@@ -329,6 +330,11 @@ def test_missing_image_model_returns_structured_error(monkeypatch, tmp_path):
 
 def test_missing_cat_image_model_returns_structured_error(monkeypatch, tmp_path):
     monkeypatch.setattr(cat_image_model_module, "DEFAULT_MODEL_PATH", tmp_path / "does-not-exist.pt")
+    # The species classifier has no real opinion on a 1x1 pixel — it isn't the species check
+    # under test here, so it's pinned to "no mismatch" rather than left to whatever a
+    # degenerate input happens to produce. See test_species_mismatch.py for that check's own
+    # coverage.
+    monkeypatch.setattr(species_gate_module, "looks_like_a_different_species", lambda *a, **k: False)
 
     with pytest.raises(ApiError) as exc_info:
         run_diagnosis({}, image_base64=_VALID_1X1_PNG_BASE64, species="CAT")
@@ -338,6 +344,7 @@ def test_missing_cat_image_model_returns_structured_error(monkeypatch, tmp_path)
 
 def test_missing_dog_image_model_returns_structured_error(monkeypatch, tmp_path):
     monkeypatch.setattr(dog_image_model_module, "DEFAULT_MODEL_PATH", tmp_path / "does-not-exist.pt")
+    monkeypatch.setattr(species_gate_module, "looks_like_a_different_species", lambda *a, **k: False)
 
     with pytest.raises(ApiError) as exc_info:
         run_diagnosis({}, image_base64=_VALID_1X1_PNG_BASE64, species="DOG")
@@ -347,6 +354,7 @@ def test_missing_dog_image_model_returns_structured_error(monkeypatch, tmp_path)
 
 def test_missing_goat_image_model_returns_structured_error(monkeypatch, tmp_path):
     monkeypatch.setattr(goat_image_model_module, "DEFAULT_MODEL_PATH", tmp_path / "does-not-exist.pt")
+    monkeypatch.setattr(species_gate_module, "looks_like_a_different_species", lambda *a, **k: False)
 
     with pytest.raises(ApiError) as exc_info:
         run_diagnosis({}, image_base64=_VALID_1X1_PNG_BASE64, species="GOAT")

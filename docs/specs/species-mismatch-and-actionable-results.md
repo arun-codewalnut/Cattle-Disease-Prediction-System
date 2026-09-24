@@ -1,7 +1,12 @@
 # Spec: Species-mismatch warning, and results that lead with what to do
 
 **Milestone**: stretch (post-M15)
-**Status**: agreed
+**Status**: agreed — **the detection mechanism this spec designed (ImageNet-1k class-group
+ratios) was later replaced by a real trained classifier**, see
+[docs/specs/species-classifier.md](species-classifier.md) and `docs/DECISIONS.md`. The
+product behavior this spec describes (refuse rather than annotate, never name the wrong
+animal) is unchanged — only what powers the "does this look like the selected species"
+judgment call changed.
 
 ## Actor + goal
 

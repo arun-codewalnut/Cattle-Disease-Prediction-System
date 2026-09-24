@@ -71,12 +71,26 @@ closest candidate data (the PPR dataset Sheep's symptom model uses) can't be rel
 by species (see `ml-service/data/sheep-symptoms/SOURCE.md`), so symptom-based diagnosis stays
 blocked for Goat, same as Cat and Dog.
 
-**A real, measured side effect of the Dog dataset swap above, unrelated to Goat itself**: the
-species-mismatch detector (which flags a dog photo submitted with Cow selected, etc.) got
-measurably weaker at catching dog-as-cow specifically — from ~80% to ~30% caught on 40-photo
-samples — because Dog's new disease dataset is skin-lesion close-ups, which don't show the
-face/ears/snout features the detector's underlying model keys on. This was judged an
-acceptable tradeoff for the real accuracy gain on Dog's actual diagnosis, but it is a real,
-disclosed change in how well that unrelated safety guard performs specifically for dog
-photos — see `docs/specs/M16-goat-disease-detection.md` and `docs/DECISIONS.md` for the full
-measurement.
+**The species-mismatch detector was rewritten** (see "Species-mismatch detection" below) —
+the Dog dataset swap above had temporarily weakened it (dog-as-cow catch rate dropped to
+~30%), and a user report of real mismatched photos still being diagnosed confirmed that
+wasn't an acceptable tradeoff after all. It's fixed now, not just disclosed.
+
+## Species-mismatch detection
+
+The check that refuses to diagnose a photo that doesn't look like the selected species (e.g.
+a dog photo submitted with Cow selected) now uses a **real classifier trained on this
+project's own cat/cow/dog/goat photos** (`app/models/species_classifier.py`), replacing an
+earlier version that repurposed an unrelated, off-the-shelf ImageNet classifier. That earlier
+version was reported by a user as not working, reproduced directly (real dog photos submitted
+as Cow came back confident, escalating cattle-disease diagnoses), and traced to the same
+class of root cause the earlier Dog-dataset-swap note above already flagged: a generic,
+not-trained-on-this-project's-photos signal doesn't reliably transfer.
+
+**Real, measured, uneven results — stated plainly**: dog-as-cow (the exact pair originally
+reported broken) is now caught 92.4% of the time (up from the collapsed ~30%), and goat-as-cow
+— the weakest pair in the whole system, since goat and cow are the two most visually similar
+species in this project's own photos — 86.5% of the time. Every other direction is caught
+81-98% of the time. A correctly-selected species is wrongly refused about 4.3% of the time
+overall (a one-retry inconvenience, not a wrong diagnosis) — Goat has the highest per-species
+false-reject rate at 8.1%. Full measurement: `docs/specs/species-classifier.md`.

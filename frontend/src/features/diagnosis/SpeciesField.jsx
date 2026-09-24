@@ -6,9 +6,13 @@
 // shouldn't have to invent an ID to get a diagnosis. See
 // docs/specs/remove-animal-identity.md. Species stays because it genuinely selects which
 // trained model runs.
+import { forwardRef } from 'react'
 import { SPECIES_OPTIONS, SPECIES_SUMMARIES, DIAGNOSIS_SUPPORTED_SPECIES, IMAGE_ONLY_SUPPORTED_SPECIES } from './species'
 
-export default function SpeciesField({ species, onSpeciesChange, disabled }) {
+// Ref forwarded to the <select> itself — DiagnosisIntake.jsx focuses it when the user clicks
+// "Analyze with a different species," so the next thing to do is visually obvious rather than
+// a silent state change somewhere off-screen.
+const SpeciesField = forwardRef(function SpeciesField({ species, onSpeciesChange, disabled }, ref) {
   return (
     <div>
       <label htmlFor="species">
@@ -17,6 +21,7 @@ export default function SpeciesField({ species, onSpeciesChange, disabled }) {
       </label>
       <select
         id="species"
+        ref={ref}
         value={species}
         onChange={(event) => onSpeciesChange(event.target.value)}
         disabled={disabled}
@@ -38,4 +43,6 @@ export default function SpeciesField({ species, onSpeciesChange, disabled }) {
       )}
     </div>
   )
-}
+})
+
+export default SpeciesField

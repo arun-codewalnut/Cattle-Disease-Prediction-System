@@ -1,17 +1,25 @@
 """
-Species-mismatch warning — see docs/specs/species-mismatch-and-actionable-results.md.
+Species-mismatch detection — see docs/specs/species-classifier.md.
 
-The behaviour being prevented, measured before this existed: 15 real cat photos fed to the
-cattle model with COW selected returned `uncertain` 0 times, averaged 71% confidence, and
-included "Foot and Mouth Disease, 85%" — a reportable disease, confidently, from a photo of
-a cat.
+The behaviour being prevented, measured before the original version of this existed: 15 real
+cat photos fed to the cattle model with COW selected returned `uncertain` 0 times, averaged
+71% confidence, and included "Foot and Mouth Disease, 85%" — a reportable disease,
+confidently, from a photo of a cat.
 
 A wrong-species photo is refused outright rather than annotated: warning alongside a real
 diagnosis was tried first and left a dog photo reading "Foot and Mouth Disease, 60% —
 contact your veterinarian". The detector reports only that a photo *isn't* the selected
-species, never what it is instead. ImageNet carries 118 dog classes against 5 cat and 3 cattle, so the "what is it"
-guess is unreliable enough to tell someone their cat looks like a dog; the negative is the
-part that holds up.
+species, never what it is instead — the "what is it" guess is unreliable enough to tell
+someone their cat looks like a dog; the negative is the part that holds up.
+
+**This detector was rewritten** (docs/specs/species-classifier.md) after the user reported it
+wasn't catching real mismatches — reproduced directly: 3/8 real dog photos submitted as Cow
+came back a confident, escalating cattle-disease diagnosis. Root cause: the previous version
+repurposed an unrelated ImageNet-1k classifier's raw class probabilities, which had collapsed
+for Dog once its disease dataset became skin-lesion close-ups (v1→v2 dataset swap, M16). Now
+uses `app/models/species_classifier.py`, a real classifier fine-tuned on this project's own
+cat/cow/dog/goat photos — including both the v1 whole-body and v2 close-up dog photos as real
+"Dog" ground truth, which is exactly what the old approach couldn't see.
 
 Tests needing real photos skip when the datasets aren't present (they're gitignored), the
 same convention the image-model tests use. The logic tests always run.
@@ -25,6 +33,8 @@ from app.models.species_gate import looks_like_a_different_species
 
 _CAT_PHOTOS = pathlib.Path(__file__).resolve().parents[1] / "data" / "cat-images" / "healthy"
 _COW_PHOTOS = pathlib.Path(__file__).resolve().parents[1] / "data" / "cattle-images" / "healthy"
+_DOG_PHOTOS = pathlib.Path(__file__).resolve().parents[1] / "data" / "dog-images"
+_GOAT_PHOTOS = pathlib.Path(__file__).resolve().parents[1] / "data" / "goat-images"
 
 
 def _photos(folder, limit):
@@ -50,16 +60,15 @@ def test_undecodable_bytes_never_raise_and_never_warn():
 @pytest.mark.skipif(not _photos(_CAT_PHOTOS, 1), reason="no cat photos available locally")
 def test_cat_photos_submitted_as_cow_are_flagged():
     flagged = [looks_like_a_different_species(p.read_bytes(), "COW") for p in _photos(_CAT_PHOTOS, 8)]
-    # Advisory and deliberately conservative, so not every photo — but the clear majority.
     assert sum(flagged) >= 5
 
 
 @pytest.mark.skipif(not _photos(_COW_PHOTOS, 1), reason="no cattle photos available locally")
 def test_cow_photos_submitted_as_cow_are_not_flagged():
-    # The expensive error is a false warning on a valid photo — measured at ~6% overall, so
-    # a small sample should be clean.
+    # The expensive error is a false reject on a valid photo — measured at ~7.7% overall on
+    # the classifier's held-out validation split, so a small sample should mostly be clean.
     flagged = [looks_like_a_different_species(p.read_bytes(), "COW") for p in _photos(_COW_PHOTOS, 8)]
-    assert not any(flagged)
+    assert sum(flagged) <= 1
 
 
 @pytest.mark.skipif(not _photos(_COW_PHOTOS, 1), reason="no cattle photos available locally")
@@ -80,26 +89,17 @@ def test_message_never_claims_what_the_animal_is():
         assert other not in message.lower()
 
 
-# M16: the Dog *disease* dataset is now skin-lesion close-ups (see data/dog-images/SOURCE.md),
-# not whole-dog photos. Measured, not assumed: close-ups give the ImageNet-based detector a
-# much weaker species signal — 40-sample check went from 80% dog-as-cow caught (whole-body
-# v1 photos) to 30% (v2 skin close-ups). That's a real, disclosed limitation of the detector
-# for lesion-style photos generally (see docs/DECISIONS.md), not specific to this test. The
-# superseded v1 folder is kept specifically as a stable whole-body-photo fixture so this test
-# still validates the detector's real capability on a representative "someone submitted a
-# photo of their dog" case, independent of whichever dataset currently trains the disease
-# classifier.
-_DOG_PHOTOS = pathlib.Path(__file__).resolve().parents[1] / "data" / "dog-images-v1-superseded"
-
-
+# The reported bug, reproduced directly against real dog photos from the CURRENT (v2,
+# skin-close-up) dataset — this is exactly what regressed and is exactly what needed to work
+# again, not the retained v1 whole-body set (that's still used separately by the species
+# classifier's own training data, see training/species_classifier_train.py, but this test
+# validates the actual production photo set).
 @pytest.mark.skipif(not _photos(_DOG_PHOTOS, 1), reason="no dog photos available locally")
 def test_dog_photo_submitted_as_cow_is_refused_not_diagnosed():
-    # The reported bug, end to end through the agent: a dog photo with Cow selected used to
-    # return "Foot and Mouth Disease, 60%" with escalation guidance attached.
     from app.agent.graph import run_diagnosis
 
     refused = 0
-    for photo in _photos(_DOG_PHOTOS, 6):
+    for photo in _photos(_DOG_PHOTOS, 10):
         result = run_diagnosis({}, image_base64=base64.b64encode(photo.read_bytes()).decode(), species="COW")
         if result["diagnosis"] == "species_mismatch":
             refused += 1
@@ -109,23 +109,19 @@ def test_dog_photo_submitted_as_cow_is_refused_not_diagnosed():
             assert result["precautions"] == []
             assert result["next_steps"] == []
         else:
-            # Whatever slips through must never be a reportable disease escalation.
+            # Whatever slips through must never be a reportable disease escalation — this is
+            # the actual bug that was reported ("Foot and Mouth Disease" for a dog photo).
             assert result["recommended_action"] != "escalate_to_vet", (
                 f"a dog photo produced {result['diagnosis']} with escalation"
             )
-    assert refused >= 4
-
-
-# M16: real goat photos, now that Goat shares the RUMINANT group with Cow/Sheep (ibex added
-# to that group as the closest available ImageNet proxy — no dedicated "goat" class exists).
-_GOAT_PHOTOS = pathlib.Path(__file__).resolve().parents[1] / "data" / "goat-images"
+    # Class-weighted retraining (docs/DECISIONS.md) fixed Dog's own bias problem too — dog-as-
+    # cow now catches ~92% on the classifier's held-out validation split, up from the collapsed
+    # ~30% the previous ImageNet-heuristic version had.
+    assert refused >= 7
 
 
 @pytest.mark.skipif(not _photos(_GOAT_PHOTOS, 1), reason="no goat photos available locally")
 def test_goat_photos_submitted_as_goat_are_not_flagged():
-    # Measured at ~5% false-reject on a 40-photo sample (2/40) — slightly noisier than cow's,
-    # since goat has no dedicated ImageNet class and leans on "ibex" as the closest proxy. A
-    # small, non-random 10-photo slice can land more than one false flag by chance alone.
     flagged = [looks_like_a_different_species(p.read_bytes(), "GOAT") for p in _photos(_GOAT_PHOTOS, 10)]
     assert sum(flagged) <= 2
 
@@ -134,6 +130,16 @@ def test_goat_photos_submitted_as_goat_are_not_flagged():
 def test_cat_photos_submitted_as_goat_are_flagged():
     flagged = [looks_like_a_different_species(p.read_bytes(), "GOAT") for p in _photos(_CAT_PHOTOS, 8)]
     assert sum(flagged) >= 5
+
+
+# Goat and cow are the two most visually similar ruminants in this project's own photos —
+# the weakest pair in the system even after class-weighted retraining fixed the classifier's
+# original COW bias (see docs/DECISIONS.md), but no longer a low number: ~93% on the
+# classifier's own held-out validation split.
+@pytest.mark.skipif(not _photos(_GOAT_PHOTOS, 1), reason="no goat photos available locally")
+def test_goat_photos_submitted_as_cow_are_flagged():
+    flagged = [looks_like_a_different_species(p.read_bytes(), "COW") for p in _photos(_GOAT_PHOTOS, 10)]
+    assert sum(flagged) >= 7
 
 
 @pytest.mark.skipif(not _photos(_COW_PHOTOS, 1), reason="no cattle photos available locally")
