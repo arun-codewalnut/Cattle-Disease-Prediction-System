@@ -49,11 +49,10 @@ downloads those weights (~14MB) the first time an image is diagnosed, caching th
 `~/.cache/torch` (image *training* pulls the same weights). Symptom-only diagnosis never
 needs this.
 
-**Native install on Windows + Python 3.13 needs one package skipped**: `shap` has no cp313
-wheel there and would need Microsoft C++ Build Tools to compile. It isn't imported anywhere
-in the code (M1 uses XGBoost's own `pred_contribs` instead), so installing everything except
-it is the practical workaround — the exact command is in Option B. (`chromadb` used to be the
-worse half of this problem; it's gone — see
+**No C++ compiler needed**: every dependency installs from a prebuilt wheel, including on
+Windows + Python 3.13. (`shap` used to need Microsoft C++ Build Tools there; it was never
+imported — M1 uses XGBoost's own `pred_contribs` — so it's been removed from
+`requirements.txt`. `chromadb` went the same way, see
 [docs/specs/remove-databases.md](docs/specs/remove-databases.md).)
 
 **Disk space** (measured, not estimated): the `ml-service` Docker image is **~3.9GB** built,
@@ -121,29 +120,12 @@ One-time setup per service:
 cd ml-service
 py -m venv .venv                           # macOS/Linux: python3 -m venv .venv
 .venv\Scripts\activate                     # macOS/Linux: source .venv/bin/activate
-pip install -r requirements.txt            # Windows: see the note right below first
+pip install -r requirements.txt
 python -m training.generate_synthetic_data # required once — trains the Cow symptom
 python -m training.symptom_model_train     #   model, no dataset download needed
 
 # frontend
 cd frontend && npm install
-```
-
-On **Windows + Python 3.13**, that `pip install` needs
-[Microsoft C++ Build Tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/)
-installed first, because `shap` has to compile from source there. If you'd rather not do that
-system install, drop it and install the rest — it's never imported:
-
-```powershell
-Get-Content requirements.txt | Where-Object { $_ -notmatch '^shap' } |
-  Set-Content -Encoding utf8 requirements-local.txt
-pip install -r requirements-local.txt
-```
-
-```bash
-# macOS/Linux equivalent (not normally needed — the full install works there)
-grep -v '^shap' requirements.txt > requirements-local.txt
-pip install -r requirements-local.txt
 ```
 
 `backend` needs no setup at all — it's stateless, with no database to provision.
