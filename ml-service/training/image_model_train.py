@@ -36,11 +36,14 @@ DATA_PATH = Path(__file__).resolve().parents[1] / "data" / "cattle-images"
 MODEL_PATH = Path(__file__).resolve().parents[1] / "models" / "image_model.pt"
 REGISTRY_PATH = Path(__file__).resolve().parents[1] / "models" / "REGISTRY.md"
 
-# Folder name (as the Kaggle dataset ships it) -> canonical DISEASES label.
+# Folder name -> canonical DISEASES label. healthy/lumpy/foot-and-mouth ship from the original
+# Kaggle dataset; mastitis is a second, separate, manually-curated source — see
+# data/cattle-images/SOURCE.md and docs/specs/cow-mastitis-image-classifier.md.
 FOLDER_TO_DISEASE = {
     "healthy": "Healthy",
     "lumpy": "Lumpy Skin Disease",
     "foot-and-mouth": "Foot and Mouth Disease",
+    "mastitis": "Mastitis",
 }
 
 VAL_FRACTION = 0.2
@@ -125,9 +128,19 @@ def train(data_path: Path = DATA_PATH, model_path: Path = MODEL_PATH) -> dict:
         features, y, test_size=VAL_FRACTION, stratify=y, random_state=SEED
     )
 
+    # Class-weighted loss: Mastitis has 47 real photos against Healthy's 1291 (~27x) — an
+    # unweighted first pass measured the hard way, not assumed, that this imbalance made the
+    # model ignore Mastitis completely (0.0 F1, every real Mastitis validation photo
+    # misclassified). Same inverse-frequency fix already used in species_classifier_train.py
+    # for a smaller (~4.5x) version of the same problem — computed from the actual training
+    # split, not the raw folder counts, so it reflects what the model really sees.
+    class_counts = np.bincount(y_train, minlength=len(DISEASES))
+    class_weights = torch.tensor(len(y_train) / (len(DISEASES) * class_counts), dtype=torch.float32)
+    print("Class weights:", dict(zip(DISEASES, [round(float(w), 3) for w in class_weights])))
+
     head = nn.Linear(pretrained.last_channel, len(DISEASES))
     optimizer = torch.optim.Adam(head.parameters(), lr=HEAD_LR)
-    loss_fn = nn.CrossEntropyLoss()
+    loss_fn = nn.CrossEntropyLoss(weight=class_weights)
 
     x_train_t = torch.tensor(x_train, dtype=torch.float32)
     y_train_t = torch.tensor(y_train, dtype=torch.long)
@@ -181,8 +194,8 @@ def train(data_path: Path = DATA_PATH, model_path: Path = MODEL_PATH) -> dict:
 
 def update_registry(metrics: dict, model_path: Path = MODEL_PATH, registry_path: Path = REGISTRY_PATH) -> None:
     entry = (
-        f"| `{model_path.name}` | Healthy / Lumpy Skin Disease / Foot and Mouth Disease "
-        f"(not Mastitis/BRD) | cattle-images ({metrics['n_samples']} images) | "
+        f"| `{model_path.name}` | Healthy / Lumpy Skin Disease / Foot and Mouth Disease / "
+        f"Mastitis (not BRD) | cattle-images ({metrics['n_samples']} images) | "
         f"acc={metrics['val_accuracy']:.3f}, f1_macro={metrics['val_f1_macro']:.3f} | "
         f"{datetime.now(timezone.utc).strftime('%Y-%m-%d')} |\n"
     )

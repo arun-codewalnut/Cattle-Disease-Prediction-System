@@ -95,10 +95,19 @@ def test_image_base64_produces_a_real_diagnosis_per_class():
         ("healthy", "Healthy"),
         ("lumpy", "Lumpy Skin Disease"),
         ("foot-and-mouth", "Foot and Mouth Disease"),
+        # Mastitis has only 47 real, manually-curated photos (see SOURCE.md) — not run in a
+        # loop asserting every single one classifies correctly (that would need a much bigger
+        # held-out set than exists), just confirms the class is wired up and at least one real
+        # photo round-trips through the whole graph end to end.
+        ("mastitis", "Mastitis"),
     ]:
         result = run_diagnosis({}, image_base64=_sample_image_base64(folder))
         assert result["diagnosis"] == expected
         assert result["sources"] == [] or isinstance(result["sources"], list)
+        # Mastitis is a common udder infection, not a notifiable/contagious disease — unlike
+        # Lumpy Skin Disease it must never escalate_to_vet via REPORTABLE_DISEASES.
+        if expected == "Mastitis":
+            assert result["recommended_action"] != "escalate_to_vet"
 
 
 @pytest.mark.skipif(not _HAS_TRAINED_IMAGE_MODEL, reason="no local ml-service/models/image_model.pt")

@@ -3,7 +3,7 @@
 Living snapshot of project state. Update this whenever you finish a meaningful chunk of work —
 this is what an agent (or you) reads first when resuming.
 
-_Last updated: 2026-09-24 (session 15, continued — species-mismatch bug fix)_
+_Last updated: 2026-09-24 (session 18 — Cow Mastitis added as a 4th image class)_
 
 ## Known gaps
 
@@ -609,10 +609,148 @@ _Last updated: 2026-09-24 (session 15, continued — species-mismatch bug fix)_
     and the retry-species button is covered by two new Vitest tests (file-picker automation
     isn't available in the built-in browser tool, same limitation prior sessions hit).
 
+- **Full positive/negative scenario QA pass on `main`** (2026-09-24, direct user request:
+  checkout main, pull latest, test every scenario, fix what's found). Ran the full automated
+  suite first (all green), then a scripted matrix of positive/negative cases against the real
+  running stack across all 5 species (symptom + image diagnosis, multi-photo, validation
+  errors), then a browser pass over every species' disclosure text and form. Found and fixed
+  three real issues:
+  1. **The species-mismatch fix's own calibration was measuring the wrong population for
+     Dog** — its "5.5% false-reject" figure mixed the served v2 (close-up) photos with v1
+     (whole-body) training-only photos. The real, served-only rate is 8.2%. Not a new bug —
+     corrected the documentation (`docs/specs/species-classifier.md`, `docs/DISCLAIMER.md`)
+     rather than silently carry the optimistic number forward.
+  2. **The pre-existing "is this an animal" gate (`species_gate.is_animal_photo`, unchanged
+     since M15) was rejecting 11.6% of real Dog photos** — nearly double its documented ~2%
+     rate — because Dog's entire dataset is now close-ups (the M16 dataset swap), which this
+     generic gate finds harder than whole-body shots. Combined with (1), **nearly 1 in 5
+     genuine Dog submissions were refused before reaching a diagnosis at all.** Retuned
+     `_MIN_ANIMAL_MASS` 0.30 → 0.25, verified against all three real non-animal fixtures first
+     (car/table/screenshot all stay well below 0.25, so the M15 regression doesn't reopen) —
+     Dog's animal-gate rejection drops to 5.2%. Goat improved slightly too (8.0% → 7.1%) as a
+     side effect, since lowering this threshold can only help every species, never hurt one.
+  3. **A raw exception leak, same bug class fixed twice before**: `POST /api/diagnoses/image`
+     with a non-multipart content type (not reachable via a real browser or `curl`, only a
+     client calling the API directly) returned a `500` leaking
+     `HttpMediaTypeNotSupportedException`'s message. Added a handler mapping it to the
+     existing `IMAGE_REQUIRED` code. Also added `DiagnosisControllerTest` — **the first real
+     HTTP-layer test for this controller**; every existing test mocks the service layer
+     directly and never touches `GlobalExceptionHandler`, which is exactly why this went
+     unnoticed.
+  - **Validated**: ml-service 95/1 (skipped), backend 28/28 (5 new controller tests), frontend
+    unaffected, plus live re-verification of all three fixes against the real running stack.
+
+- **Result-card redesign + post-result action simplified to one button** (2026-09-24, same
+  day, direct user request). Four asks: remove "Start a new check," add a "Check for Other
+  Species" button, make the result card more scannable/user-friendly with the important parts
+  highlighted, and animate the 👀 (monitor) icon.
+  - **One post-result action, not two**: `handleReset` and its "Start a new check" button are
+    gone. `handleCheckOtherSpecies` (renamed from the prior session's
+    `handleTryDifferentSpecies`) is now unconditional — it always renders, whether the result
+    came from symptoms or a photo — and keeps whatever was submitted intact (symptoms stay
+    checked, photo(s) stay attached), only clearing the result and focusing the species
+    picker. Real tradeoff, accepted per the explicit request: there's no more one-click full
+    wipe; clearing symptoms/photos to start genuinely fresh is now a manual step (unchecking
+    boxes, removing photos from the tray) rather than one button.
+  - **Result card redesign** (`DiagnosisResult.jsx` + `App.css`): a full-width, urgency-colored
+    banner strip (not just a thin border) puts the diagnosis name and a purely visual
+    confidence ring in the first thing anyone sees — the ring never restates the percentage as
+    a second number, it's decorative only, so `docs/DISCLAIMER.md`'s "the percentage appears
+    exactly once, in the heading" rule (and the tests that check that exact heading text)
+    stays intact. The action/precautions/explanation sections below are unchanged in content,
+    kept in their established most-important-first order.
+  - **The 👀 (monitor) icon now has a gentle "looking around" wiggle** (`watch-around`
+    keyframe, `prefers-reduced-motion`-aware) — scoped to just that icon, per the request; the
+    other urgency icons (🚨/🩺) stay static.
+  - **Validated**: frontend lint clean + 29/29 tests (3 rewritten for the new single-button
+    behavior) + production build, plus live verification in a real browser across an
+    escalate_to_vet result (red banner), a monitor result (green banner, confirmed the
+    `watch-around` animation is actually applied via computed style), and the button's
+    click-through behavior (result clears, symptoms stay checked, species field gets focus).
+
+- **Invalid-photo/species-mismatch cards recolored from green to red-alert** (2026-09-24,
+  same session, direct user feedback with a screenshot: a wrong-species result was rendering
+  in the app's neutral/green accent color — the same tone a healthy "all clear" result gets —
+  which reads as "nothing's wrong" for a submission that actually failed). `InvalidImageCard`
+  and `SpeciesMismatchCard` (`DiagnosisResult.jsx`) now share a new `AttentionCard` component,
+  restructured onto the same banner/body layout the real diagnosis cards use, with
+  `.diagnosis-result--attention` (`App.css`) pointing the shared `--urgency-color`/
+  `--urgency-color-bg` variables at the existing `--urgency-escalate` red tokens — no new
+  color introduced, reuses the palette already meaning "pay attention" elsewhere in the app.
+  Removed a redundant "try again" line from the card body — `result.explanation` (from
+  ml-service) already ends with the concrete next step, so repeating it would be the exact
+  duplication the confidence-wording cleanup was already asked to avoid elsewhere.
+  **Validated**: frontend lint + 29/29 + build all green (no test referenced the old CSS class
+  name), plus a live computed-style check in the browser confirming the banner/border actually
+  resolve to the red `--urgency-escalate` token, not the old green `--accent-bg`.
+
+- **Animal-photo gate false-accept on diagram/chart images, made per-species** (2026-09-24,
+  direct user bug report with a screenshot: Goat selected, an unrelated component-diagram
+  image uploaded, result came back "Likely: Unhealthy (55% confidence)"). Reproduced directly:
+  the diagram scored 0.261 animal-mass, just above the *same-day* QA pass's new 0.25 threshold
+  (see the entry above), reaching the real Goat health classifier. Measured on a 50-image
+  synthetic diagram/dashboard/flowchart sample: 12% pass at 0.25 vs 2% at 0.30 — a real,
+  repeatable gap the prior pass's 3-fixture non-animal test set never covered. Fixed by making
+  `species_gate._MIN_ANIMAL_MASS` per-species (`{"DOG": 0.25}`, everything else 0.30) instead
+  of moving the global value again — measured that only Dog's real photos are meaningfully
+  sensitive to this knob (5.2% vs 11.6%), so Dog keeps its fix intact while Cow/Cat/Goat
+  (1-2 points of false-reject either way) get the stricter, diagram-safer value. Two other
+  candidate fixes were measured and rejected: a color-flatness heuristic (real Cat/Goat photos
+  reach the same range, up to literal single-color images) and the species classifier's own
+  confidence (more confident on diagrams than on the real non-animal fixtures — OOD
+  overconfidence). Full trade-off table and rejected alternatives in `docs/DECISIONS.md` and
+  `species_gate.py`'s docstring.
+  - **Also found, not fixed**: ~1.6% of `ml-service/data/goat-images/` are tiny 24x24
+    solid-black placeholder images (broken downloads) currently trained on as real ground
+    truth — flagged as a follow-up.
+  - **Validated**: full ml-service suite 99/99 (10 in `test_species_gate.py`, up from 5, incl.
+    two new diagram fixtures and an end-to-end test reproducing the exact reported case), plus
+    live verification against the real running stack at all three layers (`run_diagnosis`,
+    ml-service's `/agent/diagnose`, backend's `/api/diagnoses/image`) — confirmed both the
+    negative case (diagram+Goat now returns `invalid_image`) and the positive case (a real
+    healthy goat photo still returns a normal `Healthy` diagnosis) through the actual backend
+    endpoint the frontend calls.
+  - **Disclosed, not eliminated**: even at 0.30, 2% of the diagram sample still passes, and
+    Dog's own 0.25 lets ~12% through — a real ceiling on a generic classifier's threshold for
+    a concept it was never trained to recognize. A dedicated animal/not-animal classifier
+    (same pattern as `species_classifier.py`'s species-mismatch fix) would close this
+    properly; not started.
+
+- **Cow's image model gains a 4th class: Mastitis** (2026-09-24, direct user request following
+  a broader "train on all diseases per species" ask — a dataset survey that session found only
+  one gap with real usable public data: Cow Mastitis). See
+  `docs/specs/cow-mastitis-image-classifier.md` for the full story — the plan changed
+  substantially mid-implementation:
+  - Downloaded [cow-and-mastitis-detection](https://universe.roboflow.com/kirubel-yemane/cow-and-mastitis-detection)
+    (Roboflow, CC BY 4.0, user-provided API key) and converted its object-detection
+    annotations to this project's whole-image classification convention.
+    **Manual review of all 319 initially-matched images found real data-quality problems the
+    dataset's CC BY 4.0 label didn't disclose**: several images carry visible iStock/
+    Shutterstock watermarks (scraped stock photography), at least 3 aren't cattle at all
+    (human hand close-ups, one a video screen-grab with a captions watermark), and the
+    `Mastitis-N` filenames turned out to be 140 files but only 48 unique photos (3 rotated
+    duplicate crops each — deduplicated to avoid train/val leakage). **Final curated set: 47
+    images** (12 of 48 unique `Mastitis-N` photos excluded for the reasons above; a separate,
+    messier ~168-image bucket wasn't used at all) — user explicitly chose to accept the
+    residual risk and proceed with the 47 unwatermarked ones rather than abandon the dataset
+    or hunt for a cleaner source.
+  - **47 images (~27x smaller than the other 3 classes) broke plain training**: an unweighted
+    first pass scored Mastitis F1 = 0.0 (completely unlearned). Fixed with class-weighted
+    loss — the same pattern already used in `species_classifier_train.py` for a smaller
+    imbalance — real result: Mastitis recall 100% (every validation photo caught) but
+    precision ~41% (more false-positive Mastitis calls on Lumpy/FMD photos), and each of the
+    other 3 classes lost 2-4 F1 points as a real, disclosed cost. Overall: acc 0.861→0.825,
+    macro F1 0.857→0.764 (old macro F1 didn't have to average in a class near zero).
+  - **Validated**: full ml-service suite 99/99 (new Mastitis case in the per-class image test,
+    plus a non-escalation check since Mastitis correctly isn't in `REPORTABLE_DISEASES`), and
+    all 4 classes (Healthy/Lumpy/FMD/Mastitis) verified live against the real running stack
+    through the actual backend endpoint the frontend calls, not just ml-service directly.
+  - `docs/DISCLAIMER.md`, `models/REGISTRY.md`, `data/cattle-images/SOURCE.md` all carry the
+    full, real numbers and the curation story — nothing about this shipped quietly.
+
 ## In Progress
 
-Nothing in progress. Every PR from this session is merged (#35 through #40), apart from the
-documentation PR carrying this update.
+Nothing in progress.
 
 ## Not Started
 

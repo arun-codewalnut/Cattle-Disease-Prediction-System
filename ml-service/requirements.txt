@@ -28,5 +28,10 @@ langgraph==0.2.60
 langchain-core==0.3.28
 langchain-ollama==0.2.2
 
+# Data acquisition — Roboflow Universe dataset export (see
+# docs/specs/cow-mastitis-image-classifier.md). Only used by the one-off download/convert
+# script under training/, never imported by the running app.
+roboflow==1.1.50
+
 # Dev/test
 pytest==8.3.4

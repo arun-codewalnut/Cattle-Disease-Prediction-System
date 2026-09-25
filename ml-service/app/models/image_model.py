@@ -5,8 +5,10 @@ See docs/specs/M9-cattle-image-classifier.md. `DISEASES` here is the canonical l
 saved into the trained artifact — the training script imports it from this module rather than
 redefining it, same convention as `symptom_model.py`.
 
-Only 3 of the symptom model's 5 `DISEASES` are covered here (no dataset exists yet for
-Mastitis/Bovine Respiratory Disease via image) — don't imply parity elsewhere.
+**4 of the symptom model's 5 `DISEASES` are covered here** (Mastitis added — see
+docs/specs/cow-mastitis-image-classifier.md and data/cattle-images/SOURCE.md for the real,
+smaller, manually-curated dataset behind it). Bovine Respiratory Disease still has no image
+dataset — don't imply full parity with the symptom model.
 """
 from __future__ import annotations
 
@@ -20,7 +22,7 @@ from torch import nn
 from torchvision import transforms
 from torchvision.models import mobilenet_v2
 
-DISEASES = ["Healthy", "Lumpy Skin Disease", "Foot and Mouth Disease"]
+DISEASES = ["Healthy", "Lumpy Skin Disease", "Foot and Mouth Disease", "Mastitis"]
 
 CONFIDENCE_THRESHOLD = 0.4
 
