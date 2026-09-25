@@ -33,8 +33,7 @@ The same **required one-time model training** as Option A step 3 applies here, r
 - `frontend`: `cd frontend && npm install` once, then `npm run dev`
 - `backend`: `cd backend && mvn spring-boot:run` (stateless — nothing to provision)
 - `ml-service`: `cd ml-service && .venv\Scripts\activate && uvicorn app.main:app --reload`
-  — on Windows/Python 3.13 skip `shap` when installing (no cp313 wheel; never imported
-  anyway), README has the exact filter command. Everything else installs cleanly, and this
+  — everything installs cleanly from wheels (no C++ compiler needed), and this
   is full functionality: precautions, next steps and citations all work, since the reference
   documents are read straight from `data/veterinary-reference/`.
 

@@ -7,10 +7,6 @@ _Last updated: 2026-09-24 (session 18 — Cow Mastitis added as a 4th image clas
 
 ## Known gaps
 
-- `shap` has no cp313 wheel on Windows, so a bare `pip install -r requirements.txt` fails
-  there; it's never imported, so skipping it is the fix (README has the command). The bigger
-  version of this problem, `chromadb`/`chroma-hnswlib`, is **gone** — ml-service's whole
-  suite now runs natively, no Docker.
 - `springdoc-openapi` Spring-Boot-4 compatibility unverified — not added to `backend/pom.xml`
   yet. See [backend/AGENTS.md](backend/AGENTS.md).
 - No `LICENSE` file yet — open decision, not yet made.

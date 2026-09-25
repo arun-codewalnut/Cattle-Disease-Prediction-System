@@ -1,0 +1,8 @@
+# Keep the build context to what the image needs — a local venv alone is ~1.2GB.
+.venv/
+.pytest_cache/
+__pycache__/
+**/__pycache__/
+.env
+data/*/
+!data/veterinary-reference/

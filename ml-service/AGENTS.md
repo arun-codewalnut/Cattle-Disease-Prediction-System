@@ -4,14 +4,15 @@
 
 - **Setup**: `py -m venv .venv`, then `.venv\Scripts\python -m pip install -r requirements.txt`,
   then `uvicorn app.main:app --reload`.
-- **Native install caveat**: `shap` needs to compile a native extension and has no cp313
-  wheel on Windows, so a bare `pip install -r requirements.txt` fails there without
-  [Microsoft C++ Build Tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/).
-  `shap` isn't imported anywhere (M1 uses XGBoost's own `pred_contribs` — see
-  `docs/DECISIONS.md`), so installing everything except it is the practical workaround; the
-  README has the exact command. **`chromadb`/`chroma-hnswlib` used to be the bigger blocker
-  and is gone** — retrieval reads markdown directly now
-  (`docs/specs/remove-databases.md`), which is why the tests no longer need Docker.
+- **No native builds**: every dependency installs from a prebuilt wheel on all platforms.
+  Keep it that way — don't add a package that has to compile (no cp313 wheel) without a real
+  need. `shap` was removed for exactly this (never imported; M1 uses XGBoost's own
+  `pred_contribs` — see `docs/DECISIONS.md`), and `chromadb`/`chroma-hnswlib` before it
+  (`docs/specs/remove-databases.md`). It's also why the Dockerfile needs no compiler.
+- **Docker image**: the Dockerfile's CMD is the production one (honours `$PORT`, no
+  `--reload`); `docker-compose.yml` overrides it with `--reload` for local dev.
+  `.dockerignore` keeps `.venv/` and training datasets out of the image — only
+  `data/veterinary-reference/` is read at runtime.
 - **Structure**: `app/api/` = FastAPI routers, `app/agent/` = LangGraph graph + tools,
   `app/models/` = ML inference wrappers, `app/rag/` = retrieval over
   `data/veterinary-reference/*.md`. Still RAG — the explain node grounds its prompt in
