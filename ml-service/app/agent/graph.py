@@ -11,11 +11,16 @@ the model's own output plus (M6) retrieved reference passages — never facts in
 what it's given.
 
 `predict_image` (M9) is a real, trained MobileNetV2-transfer-learning classifier — see
-docs/specs/M9-cattle-image-classifier.md. It covers only 3 of the symptom model's 5 diseases
-(Healthy / Lumpy Skin Disease / Foot and Mouth Disease — no Mastitis/Bovine Respiratory
-Disease image data exists). It flows through `recommend` exactly like the symptom path, so
-the REPORTABLE_DISEASES escalation rule applies identically regardless of which path produced
-the diagnosis.
+docs/specs/M9-cattle-image-classifier.md. It covers 4 of the symptom model's 5 diseases as of
+2026-09-24 (Healthy / Lumpy Skin Disease / Foot and Mouth Disease / Mastitis — no Bovine
+Respiratory Disease image data exists; see docs/specs/cow-mastitis-image-classifier.md and
+data/cattle-images/SOURCE.md for how thin and manually-curated the Mastitis data specifically
+is — 47 images, class-weighted loss, a real disclosed accuracy trade-off). It flows through
+`recommend` exactly like the symptom path, so the REPORTABLE_DISEASES escalation rule applies
+identically regardless of which path produced the diagnosis. Mastitis itself is not in
+REPORTABLE_DISEASES (unchanged, correctly — it's a common udder infection, not a
+notifiable/contagious disease like FMD or LSD), so an image-based Mastitis result gets the
+same non-escalating treatment the symptom model's Mastitis already did.
 
 `predict_image` is species-aware (M13/M14 follow-up, real Cat/Dog models): `species` in the
 request picks which trained model runs — Cat and Dog get their own models
@@ -240,17 +245,19 @@ def predict_image_node(state: DiagnosisState) -> dict[str, Any]:
         # than failing the request, same "never blocks a diagnosis" pattern as explain_node.
         return {"diagnosis": "uncertain", "confidence": 0.0, "top_features": []}
 
-    if not species_gate.is_animal_photo(image_bytes):
+    selected_species = state.get("species")
+
+    if not species_gate.is_animal_photo(image_bytes, selected_species):
         # Not a decode failure (that's the branch above) — a photo that decoded fine but
         # isn't of an animal at all. Never reaches a disease-specific model; see
-        # docs/specs/M15-image-diagnosis-quality-gate.md.
+        # docs/specs/M15-image-diagnosis-quality-gate.md. Threshold is per-species (see that
+        # function's docstring) — passing selected_species matters, not just documentation.
         return {"diagnosis": "invalid_image", "confidence": 0.0, "top_features": []}
 
     # Once we know it's an animal: is it the species the user picked? If not, stop here. The
     # disease model would otherwise answer confidently about the wrong animal — a dog photo
     # submitted as a cow produced "Foot and Mouth Disease, 60%" with full escalation guidance,
     # which is why this refuses rather than annotates.
-    selected_species = state.get("species")
     if species_gate.looks_like_a_different_species(image_bytes, selected_species):
         return {"diagnosis": "species_mismatch", "confidence": 0.0, "top_features": []}
 

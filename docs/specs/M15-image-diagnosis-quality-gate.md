@@ -17,6 +17,30 @@
 > "Kennel Cough, 42%". It now scores total probability mass over animal classes (≥ 0.30),
 > which let through 0/12 non-animal test images versus the old rule's 2/12, at the same cost
 > in valid photos. The gate's purpose and position in the graph are unchanged.
+>
+> **Follow-up 3 (2026-09-24): a user-reported bug found the M16 threshold retune (0.30 → 0.25,
+> applied globally to fix Dog's false-reject rate) had reopened this gate for a whole image
+> category the 12-fixture test set never covered — diagrams/dashboards/flowcharts (flat vector
+> graphics, not photos).** Reproduced directly: a component-diagram screenshot uploaded with
+> Goat selected scored 0.261 animal-mass, passed the 0.25 gate, and reached the real Goat
+> health classifier, which returned a confident-reading "Likely: Unhealthy (55% confidence)"
+> for an image that was never a photo of anything. Measured on a 50-image synthetic sample of
+> diagrams/dashboards/flowcharts/network diagrams: **12% passed at 0.25 vs 2% at 0.30** — a
+> real, non-trivial gap, not a one-off fluke. Raising the threshold back to 0.30 globally would
+> undo the Dog fix (11.6% Dog false-reject, re-measured, unchanged from the original M16
+> finding), so **the threshold is now per-species**: only Dog — the one species whose real
+> photos are meaningfully sensitive to this knob (5.2% vs 11.6% at 0.25 vs 0.30) — keeps 0.25;
+> Cow/Cat/Goat all move back to 0.30, measured to cost them only 1-2 points of false-reject
+> (e.g. Goat 8.4% → 9.6%) while cutting their non-animal-diagram false-accept rate ~6x. Full
+> measured trade-off table in `app/models/species_gate.py`'s `is_animal_photo` docstring.
+> **Disclosed remaining gap, not eliminated**: 2% of the diagram sample still passes at 0.30,
+> and Dog specifically (needs the lower value) still lets ~12% through — the same structural
+> ceiling as any threshold on a generic, not-trained-on-this-project classifier repurposed for
+> a concept ("diagram") it was never trained to recognize. A real animal/not-animal classifier
+> (same pattern as `species_classifier.py`'s fix for species-mismatch) would close this
+> properly; not done this pass. Added two new regression fixtures
+> (`tests/fixtures/non-animal-diagram-*.png`) and an end-to-end test reproducing the exact
+> reported (Goat + diagram) case so this category is covered going forward.
 
 ## Actor + goal
 

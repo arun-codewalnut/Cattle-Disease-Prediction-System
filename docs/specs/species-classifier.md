@@ -73,7 +73,7 @@ system's own baseline (5-7.5% false-reject).
 |-------------------|-------:|-|----------------------------|-----:|
 | dog as cow         | 92.4% | | CAT (own class)            | 2.5% |
 | goat as cow        | 86.5% | | COW (own class)            | 3.5% |
-| cat as dog         | 81.5% | | DOG (own class)            | 5.5% |
+| cat as dog         | 81.5% | | DOG (own class)            | 5.5%* |
 | goat as dog        | 83.2% | | GOAT (own class)           | 8.1% |
 | everything else    | 88-98%| |                            |      |
 
@@ -82,6 +82,15 @@ goat-as-cow (the two most visually similar species in this project's photos) —
 above 85%, a large jump from the unweighted model's 57-68% at the same threshold. Goat has the
 highest same-species false-reject (8.1%) — the new weakest spot in the system after the fix,
 real and disclosed, still far better than any pair was before the fix existed.
+
+**\*Corrected (full-scenario QA pass, 2026-09-24): the 5.5% figure for DOG is optimistic.**
+It comes from a held-out validation split that mixes `dog-images` (v2 close-ups — the only
+data ever actually served to real users) with `dog-images-v1-superseded` (v1 whole-body —
+training data only, never served). Measuring the **real served population directly** (all 439
+v2 images) gives **8.2%**, not 5.5% — worth knowing if this number is used to reason about
+real user impact. Not a new bug and not re-tuned for it (see `docs/DECISIONS.md`'s
+"Full positive/negative scenario pass" entry) — the classifier and threshold are unchanged;
+only the reported number was wrong.
 
 ## Examples
 
