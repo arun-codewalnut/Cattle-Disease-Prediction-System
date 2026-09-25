@@ -42,28 +42,21 @@ export default function DiagnosisIntake() {
     return `Result ready. Likely ${diagnosis?.diagnosis}, ${Math.round((diagnosis?.confidence ?? 0) * 100)}% confidence.`
   }
 
-  // Species deliberately survives a reset: the next animal is usually the same kind, on the
-  // same farm, in the same session.
-  function handleReset() {
+  // The single post-result action: clears the result (and any error) *and* whatever was
+  // submitted — symptoms and any uploaded photo(s) — so the form looks genuinely fresh, then
+  // sends focus back to the species picker. Deliberately not "keep the photo, just change the
+  // species": a wrong-species result means the uploaded photo was of the wrong animal in the
+  // first place, so re-running the same photo against a different species model isn't a real
+  // fix — the user needs to pick correctly and attach the right photo. Also the recovery path
+  // when a result looks off for a reason other than a photo mismatch and the automatic check
+  // (a disclosed, imperfect heuristic — see docs/DISCLAIMER.md) didn't catch it.
+  function handleCheckOtherSpecies() {
     setSymptoms(emptySymptoms(species))
     setImages([])
     setResult(null)
     setError(null)
     setStatus('idle')
-    setAnnouncement('Form cleared. Ready for a new check.')
-  }
-
-  // For when the result looks wrong for a reason other than the disease model itself — the
-  // photo may have been the wrong species and the automatic check didn't catch it (that check
-  // is a disclosed, imperfect heuristic — see docs/DISCLAIMER.md). Unlike handleReset, this
-  // keeps the uploaded photo(s) so the user doesn't have to re-attach anything: only the
-  // result/species selection clear, then focus moves to the species picker so the next step
-  // is obvious.
-  function handleTryDifferentSpecies() {
-    setResult(null)
-    setError(null)
-    setStatus('idle')
-    setAnnouncement('Pick the correct species and analyze the same photo again.')
+    setAnnouncement('Form cleared. Pick a species and check again.')
     speciesFieldRef.current?.focus()
   }
 
@@ -192,13 +185,8 @@ export default function DiagnosisIntake() {
           <div className="diagnosis-outcome" ref={resultRef} tabIndex={-1}>
             <DiagnosisResult result={result} />
             <div className="diagnosis-outcome__actions">
-              {images.length > 0 && (
-                <button type="button" className="retry-species-button" onClick={handleTryDifferentSpecies}>
-                  <span aria-hidden="true">🔁</span> Analyze with a different species
-                </button>
-              )}
-              <button type="button" className="reset-button" onClick={handleReset}>
-                <span aria-hidden="true">↺</span> Start a new check
+              <button type="button" className="retry-species-button" onClick={handleCheckOtherSpecies}>
+                <span aria-hidden="true">🔍</span> Check for Other Species
               </button>
             </div>
           </div>

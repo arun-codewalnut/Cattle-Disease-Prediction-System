@@ -25,20 +25,35 @@ function isLowConfidence(confidencePercent) {
 // M15 (docs/specs/M15-image-diagnosis-quality-gate.md): a photo that isn't of an animal at
 // all never reached a disease model — rendering it through the normal card (a confidence
 // percentage, a vet-triage badge) would be actively misleading, since neither concept
-// applies to "this wasn't a valid photo." Deliberately its own simple treatment instead,
-// matching SpeciesField's `.species-unavailable` visual language.
-function InvalidImageCard({ result }) {
+// applies to "this wasn't a valid photo." Its own treatment instead — but styled as a clear
+// alert (red, same banner language as an escalate_to_vet result), not the neutral/greenish
+// look it used to share with a healthy result. Nothing was wrong with the animal here, but
+// something *did* go wrong with the submission, and it read as "all clear" before — a real
+// point of confusion this fixes, not a cosmetic one.
+function AttentionCard({ icon, heading, explanation }) {
   return (
-    <section className="diagnosis-result diagnosis-result--invalid-image">
-      <span className="diagnosis-result__icon" aria-hidden="true">
-        🚫
-      </span>
-      <div>
-        <h2>Not a valid photo</h2>
-        <p>{result.explanation}</p>
+    <section className="diagnosis-result diagnosis-result--attention">
+      <div className="diagnosis-result__banner">
+        <span className="diagnosis-result__icon" aria-hidden="true">
+          {icon}
+        </span>
+        <div className="diagnosis-result__headline">
+          <h2>{heading}</h2>
+        </div>
+      </div>
+      <div className="diagnosis-result__body">
+        {/* The explanation already ends with the concrete next step (retry / check species
+            selection) — see app.agent.graph's _species_mismatch_message and
+            _template_explanation in ml-service. Repeating it here would be the exact
+            redundancy the diagnosis card's own confidence wording was already trimmed for. */}
+        <p className="diagnosis-result__explanation">{explanation}</p>
       </div>
     </section>
   )
+}
+
+function InvalidImageCard({ result }) {
+  return <AttentionCard icon="🚫" heading="Not a valid photo" explanation={result.explanation} />
 }
 
 // Same treatment, different cause: the photo is an animal, just not the selected one. No
@@ -46,17 +61,7 @@ function InvalidImageCard({ result }) {
 // inventing both. This replaced a warning shown *alongside* a real diagnosis, which left a
 // dog photo reading "Foot and Mouth Disease, 60% — contact your veterinarian".
 function SpeciesMismatchCard({ result }) {
-  return (
-    <section className="diagnosis-result diagnosis-result--invalid-image">
-      <span className="diagnosis-result__icon" aria-hidden="true">
-        🔄
-      </span>
-      <div>
-        <h2>Wrong species for this photo</h2>
-        <p>{result.explanation}</p>
-      </div>
-    </section>
-  )
+  return <AttentionCard icon="🔄" heading="Wrong species for this photo" explanation={result.explanation} />
 }
 
 function DiagnosisResultCard({ result }) {
@@ -74,19 +79,36 @@ function DiagnosisResultCard({ result }) {
 
   return (
     <section data-urgent={isUrgent} className={`diagnosis-result urgency-${result.recommendedAction}`}>
-      <span className="diagnosis-result__icon" aria-hidden="true">
-        {urgencyIcon}
-      </span>
-      <div>
-        {/* "likely X, confidence Y%" is required wording, not a stylistic choice — see
-            docs/DISCLAIMER.md. It is also the only place a percentage appears. */}
-        <h2>
-          Likely: {result.diagnosis} ({confidencePercent}% confidence)
-        </h2>
+      {/* Banner: the two things worth a half-second glance — what it is, and how sure the
+          model is — grouped together above everything else. The dial is a purely visual
+          (non-numeric) read of confidence, not a second rendering of the percentage — that
+          stays exactly once, in the heading below, per docs/DISCLAIMER.md's required
+          "likely X, confidence Y%" wording (also what the existing tests match against, so
+          the heading's text must stay a single unbroken string). */}
+      <div className="diagnosis-result__banner">
+        <span
+          className={`diagnosis-result__icon${result.recommendedAction === 'monitor' ? ' diagnosis-result__icon--watching' : ''}`}
+          aria-hidden="true"
+        >
+          {urgencyIcon}
+        </span>
+        <div className="diagnosis-result__headline">
+          <h2>
+            Likely: {result.diagnosis} ({confidencePercent}% confidence)
+          </h2>
+          <span
+            className="confidence-dial"
+            style={{ '--confidence': confidencePercent }}
+            aria-hidden="true"
+          />
+        </div>
+      </div>
 
+      <div className="diagnosis-result__body">
         {lowConfidence && (
           <p className="confidence__caveat">
-            Low confidence — treat this as a hint to look closer, not a finding.
+            <span aria-hidden="true">⚠️</span> Low confidence — treat this as a hint to look
+            closer, not a finding.
           </p>
         )}
 

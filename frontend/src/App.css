@@ -454,47 +454,153 @@ section[data-urgent='true'] [role='alert'] {
 
 .diagnosis-result {
   margin-top: 24px;
-  padding: 18px 20px;
   border-radius: 16px;
   border: 2px solid var(--urgency-monitor);
-  background: var(--urgency-monitor-bg);
-  display: flex;
-  gap: 14px;
-  align-items: flex-start;
+  background: var(--card-bg);
+  overflow: hidden;
   animation: fade-in-up 0.25s ease;
+  --urgency-color: var(--urgency-monitor);
+  --urgency-color-bg: var(--urgency-monitor-bg);
 }
 
 .diagnosis-result.urgency-consult_vet {
   border-color: var(--urgency-consult);
-  background: var(--urgency-consult-bg);
+  --urgency-color: var(--urgency-consult);
+  --urgency-color-bg: var(--urgency-consult-bg);
 }
 
 .diagnosis-result.urgency-escalate_to_vet {
   border-color: var(--urgency-escalate);
-  background: var(--urgency-escalate-bg);
+  --urgency-color: var(--urgency-escalate);
+  --urgency-color-bg: var(--urgency-escalate-bg);
 }
 
-/* No vet-urgency color here on purpose — nothing was actually diagnosed, so the usual
-   monitor/consult/escalate palette doesn't apply. Dashed border matches
-   .species-unavailable's "nothing to show yet" visual language instead. */
-.diagnosis-result--invalid-image {
-  border: 2px dashed var(--border);
-  background: var(--accent-bg);
+/* Deliberately red/alert, reusing the same banner structure and color-variable mechanism
+   the real diagnosis cards use (--urgency-color/--urgency-color-bg feed .diagnosis-result__
+   banner automatically). Not the escalate_to_vet *action* — nothing was diagnosed, so no
+   vet-triage badge or confidence figure appears — but the same "pay attention" red as a
+   reportable-disease result, on purpose: this used to share the app's neutral/green accent
+   color, which read as "all clear" for a submission that actually failed. That was the
+   actual point of confusion, not just an unstyled edge case. */
+.diagnosis-result--attention {
+  border-color: var(--urgency-escalate);
+  --urgency-color: var(--urgency-escalate);
+  --urgency-color-bg: var(--urgency-escalate-bg);
+}
+
+/* The banner strip: what it is + how sure the model is, in the one place someone glancing at
+   their phone for half a second will actually look. Full-bleed urgency-colored background so
+   it reads at a glance, before any of the supporting detail below. */
+.diagnosis-result__banner {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 16px 20px;
+  background: var(--urgency-color-bg);
+  border-bottom: 2px solid var(--urgency-color);
 }
 
 .diagnosis-result__icon {
-  font-size: 36px;
+  font-size: 40px;
   line-height: 1;
   flex-shrink: 0;
 }
 
-.diagnosis-result h2 {
-  text-align: left;
-  margin-top: 0;
+/* A gentle "looking around" wiggle — just this icon, just the monitor/low-urgency case,
+   where "keep watching" is the actual message. Respects reduced-motion. */
+@keyframes watch-around {
+  0%, 100% {
+    transform: translateX(0) rotate(0deg);
+  }
+  20% {
+    transform: translateX(-3px) rotate(-6deg);
+  }
+  40% {
+    transform: translateX(3px) rotate(6deg);
+  }
+  60% {
+    transform: translateX(-2px) rotate(-3deg);
+  }
+  80% {
+    transform: translateX(2px) rotate(3deg);
+  }
 }
 
-.diagnosis-result p {
+.diagnosis-result__icon--watching {
+  display: inline-block;
+  animation: watch-around 3.2s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .diagnosis-result__icon--watching {
+    animation: none;
+  }
+}
+
+.diagnosis-result__headline {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex: 1;
+}
+
+.diagnosis-result__headline h2 {
+  text-align: left;
+  margin: 0;
+}
+
+/* Purely visual read of confidence — a filled ring, no number on it. The percentage itself
+   lives exactly once, in the heading text to its left (docs/DISCLAIMER.md's required
+   wording) — this never restates it, just gives the eye something faster than reading digits. */
+.confidence-dial {
+  --confidence: 0;
+  flex-shrink: 0;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: conic-gradient(
+    var(--urgency-color) calc(var(--confidence) * 1%),
+    var(--border) 0
+  );
+  position: relative;
+}
+
+.confidence-dial::after {
+  content: '';
+  position: absolute;
+  inset: 5px;
+  border-radius: 50%;
+  background: var(--card-bg);
+}
+
+.diagnosis-result__body {
+  padding: 16px 20px 18px;
+}
+
+.diagnosis-result__body p {
   margin: 8px 0;
+}
+
+.action-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-weight: 700;
+  background: var(--urgency-monitor-bg);
+  color: var(--urgency-monitor);
+}
+
+.urgency-consult_vet .action-badge {
+  background: var(--urgency-consult-bg);
+  color: var(--urgency-consult);
+}
+
+.urgency-escalate_to_vet .action-badge {
+  background: var(--urgency-escalate-bg);
+  color: var(--urgency-escalate);
 }
 
 .action-badge {
@@ -551,13 +657,17 @@ section[data-urgent='true'] [role='alert'] {
 }
 
 @media (max-width: 480px) {
-  .diagnosis-result {
+  .diagnosis-result__banner {
     flex-direction: column;
-    align-items: center;
     text-align: center;
   }
 
-  .diagnosis-result h2 {
+  .diagnosis-result__headline {
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .diagnosis-result__headline h2 {
     text-align: center;
   }
 }
@@ -746,33 +856,36 @@ section[data-urgent='true'] [role='alert'] {
   margin-top: 16px;
 }
 
-.reset-button {
-  margin-top: 0;
-  background: transparent;
-  color: var(--text-h);
-  border: 1.5px solid var(--border);
-  box-shadow: none;
-}
-
-.reset-button:hover:not(:disabled) {
-  border-color: var(--accent);
-  box-shadow: none;
-}
-
-/* Same visual weight as the symptom/photo submit buttons — this is the action most people
-   should reach for when a result looks like it came from the wrong species, since it doesn't
-   throw away the photo they already picked. */
+/* The only post-result action, so it gets the same visual weight as the main submit
+   buttons — a filled, unmissable call to action — rather than the quieter outline style a
+   secondary action would get. */
 .retry-species-button {
   margin-top: 0;
-  background: transparent;
-  color: var(--accent);
-  border: 1.5px solid var(--accent-border);
-  box-shadow: none;
+  width: 100%;
+  padding: 13px 20px;
+  font-size: 16px;
+  font-weight: 700;
+  color: #fff;
+  background: linear-gradient(135deg, var(--accent), #1c6b38);
+  border: none;
+  border-radius: 12px;
+  cursor: pointer;
+  box-shadow: 0 6px 14px rgba(47, 143, 78, 0.35);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
 }
 
 .retry-species-button:hover:not(:disabled) {
-  background: var(--accent-bg);
-  box-shadow: none;
+  transform: translateY(-2px);
+  box-shadow: 0 10px 18px rgba(47, 143, 78, 0.4);
+}
+
+.retry-species-button:focus-visible {
+  outline: 3px solid var(--accent-border);
+  outline-offset: 2px;
 }
 
 /* The result container takes focus on success, so it needs a visible ring when it does —
