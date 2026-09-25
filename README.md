@@ -24,6 +24,30 @@ Agent-context files: [AGENTS.md](AGENTS.md) (canonical), [CLAUDE.md](CLAUDE.md) 
 entry point), [STATE.md](STATE.md) (current progress), [HANDOFF.md](HANDOFF.md) (session
 handoff notes). Each service has its own scoped `AGENTS.md`/`CLAUDE.md`.
 
+## Why there's no database
+
+Short answer: there used to be two (Postgres, Chroma), and removing both changed nothing a
+user could see. Measured before deleting them, not assumed:
+
+- **Postgres was write-only** — two `save()` calls, zero queries, no history endpoint — but it
+  was still a hard startup dependency (the backend didn't boot without it), and a failed save
+  would have turned a successful diagnosis into a `500`. All cost, no payoff.
+- **Chroma (a vector database) was indexing 10.8 KB of markdown** — six reference documents —
+  that both call sites already fetched by an exact key, never a similarity search. It also
+  cost a dependency (`chroma-hnswlib`) with no Python 3.13 wheel, which is why this service's
+  tests used to need Docker.
+- Symptom diagnosis was 6/6 correct, image diagnosis 5/5, escalation correct, and the
+  non-animal photo gate still worked — all measured with both databases absent, before this
+  was made permanent.
+
+**What this means in practice**: `backend` is fully stateless (no JPA/Flyway/datasource — see
+[backend/AGENTS.md](backend/AGENTS.md)), `ml-service` reads its reference docs straight off
+disk, and every test suite (including CI) runs with no database service to start, wait for, or
+tear down. The real cost is that **nothing is persisted** — there's no diagnosis history; every
+request is stateless in, stateless out. If that's ever needed again, it comes back as its own
+feature with a real read path, not by reviving this. Full measurement and reasoning:
+[docs/specs/remove-databases.md](docs/specs/remove-databases.md).
+
 ## Prerequisites
 
 There are two ways to run this (Option A / Option B below) and they need different things.
@@ -37,6 +61,7 @@ There are two ways to run this (Option A / Option B below) and they need differe
 | [Java 21](https://adoptium.net/) + [Maven](https://maven.apache.org/) | Option B `backend` | every Maven command runs **from `backend/`** — there's no root `pom.xml`. `backend/mvnw` (`mvnw.cmd` on Windows) is a fallback if you have no system Maven, but it downloads its own Maven distribution and can fail behind a restricted network — see [backend/AGENTS.md](backend/AGENTS.md) |
 | [Python 3.13](https://www.python.org/) | Option B `ml-service` | Windows: use the `py` launcher. Read the native-install note below before `pip install` |
 | [Ollama](https://ollama.com/download) (optional, either option) | real LLM-generated explanations | without it, explanations use a deterministic template — the app works fully either way, see `docs/DECISIONS.md` |
+| [Roboflow](https://roboflow.com/) account (optional, free) | retraining the Cow **Mastitis** image class specifically | unlike the Kaggle datasets below (which download anonymously), this one needs its own free API key — see `ml-service/data/cattle-images/SOURCE.md`. Every other model trains without any account of any kind |
 
 **You must train at least one model before the app can diagnose anything** — model
 artifacts are gitignored, so a fresh clone has none and every diagnosis returns
@@ -93,8 +118,8 @@ docker compose run --rm ml-service python -m training.generate_synthetic_data
 docker compose run --rm ml-service python -m training.symptom_model_train
 ```
 
-Every *other* model (Sheep symptoms, and the cattle/cat/dog image classifiers) needs a real
-dataset downloaded first — see [Training/retraining a model](#trainingretraining-a-model)
+Every *other* model (Sheep symptoms, and the cattle/cat/dog/goat image classifiers) needs a
+real dataset downloaded first — see [Training/retraining a model](#trainingretraining-a-model)
 below. Nothing forces you to train them; a species/mode you haven't trained just returns
 `503` until you do.
 
@@ -176,10 +201,11 @@ removed as a supported species** (no usable dataset was ever found for it — se
 
 | Species | Symptom diagnosis | Image diagnosis | Notes |
 |---|---|---|---|
-| Cow | ✅ real model | ✅ real model (86.1% acc) | The only species with a symptom+image model trained specifically on it |
-| Sheep | ✅ real model — PPR screen only (80.5% acc) | ✅ Cow's model, as a disclosed approximation | Symptoms: a real, trained binary screen for one disease (Peste des Petits Ruminants) — not a broader disease list like Cow's. A negative result means "not PPR," not "healthy." Image: no sheep-specific dataset exists, still an approximation |
-| Cat | ❌ blocked (no symptom model) | ✅ real model (83.0% acc) | Flea Allergy / Healthy / Ringworm / Scabies |
-| Dog | ❌ blocked (no symptom model) | ✅ real, but weak (52.6% acc) | Canine Distemper / Canine Parvovirus / Kennel Cough / Mange — **no Healthy class**, disclosed loudly in the UI |
+| Cow | ✅ real model, 5 diseases (88.8% acc) | ✅ real model, 4 diseases (82.5% acc) | The only species with both a symptom and an image model trained specifically on it, and the most complete. Image classes: Healthy / Lumpy Skin Disease / Foot and Mouth Disease / **Mastitis**. Mastitis is the newest and thinnest of the four — only 47 manually-curated real photos (vs 746-1291 for the other three), so it's tuned for high recall at a real precision cost (~41%) — see `ml-service/data/cattle-images/SOURCE.md`. Bovine Respiratory Disease is symptom-only — no image dataset exists for it anywhere |
+| Sheep | ✅ real model — PPR screen only (80.5% acc) | ✅ Cow's model, as a disclosed approximation | Symptoms: a real, trained binary screen for one disease (Peste des Petits Ruminants) — not a broader disease list like Cow's. A negative result means "not PPR," not "healthy." Image: no sheep-specific dataset exists anywhere, still an approximation |
+| Goat | ❌ falls back to Cow's model (names the wrong species' diseases — a known, disclosed gap) | ✅ real model, **binary only** (80.1% acc) | Can only flag `Healthy` vs `Unhealthy` — no disease-specific goat photo dataset exists, so it can never name what's actually wrong |
+| Cat | ❌ blocked (no symptom model) | ✅ real model, 4 diseases (83.0% acc) | Flea Allergy / Healthy / Ringworm / Scabies |
+| Dog | ❌ blocked (no symptom model) | ✅ real model, 4 diseases (70.5% acc) | Bacterial Dermatosis / Fungal Infection / Healthy / Hypersensitivity-Allergic Dermatosis — a v2 dataset that replaced the original 52.6%-accuracy, no-`Healthy`-class v1 model |
 
 ### Symptom-based diagnosis
 
@@ -203,9 +229,9 @@ Upload 1–5 JPEG/PNG photos in one submission — one file picker takes them al
 (ctrl/shift-click, or drag a multi-selection), and each chosen photo is then listed with its
 own remove button. Picking more than 5 keeps the first 5 and says how many it dropped, rather
 than silently trimming the selection. Real sample photos to test with live under
-`ml-service/data/{cattle,cat,dog}-images/<class-name>/` once you've populated them (see
+`ml-service/data/{cattle,cat,dog,goat}-images/<class-name>/` once you've populated them (see
 "Training/retraining a model" below) — e.g. `ml-service/data/cat-images/ringworm/` for a real
-Ringworm photo.
+Ringworm photo, or `ml-service/data/cattle-images/mastitis/` for the newest class.
 
 - **1 photo**: a single diagnosis result, same as the old flow.
 - **2–5 photos**: each photo is diagnosed independently, and results are shown together. If
@@ -218,6 +244,27 @@ Ringworm photo.
   species to trigger the warning; upload two photos of the same class to see it agree.
 - **6th photo**: rejected with `400 TOO_MANY_IMAGES` before anything is sent to `ml-service`
   (limit is enforced in `backend`, see `DiagnosisService.MAX_IMAGES`).
+
+### Wrong-photo detection (species-mismatch and non-animal gate)
+
+Every uploaded photo passes two checks *before* any disease model runs, and both are worth
+demoing deliberately rather than only hitting by accident:
+
+1. **"Is this even an animal?"** — a photo that isn't of an animal at all (a screenshot, a
+   diagram, a random object) is refused with `diagnosis: "invalid_image"` rather than handed
+   to a disease classifier that was never trained to say "I don't recognize this." Try
+   uploading any non-photo image (a screenshot works) with any species selected.
+2. **"Is this the selected species?"** — a real animal photo submitted with the *wrong*
+   species selected (e.g. a dog photo with Cow selected) is refused with
+   `diagnosis: "species_mismatch"`, never a confident-sounding wrong-species diagnosis. Try
+   uploading a photo from one species' data folder while a *different* species is selected in
+   the form.
+
+Neither check is perfect (both are real, trained/tuned models, not hardcoded rules — catch
+rates and false-reject rates per species/pair are in `docs/DISCLAIMER.md`), but both fail
+toward refusing rather than guessing, which is the safety property that matters for a
+diagnosis tool. See `ml-service/app/models/species_gate.py` and
+`docs/specs/M15-image-diagnosis-quality-gate.md` / `docs/specs/species-classifier.md`.
 
 ### Testing the API directly (skipping the UI)
 
@@ -251,6 +298,8 @@ is in the ML layer or the gateway) at `POST http://localhost:8000/agent/diagnose
 | Symptom diagnosis requested for Cat/Dog | blocked client-side (no symptom model exists for them) |
 | A model artifact isn't present locally yet | `503 MODEL_NOT_TRAINED` — see below to train it |
 | Unreadable/corrupt image bytes | ml-service degrades to `diagnosis: "uncertain"` rather than erroring |
+| A photo that isn't of an animal at all | `diagnosis: "invalid_image"` — never reaches a disease model, see "Wrong-photo detection" above |
+| A real animal photo of the wrong species | `diagnosis: "species_mismatch"` — same section, a real but imperfect trained check |
 
 ### Training/retraining a model
 
@@ -261,14 +310,17 @@ If a diagnosis attempt returns `503 MODEL_NOT_TRAINED`, the corresponding model 
 |---|---|---|
 | Symptom model (Cow) | `python -m training.generate_synthetic_data && python -m training.symptom_model_train` | No — synthetic, generates its own data |
 | Sheep symptom model (PPR screen) | `python -m training.sheep_symptom_model_train` | Yes — see `ml-service/data/sheep-symptoms/SOURCE.md` |
-| Cattle image model | `python -m training.image_model_train` | Yes — see `ml-service/data/cattle-images/SOURCE.md` |
+| Cattle image model | `python -m training.image_model_train` | Yes — **two separate datasets now**: the original 3-class Kaggle set (anonymous download) plus a manually-curated Mastitis set that needs a Roboflow account. See `ml-service/data/cattle-images/SOURCE.md` for both — the Mastitis one specifically is not a "just re-download it" pipeline, read that file before trusting a fresh pull |
 | Cat image model | `python -m training.cat_image_model_train` | Yes — see `ml-service/data/cat-images/SOURCE.md` |
 | Dog image model | `python -m training.dog_image_model_train` | Yes — see `ml-service/data/dog-images/SOURCE.md` |
+| Goat image model (binary Healthy/Unhealthy) | `python -m training.goat_image_model_train` | Yes — see `ml-service/data/goat-images/SOURCE.md` |
+| Species classifier (powers the wrong-species-photo check above — not a disease model itself) | `python -m training.species_classifier_train` | Yes, but reuses the cat/cattle/dog/goat datasets above — train those first. Optional: the wrong-species check simply never fires (fails open) if this artifact is missing, so nothing 503s without it |
 
-Each `SOURCE.md` has the exact `kagglehub.dataset_download(...)` snippet — all four real
-datasets (the three image ones plus the sheep symptom one) download anonymously, no Kaggle
-account needed. `kagglehub` isn't in `requirements.txt`; `pip install kagglehub` when you
-want one of these datasets.
+Each image/symptom `SOURCE.md` (except the Mastitis one, see above) has the exact
+`kagglehub.dataset_download(...)` snippet — those datasets all download anonymously, no Kaggle
+account needed. Neither `kagglehub` nor `roboflow` is in `requirements.txt` — both are
+one-off, on-demand installs (`pip install kagglehub` / `pip install roboflow`) only needed if
+you're actually (re)training that specific model, not to run the app.
 
 Run the commands above from `ml-service/` with the venv active (Option B), or prefix them
 with `docker compose run --rm ml-service` if you're on the Docker path (Option A) and have

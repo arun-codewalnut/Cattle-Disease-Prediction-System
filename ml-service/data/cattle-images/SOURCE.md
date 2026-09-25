@@ -103,14 +103,19 @@ disclosed in `docs/DISCLAIMER.md`, not glossed over.
 
 ### Redownload
 
-```python
-import os
-from dotenv import load_dotenv
-load_dotenv()
-import roboflow
-rf = roboflow.Roboflow(api_key=os.environ["ROBOFLOW_API_KEY"])
-dataset = rf.workspace("kirubel-yemane").project("cow-and-mastitis-detection").version(1).download("voc")
+`roboflow` isn't in `requirements.txt` — same "on-demand, not a permanent app dependency"
+convention as `kagglehub` for the other 3 classes' datasets. Install it, add
+`ROBOFLOW_API_KEY` to `ml-service/.env` (a free Roboflow account's own API key — see its
+account settings page), then:
+
+```bash
+pip install roboflow
+python -m training.fetch_mastitis_data   # downloads + converts into this folder
 ```
+
+Unlike the other 3 classes, **this is not a "just re-run it" pipeline** — re-running only
+gets you back to the uncurated 319-image match, since the exclusions above were manual
+judgment calls a script can't make. Re-review before trusting a fresh download.
 
 Then re-run the conversion (`training.fetch_mastitis_data.convert`) and manually re-verify —
 this is not a "just re-run it" pipeline; the curation step above found real problems that a
