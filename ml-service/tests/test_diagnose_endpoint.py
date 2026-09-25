@@ -10,12 +10,21 @@ from app.main import app
 
 client = TestClient(app)
 
-# M9: the real image model artifact/dataset are gitignored (large, unverified-license real
-# photos) so CI won't have them — tests needing a real confident image prediction skip
-# gracefully there rather than fail; the "no model trained" case below always runs, since
-# that's the actual behavior CI will exercise. See docs/specs/M9-cattle-image-classifier.md.
-_HAS_TRAINED_IMAGE_MODEL = image_model_module.DEFAULT_MODEL_PATH.exists()
+# M9: the cattle-images dataset is gitignored (large, unverified-license real photos) so CI
+# won't have it — tests needing a real confident image prediction skip gracefully there rather
+# than fail. The model artifact itself is committed now (docs/DECISIONS.md), so the flag needs
+# the sample photos too; the "no model trained" case below monkeypatches the path and always
+# runs. See docs/specs/M9-cattle-image-classifier.md.
 _CATTLE_IMAGES_DIR = Path(__file__).resolve().parents[1] / "data" / "cattle-images"
+
+
+def _has_sample_photos(images_dir: Path) -> bool:
+    # The dataset folders themselves exist in git (each keeps a tracked SOURCE.md) — only the
+    # photos are gitignored, so check for real image files, not just the directory.
+    return any(f.suffix.lower() in (".jpg", ".jpeg", ".png") for f in images_dir.rglob("*"))
+
+
+_HAS_TRAINED_IMAGE_MODEL = image_model_module.DEFAULT_MODEL_PATH.exists() and _has_sample_photos(_CATTLE_IMAGES_DIR)
 
 
 def _sample_image_base64(folder: str) -> str:
@@ -90,7 +99,7 @@ def test_healthy_recommends_monitor() -> None:
     assert body["recommended_action"] == "monitor"
 
 
-@pytest.mark.skipif(not _HAS_TRAINED_IMAGE_MODEL, reason="no local ml-service/models/image_model.pt")
+@pytest.mark.skipif(not _HAS_TRAINED_IMAGE_MODEL, reason="no local image_model.pt or data/cattle-images/")
 def test_image_base64_returns_real_diagnosis_via_llm_rag_path() -> None:
     image_base64 = _sample_image_base64("lumpy")
 
@@ -133,9 +142,9 @@ def test_missing_model_returns_structured_error(monkeypatch, tmp_path: Path) -> 
 
 
 def test_missing_image_model_returns_structured_error(monkeypatch, tmp_path: Path) -> None:
-    # Always runs, everywhere (unlike the real-prediction test above) — this is the actual
-    # behavior CI sees, since the trained image_model.pt artifact is gitignored and not
-    # committed. See docs/specs/M9-cattle-image-classifier.md.
+    # Always runs, everywhere (unlike the real-prediction test above) — the model path is
+    # pointed somewhere empty, so this holds whether or not the committed artifact exists.
+    # See docs/specs/M9-cattle-image-classifier.md.
     monkeypatch.setattr(image_model_module, "DEFAULT_MODEL_PATH", tmp_path / "does-not-exist.pt")
 
     response = client.post(

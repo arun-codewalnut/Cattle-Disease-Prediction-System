@@ -39,9 +39,9 @@ ml-service/data/dog-images/*
 !ml-service/data/sheep-symptoms/
 ml-service/data/sheep-symptoms/*
 !ml-service/data/sheep-symptoms/SOURCE.md
-ml-service/models/*.pkl
-ml-service/models/*.pt
-ml-service/models/*.onnx
+# ml-service/models/*.pkl
+# ml-service/models/*.pt
+# ml-service/models/*.onnx
 ml-service/.env
 
 # --- Claude Code local session data ---

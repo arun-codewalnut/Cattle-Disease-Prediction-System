@@ -989,3 +989,25 @@ real goat photos, currently being trained on as real "healthy"/"unhealthy" groun
 Goat's own accuracy (80.1%, the lowest of the four species) and confidence readings are the
 least stable — not confirmed as the cause, and not cleaned up or retrained on this pass
 (out of scope for a UI-reported gate bug); flagged as a follow-up.
+
+## Model artifacts committed to git (2026-09-26)
+
+**Context**: `ml-service/models/*.pkl`/`*.pt`/`*.onnx` were gitignored, so a fresh clone had
+no models and every diagnosis returned `503 MODEL_NOT_TRAINED` until you trained locally.
+That also broke the Railway deployment: Railway builds from GitHub, so the image shipped
+without any models.
+
+**Decision**: stop ignoring model artifacts and commit them. The seven current files total
+about 46MB, and none is over 10MB, well under GitHub's 100MB per-file limit.
+
+**Alternatives considered**:
+- *Train during the Docker build*: only the two symptom models can be retrained without a
+  dataset download (the Sheep CSV and every image dataset are gitignored), so image and
+  Sheep diagnosis would still return 503.
+- *Railway volume / Git LFS*: keeps binaries out of normal git history, but adds a manual
+  upload step (or LFS setup) on every retrain. Not worth it at this size for a learning
+  project.
+
+**Consequences**: each retrain adds roughly one artifact's size to git history, so commit a
+retrained model only when it's meant to ship. `models/REGISTRY.md` stays the record of what
+each committed artifact is.
