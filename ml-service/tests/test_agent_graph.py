@@ -76,12 +76,22 @@ def test_uncertain_diagnosis_never_calls_the_llm(monkeypatch):
     assert calls == []
 
 
-# M9: the real image_model.pt artifact and cattle-images dataset are both gitignored (large,
-# unverified-license real photos), so CI won't have them — tests needing a real confident
-# image prediction skip gracefully there. See docs/specs/M9-cattle-image-classifier.md.
+# M9: the image datasets are gitignored (large, unverified-license real photos), so CI won't
+# have them — tests needing a real confident image prediction skip gracefully there. The model
+# artifacts themselves *are* committed now (see docs/DECISIONS.md, "Model artifacts committed to
+# git"), so every flag below requires the sample photos too, not just the model file.
+# See docs/specs/M9-cattle-image-classifier.md.
 _IMAGE_MODEL_PATH = image_model_module.DEFAULT_MODEL_PATH
 _CATTLE_IMAGES_DIR = Path(__file__).resolve().parents[1] / "data" / "cattle-images"
-_HAS_TRAINED_IMAGE_MODEL = _IMAGE_MODEL_PATH.exists()
+
+
+def _has_sample_photos(images_dir: Path) -> bool:
+    # The dataset folders themselves exist in git (each keeps a tracked SOURCE.md) — only the
+    # photos are gitignored, so check for real image files, not just the directory.
+    return any(f.suffix.lower() in (".jpg", ".jpeg", ".png") for f in images_dir.rglob("*"))
+
+
+_HAS_TRAINED_IMAGE_MODEL = _IMAGE_MODEL_PATH.exists() and _has_sample_photos(_CATTLE_IMAGES_DIR)
 
 
 def _sample_image_base64(folder: str) -> str:
@@ -89,7 +99,7 @@ def _sample_image_base64(folder: str) -> str:
     return base64.b64encode(sample.read_bytes()).decode()
 
 
-@pytest.mark.skipif(not _HAS_TRAINED_IMAGE_MODEL, reason="no local ml-service/models/image_model.pt")
+@pytest.mark.skipif(not _HAS_TRAINED_IMAGE_MODEL, reason="no local image_model.pt or data/cattle-images/")
 def test_image_base64_produces_a_real_diagnosis_per_class():
     for folder, expected in [
         ("healthy", "Healthy"),
@@ -110,7 +120,7 @@ def test_image_base64_produces_a_real_diagnosis_per_class():
             assert result["recommended_action"] != "escalate_to_vet"
 
 
-@pytest.mark.skipif(not _HAS_TRAINED_IMAGE_MODEL, reason="no local ml-service/models/image_model.pt")
+@pytest.mark.skipif(not _HAS_TRAINED_IMAGE_MODEL, reason="no local image_model.pt or data/cattle-images/")
 def test_image_diagnosis_uses_the_real_llm_rag_explain_path(monkeypatch):
     # Unlike the M8 placeholder, a real image diagnosis now goes through the same explain
     # path as symptoms — get_llm() gets called, not skipped.
@@ -129,7 +139,7 @@ def test_image_diagnosis_uses_the_real_llm_rag_explain_path(monkeypatch):
     assert result["explanation"] == "Grounded explanation."
 
 
-@pytest.mark.skipif(not _HAS_TRAINED_IMAGE_MODEL, reason="no local ml-service/models/image_model.pt")
+@pytest.mark.skipif(not _HAS_TRAINED_IMAGE_MODEL, reason="no local image_model.pt or data/cattle-images/")
 def test_image_diagnosis_still_escalates_for_reportable_disease():
     result = run_diagnosis({}, image_base64=_sample_image_base64("lumpy"))
 
@@ -142,16 +152,16 @@ def test_image_diagnosis_still_escalates_for_reportable_disease():
 # model predict_image_node calls; see app.agent.graph._IMAGE_MODEL_BY_SPECIES.
 _CAT_IMAGE_MODEL_PATH = cat_image_model_module.DEFAULT_MODEL_PATH
 _CAT_IMAGES_DIR = Path(__file__).resolve().parents[1] / "data" / "cat-images"
-_HAS_TRAINED_CAT_IMAGE_MODEL = _CAT_IMAGE_MODEL_PATH.exists()
+_HAS_TRAINED_CAT_IMAGE_MODEL = _CAT_IMAGE_MODEL_PATH.exists() and _has_sample_photos(_CAT_IMAGES_DIR)
 
 _DOG_IMAGE_MODEL_PATH = dog_image_model_module.DEFAULT_MODEL_PATH
 _DOG_IMAGES_DIR = Path(__file__).resolve().parents[1] / "data" / "dog-images"
-_HAS_TRAINED_DOG_IMAGE_MODEL = _DOG_IMAGE_MODEL_PATH.exists()
+_HAS_TRAINED_DOG_IMAGE_MODEL = _DOG_IMAGE_MODEL_PATH.exists() and _has_sample_photos(_DOG_IMAGES_DIR)
 
 # M16: Goat gets its own real, trained IMAGE model too — same gitignored-artifact reasoning.
 _GOAT_IMAGE_MODEL_PATH = goat_image_model_module.DEFAULT_MODEL_PATH
 _GOAT_IMAGES_DIR = Path(__file__).resolve().parents[1] / "data" / "goat-images"
-_HAS_TRAINED_GOAT_IMAGE_MODEL = _GOAT_IMAGE_MODEL_PATH.exists()
+_HAS_TRAINED_GOAT_IMAGE_MODEL = _GOAT_IMAGE_MODEL_PATH.exists() and _has_sample_photos(_GOAT_IMAGES_DIR)
 
 # M12 follow-up: Sheep has its own real, trained SYMPTOM model (unlike Cat/Dog above, which
 # are image-only) — see app.agent.graph._SYMPTOM_MODEL_BY_SPECIES.
@@ -185,7 +195,7 @@ def _sample_species_images_base64(images_dir: Path, folder: str, n: int = 10) ->
     return [base64.b64encode(s.read_bytes()).decode() for s in samples]
 
 
-@pytest.mark.skipif(not _HAS_TRAINED_CAT_IMAGE_MODEL, reason="no local ml-service/models/cat_image_model.pt")
+@pytest.mark.skipif(not _HAS_TRAINED_CAT_IMAGE_MODEL, reason="no local cat_image_model.pt or data/cat-images/")
 def test_cat_species_routes_to_the_cat_model_per_class():
     # Cat's real per-class F1 is 0.77-0.86, not 1.0 — asserting a single arbitrary sample per
     # class would occasionally fail on a genuinely-correct model just from picking an unlucky
@@ -203,7 +213,7 @@ def test_cat_species_routes_to_the_cat_model_per_class():
         assert correct >= 5, f"{folder}: only {correct}/10 correctly diagnosed as {expected}, got {diagnoses}"
 
 
-@pytest.mark.skipif(not _HAS_TRAINED_DOG_IMAGE_MODEL, reason="no local ml-service/models/dog_image_model.pt")
+@pytest.mark.skipif(not _HAS_TRAINED_DOG_IMAGE_MODEL, reason="no local dog_image_model.pt or data/dog-images/")
 def test_dog_species_routes_to_the_dog_model():
     # M16 follow-up: the dog model was retrained on a new dataset (70.5% acc, 0.683 macro F1 —
     # see docs/specs/M14-dog-disease-detection.md's "Follow-up: Dog image model v2" section).
@@ -220,7 +230,7 @@ def test_dog_species_routes_to_the_dog_model():
         assert correct >= min_correct, f"{folder}: only {correct}/10 correctly diagnosed as {expected}, got {diagnoses}"
 
 
-@pytest.mark.skipif(not _HAS_TRAINED_GOAT_IMAGE_MODEL, reason="no local ml-service/models/goat_image_model.pt")
+@pytest.mark.skipif(not _HAS_TRAINED_GOAT_IMAGE_MODEL, reason="no local goat_image_model.pt or data/goat-images/")
 def test_goat_species_routes_to_the_goat_model():
     # Goat's model is binary (Healthy/Unhealthy, 80.1% acc, 0.800 macro F1 — see
     # docs/specs/M16-goat-disease-detection.md) — both classes have comparable, decent recall
@@ -233,8 +243,9 @@ def test_goat_species_routes_to_the_goat_model():
 
 
 @pytest.mark.skipif(
-    not (_HAS_TRAINED_CAT_IMAGE_MODEL and _HAS_TRAINED_DOG_IMAGE_MODEL),
-    reason="no local ml-service/models/{cat,dog}_image_model.pt",
+    # Uses the cattle model and a cattle photo, so it needs those too — not just cat/dog.
+    not (_HAS_TRAINED_IMAGE_MODEL and _HAS_TRAINED_CAT_IMAGE_MODEL and _HAS_TRAINED_DOG_IMAGE_MODEL),
+    reason="no local image/cat/dog models or their data/ photos",
 )
 def test_unrecognized_species_falls_back_to_the_cattle_model():
     # Sheep isn't in _IMAGE_MODEL_BY_SPECIES (only symptom routing is species-aware for it —
