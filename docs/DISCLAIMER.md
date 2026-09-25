@@ -14,10 +14,21 @@ Any feature that adds real-world action (notifications, escalation, reporting to
 authority) must preserve this behavior. See
 [docs/API_CONTRACTS.md](API_CONTRACTS.md) for the `recommended_action` field this maps to.
 
-**Image-based prediction (M9)** covers only 3 of the 5 symptom-model diseases — `Healthy`,
-`Lumpy Skin Disease`, `Foot and Mouth Disease` — since no image dataset exists for
-`Mastitis`/`Bovine Respiratory Disease`. Don't present an image-based diagnosis as having the
-same disease coverage as a symptom-based one.
+**Image-based prediction (M9)** covers 4 of the 5 symptom-model diseases as of 2026-09-24 —
+`Healthy`, `Lumpy Skin Disease`, `Foot and Mouth Disease`, `Mastitis` — `Bovine Respiratory
+Disease` still has no image dataset. Don't present an image-based diagnosis as having full
+parity with a symptom-based one.
+
+**Mastitis image coverage is real but noticeably thinner than the other 3 classes** — only 47
+real, manually-curated photos (a public dataset's "Mastitis" label turned out to include
+scraped stock photos and even non-cattle images; see `ml-service/data/cattle-images/SOURCE.md`
+for the full curation writeup), against 746-1291 for each of the other 3. A class-weighted
+loss was needed just to get the model to recognize Mastitis at all (an unweighted first pass
+scored it 0.0 F1 — completely ignored). The result: Mastitis is caught with 100% recall on its
+small validation set (a real photo showing mastitis should get flagged), but at a real cost —
+roughly 2 in 5 "Mastitis" predictions are a false positive (a Lumpy Skin Disease or Foot and
+Mouth Disease photo misclassified as Mastitis), and the other 3 classes each lost 2-4 points
+of F1 from before Mastitis was added. Full numbers: `ml-service/models/REGISTRY.md`.
 
 ## Companion animals (M13+)
 
@@ -91,6 +102,35 @@ not-trained-on-this-project's-photos signal doesn't reliably transfer.
 reported broken) is now caught 92.4% of the time (up from the collapsed ~30%), and goat-as-cow
 — the weakest pair in the whole system, since goat and cow are the two most visually similar
 species in this project's own photos — 86.5% of the time. Every other direction is caught
-81-98% of the time. A correctly-selected species is wrongly refused about 4.3% of the time
-overall (a one-retry inconvenience, not a wrong diagnosis) — Goat has the highest per-species
-false-reject rate at 8.1%. Full measurement: `docs/specs/species-classifier.md`.
+81-98% of the time. A correctly-selected species is wrongly refused **8.2% of the time for
+Dog specifically** (measured against the real served photo set, not the mixed validation
+figure `docs/specs/species-classifier.md` originally reported — corrected 2026-09-24) and 3.5%
+or less for Cow/Cat; Goat sits at 8.1% for the same reason Dog does — a false reject is a
+one-retry inconvenience, not a wrong diagnosis, but it's a real cost worth stating accurately.
+Full measurement: `docs/specs/species-classifier.md`.
+
+**A second, independent gate also rejects real photos — retuned for the same reason, then made
+per-species after a follow-up bug.** Before any species-specific check runs, every photo
+passes an "is this even an animal" gate (`app/models/species_gate.py`'s `is_animal_photo`).
+Full-scenario testing found this was rejecting 11.6% of genuine Dog photos — the gate is
+generic (pretrained ImageNet, not fine-tuned on this project's photos) and finds skin-lesion
+close-ups harder than whole-body shots, and Dog's entire served dataset is close-ups. First
+retuned (0.30 → 0.25) globally, verified against the three known non-animal fixtures at the
+time — now 5.2% for Dog.
+
+**That global retune reopened a different gap, reported directly by a user with a
+screenshot**: a component-diagram image (not a photo at all) uploaded with Goat selected
+scored above the new 0.25 threshold and reached the Goat health classifier, producing a
+confident-reading "55% Unhealthy" for a non-photo. Measured on a 50-image synthetic sample of
+diagrams/dashboards/flowcharts: 12% passed at 0.25 vs 2% at 0.30. **Fixed by making the
+threshold per-species** rather than moving it globally again: Dog keeps 0.25 (the only species
+whose real photos are meaningfully sensitive to this value — every other species moves only
+1-2 points of false-reject across the same range), everything else uses 0.30. Dog's own rate
+is unchanged by this (still 5.2%); **combined, a genuine Dog photo submission has about a
+1-in-8 chance of being refused** (5.2% + 8.2%) rather than the 1-in-5 chance measured before
+the first pass — real, disclosed, not eliminated. More/better Dog training data, not another
+threshold change, is the next lever if Dog's own rate is revisited. The diagram/chart false-
+accept gap is separately disclosed, not eliminated: even at 0.30, 2% of that sample still
+passes, and Dog's own 0.25 lets roughly 12% through — a generic, off-the-shelf classifier's
+threshold has a real ceiling for a concept ("is this a diagram") it was never trained on; see
+`docs/specs/M15-image-diagnosis-quality-gate.md`'s Follow-up 3 for the full measurement.

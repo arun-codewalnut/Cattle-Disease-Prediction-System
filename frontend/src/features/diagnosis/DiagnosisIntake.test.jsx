@@ -339,7 +339,7 @@ describe('DiagnosisIntake', () => {
     expect(screen.getByText(/low confidence/i)).toBeInTheDocument()
   })
 
-  it('clears the form for the next animal but keeps the species', async () => {
+  it('clears the result and the checked symptoms when checking another species', async () => {
     const user = userEvent.setup()
     fetchMock.mockResolvedValueOnce(
       jsonResponse(true, {
@@ -354,12 +354,15 @@ describe('DiagnosisIntake', () => {
     await screen.findByText(/likely: healthy/i)
     expect(screen.getByLabelText(/fever/i)).toBeChecked()
 
-    await user.click(screen.getByRole('button', { name: /start a new check/i }))
+    await user.click(screen.getByRole('button', { name: /check for other species/i }))
 
+    // The result clears and so does everything that was filled in (symptoms here, a photo
+    // elsewhere) — a genuinely fresh form, so the user picks the right species and re-enters
+    // what's actually relevant rather than resubmitting stale, possibly-wrong-species input.
     expect(screen.queryByText(/likely: healthy/i)).not.toBeInTheDocument()
     expect(screen.getByLabelText(/fever/i)).not.toBeChecked()
-    // Same farm, same kind of animal — re-picking the species every time is busywork.
     expect(screen.getByLabelText(/species/i)).toHaveValue('COW')
+    expect(screen.getByLabelText(/species/i)).toHaveFocus()
   })
 
   it('renders real thumbnails and releases them when a photo is removed', async () => {
@@ -593,10 +596,11 @@ describe('DiagnosisIntake', () => {
   })
 
   // The species-mismatch detector is a real but imperfect classifier (see
-  // docs/DISCLAIMER.md) — it doesn't catch every wrong-species photo. This button is the
-  // recovery path: keep the photo, pick the right species, analyze again, without having to
-  // re-attach anything.
-  it('lets the user retry the same photo with a different species after a result', async () => {
+  // docs/DISCLAIMER.md) — it doesn't catch every wrong-species photo. A wrong-species result
+  // means the attached photo was of the wrong animal in the first place, so this button clears
+  // it along with the result: the user picks the right species and attaches the right photo,
+  // rather than re-running the same (wrong) photo against a different species' model.
+  it('clears the uploaded photo and result when checking for another species', async () => {
     const user = userEvent.setup()
     fetchMock.mockResolvedValueOnce(
       jsonResponse(true, {
@@ -623,13 +627,13 @@ describe('DiagnosisIntake', () => {
 
     await screen.findByText(/likely: foot and mouth disease/i)
 
-    const retryButton = screen.getByRole('button', { name: /analyze with a different species/i })
+    const retryButton = screen.getByRole('button', { name: /check for other species/i })
     await user.click(retryButton)
 
-    // The result clears and the species selector is ready for input again — but the photo is
-    // still attached, not lost the way "Start a new check" would lose it.
+    // The result clears, the photo is gone (not just the result), and the species selector is
+    // ready for input again — a genuinely fresh form, not a partial reset.
     expect(screen.queryByText(/likely: foot and mouth disease/i)).not.toBeInTheDocument()
-    expect(screen.getByText(/maybe-a-dog\.jpg/i)).toBeInTheDocument()
+    expect(screen.queryByText(/maybe-a-dog\.jpg/i)).not.toBeInTheDocument()
     expect(screen.getByLabelText(/species/i)).toHaveFocus()
 
     fetchMock.mockResolvedValueOnce(
@@ -650,6 +654,8 @@ describe('DiagnosisIntake', () => {
       })
     )
     await user.selectOptions(screen.getByLabelText(/species/i), 'DOG')
+    const nextFile = new File(['fake-image-bytes'], 'actually-a-dog.jpg', { type: 'image/jpeg' })
+    await user.upload(screen.getByLabelText(/add photos/i), nextFile)
     await user.click(screen.getByRole('button', { name: /diagnose from photo/i }))
 
     await screen.findByText(/likely: fungal infection/i)
@@ -658,7 +664,7 @@ describe('DiagnosisIntake', () => {
     expect(secondCall[1].body.get('species')).toBe('DOG')
   })
 
-  it('does not show the retry-species button after a symptom-only submission with no photo', async () => {
+  it('shows "Check for Other Species" even after a symptom-only submission with no photo', async () => {
     const user = userEvent.setup()
     fetchMock.mockResolvedValueOnce(
       jsonResponse(true, {
@@ -677,6 +683,9 @@ describe('DiagnosisIntake', () => {
     await fillAndSubmit(user)
 
     await screen.findByText(/likely: healthy/i)
-    expect(screen.queryByRole('button', { name: /analyze with a different species/i })).not.toBeInTheDocument()
+    // It's the only post-result action now (no separate "Start a new check"), so it has to be
+    // available regardless of whether the result came from symptoms or a photo.
+    expect(screen.getByRole('button', { name: /check for other species/i })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /start a new check/i })).not.toBeInTheDocument()
   })
 })

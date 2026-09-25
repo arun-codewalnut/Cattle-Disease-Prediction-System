@@ -5,70 +5,68 @@ End-of-session notes. Overwrite this each session — it's a handoff to "next se
 
 ---
 
-## This session (2026-09-24) — continuation of `feat/m16-goat-species-and-dog-v2`
+## This session (2026-09-24) — Cow Mastitis added as a 4th image class
 
-You reported two things after the M16/Dog-v2 PR: (1) uploading a wrong-species or unrelated
-image still "gives some output" instead of being caught, and (2) wanted a button to re-analyze
-with a different species. Both addressed.
+Followed on from a broader user ask ("train on all diseases per species so diagnosis gives
+related output") — a dataset survey that same session found real public data for exactly one
+gap: Cow Mastitis (image). User said go ahead. See
+`docs/specs/cow-mastitis-image-classifier.md` for the full story; the short version is that
+almost nothing about the original plan survived contact with the actual data.
 
-- **The species-mismatch detector was genuinely broken, not just imperfect** — reproduced
-  before touching any code: 3 of 8 real dog photos submitted as Cow came back a confident
-  **"Foot and Mouth Disease"** with `escalate_to_vet`. This was a real regression from the
-  same session's Dog dataset swap (M16), previously only *disclosed* in docs, not fixed. The
-  "is this an animal at all" gate was never the problem — every non-animal fixture still
-  correctly rejected.
-- **Root cause and fix**: the old detector repurposed an unrelated, off-the-shelf ImageNet-1k
-  classifier's class probabilities as a proxy for species. Replaced with a **real classifier
-  trained on this project's own cat/cow/dog/goat photos**
-  (`ml-service/app/models/species_classifier.py` + `training/species_classifier_train.py`) —
-  5,894 photos already downloaded for the disease classifiers, no new dataset. Deliberately
-  includes **both** Dog photo sets (v2 skin close-ups and the retained v1 whole-body set) as
-  training data, so the exact close-ups that broke the old approach are now real ground truth.
-- **Caught a second real bug during calibration, before shipping anything**: the first
-  (unweighted-loss) trained model was 84.9% accurate but biased toward COW (3,244 training
-  photos vs. Dog's 724, ~4.5x imbalance) — real Dog photos scored *higher* on COW than DOG,
-  and any threshold sensitive enough to catch the reported bug well was false-rejecting ~15%
-  of genuine Dog submissions. Fixed with inverse-frequency class-weighted loss (no data
-  discarded) — final model: **89.2% accuracy, 0.857 macro F1**.
-- **Measured result** at the chosen threshold (2.0): dog-as-cow (the reported pair) now
-  catches 92.4% (was ~30% before this fix), goat-as-cow 86.5%, everything else 81-98%.
-  Same-species false-reject is 4.3% overall (Goat highest at 8.1% — the new weakest spot,
-  disclosed, not chased further). Re-verified directly against the *exact* photos from the
-  original bug report through the real running backend + ml-service — all now correctly
-  return `species_mismatch` instead of a disease name.
-- **New feature**: a "🔁 Analyze with a different species" button appears after any
-  image-based result — keeps the uploaded photo(s), clears the result, focuses the species
-  dropdown. Lets someone correct a wrong species guess (whether the detector caught it or,
-  since it's not perfect, didn't) without re-attaching anything. Only shown when a photo was
-  actually submitted; `SpeciesField.jsx` now forwards a ref so focus can move there
-  programmatically, matching the existing focus-management pattern for results.
-- Docs: new [docs/specs/species-classifier.md](docs/specs/species-classifier.md);
-  `docs/specs/species-mismatch-and-actionable-results.md` annotated (not rewritten) as
-  superseded-mechanism; `docs/DECISIONS.md`, `docs/DISCLAIMER.md`, `docs/API_CONTRACTS.md`
-  updated with the real final numbers.
-- **Validated**: ml-service 95 passed / 1 skipped, backend unaffected and re-confirmed green,
-  frontend lint clean + 29/29 tests + production build, plus live end-to-end verification
-  (real backend + ml-service + browser) — including catching and fixing a stale-process port
-  collision along the way (same class of issue as the M16 session; check `netstat` before
-  trusting a "green" verification if default ports might be occupied by another session).
+- **The Roboflow source dataset's CC BY 4.0 label was misleading.** Downloaded
+  `cow-and-mastitis-detection` (user provided their own free API key), converted the
+  object-detection export to this project's whole-image convention — 319 images initially
+  matched the Mastitis class. **Manually reviewed every one of them** (not a sample) rather
+  than trusting the label, and found: visible iStock/Shutterstock watermarks on several
+  images (scraped stock photography, not original work), at least 3 images that aren't cattle
+  at all (human hand close-ups, one a literal video screen-grab with a captions watermark),
+  and the `Mastitis-N` filenames turned out to be 140 files but only **48 unique photos** (3
+  rotated duplicate crops each, which would have leaked across train/val splits undetected).
+  **Stopped and asked the user at two separate decision points** rather than push through
+  silently: first when the scale of contamination became clear, then again after finding it
+  ran through the "clean-looking" bucket too, not just the messy one. User chose to accept the
+  residual risk and use the 47 confirmed-unwatermarked photos.
+- **47 images (~27x smaller than the other 3 classes) broke plain training** — Mastitis
+  scored 0.0 F1, completely unlearned by an unweighted loss. Fixed with class-weighted loss
+  (same pattern `species_classifier_train.py` already used for a smaller imbalance): real
+  result is 100% recall / ~41% precision on Mastitis, and a 2-4 point F1 cost to each of the
+  other 3 classes — a genuine, disclosed trade-off, not tuned away.
+- **Validated**: full ml-service suite 99/99, plus all 4 classes (Healthy/Lumpy/FMD/Mastitis)
+  verified live through the actual backend endpoint the frontend calls, not just ml-service
+  directly.
+- Docs carrying the real numbers and the full curation story: `data/cattle-images/SOURCE.md`
+  (most detail — read this first if picking this back up), `docs/DISCLAIMER.md`,
+  `models/REGISTRY.md`, `docs/specs/cow-mastitis-image-classifier.md`.
+- New infra left behind, reusable for a future dataset: `roboflow` SDK in
+  `requirements.txt`, `training/fetch_mastitis_data.py` (download+convert script — its
+  `ROBOFLOW_API_KEY` is in `ml-service/.env`, gitignored, still there for reuse).
 
-### What shipped
+## Next session
 
-- **Nothing has been committed yet this continuation** — the M16 work was already committed
-  and PR'd (#42) in the prior part of this session; this session's fix (species classifier +
-  retry button) is uncommitted on top of that on the same branch. Ask before committing —
-  probably as a second commit on the same PR, since it's fixing a bug reported against work
-  that PR already contains, but confirm with the user rather than assuming.
-- The species classifier's feature-extraction step is slow (~3-4 min for 5,894 images on
-  CPU) — if retraining it again, cache pooled features to a `.npz` file first (a scratch
-  script did this this session) rather than re-extracting for every calibration iteration.
-- Goat-as-cow (86.5% caught) and cat-as-dog/goat-as-dog (~81-83%) are the remaining weakest
-  mismatch pairs — real, disclosed, not chased down further. If revisited, more Goat/Dog
-  training photos (not just reweighting) would be the next lever.
-- Could not literally drive the file picker in the built-in browser tool to visually verify
-  the new retry-species button end-to-end (same limitation prior sessions noted) — covered
-  instead by two new Vitest tests using `user.upload()` simulation, plus curl-based
-  verification of the underlying species-classifier fix.
+- **Four separate, uncommitted changes are sitting on `main` right now** — ask before
+  committing, these are logically distinct and probably deserve separate PRs:
+  1. Species-mismatch classifier threshold fix + first animal-gate retune +
+     `GlobalExceptionHandler`/`DiagnosisControllerTest` fix — see "Full positive/negative
+     scenario pass" in `docs/DECISIONS.md`. `backend/src/test/java/.../DiagnosisControllerTest.java`
+     is still untracked (part of this one).
+  2. Result-card redesign + single-button change (`DiagnosisIntake.jsx`/`DiagnosisResult.jsx`/
+     `App.css`).
+  3. Per-species animal-gate threshold fix (diagram/chart false-accept bug) — new fixtures in
+     `tests/fixtures/non-animal-diagram-*.png`.
+  4. This session: Cow Mastitis 4th class — new `data/cattle-images/mastitis/` (47 images,
+     gitignored like the rest of `data/`), `training/fetch_mastitis_data.py`, retrained
+     `image_model.pt` (gitignored, not committed — whoever picks this up needs to retrain
+     locally or the artifact needs sharing some other way).
+- **The other Roboflow bucket (~168 images, `Picture-N`/`*-400x284` naming) was never
+  reviewed** — deliberately not used this session given how the first bucket turned out, but
+  not confirmed bad either. A real "is there more usable Mastitis data in here" question if
+  ever revisited — would need the same manual-review treatment before trusting any of it.
+- **The Mastitis precision problem (~41%) is a real, live cost** — worth watching if real
+  users start hitting false-positive Mastitis calls on Lumpy/FMD photos. More real, clean
+  Mastitis data (not more threshold tuning) is the actual fix if this needs revisiting.
+- Nothing else changed from earlier open items (Dog's ~13% combined block rate, Goat's
+  placeholder-image contamination, the "temp"-not-humanized Sheep explanation wording,
+  diagram/chart gate's own disclosed remaining gap) — still real, still not chased further.
 
 ## Blockers
 

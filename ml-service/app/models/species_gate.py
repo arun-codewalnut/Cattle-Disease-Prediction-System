@@ -31,8 +31,15 @@ from app.models import species_classifier
 _ANIMAL_CLASS_MAX_INDEX = 397
 
 # How much of the prediction has to land on animal classes for the photo to count as one.
-# Chosen by measurement — see is_animal_photo's docstring for the table.
-_MIN_ANIMAL_MASS = 0.30
+# Chosen by measurement — see is_animal_photo's docstring for the table. Per-species, not a
+# single global value: DOG's entire served dataset is skin-lesion close-ups, which this
+# generic gate finds much harder than a whole-body shot (see the M16-follow-up history below),
+# so DOG alone gets the lower, more lenient value. Every other species stays at the stricter
+# 0.30 — measured to cost them almost nothing (COW/CAT/GOAT's own false-reject rates move by
+# 1-2 points across the whole 0.25-0.30 range) while cutting non-animal false-accepts roughly
+# 3x (see the "diagram/chart-style images" entry below).
+_MIN_ANIMAL_MASS_DEFAULT = 0.30
+_MIN_ANIMAL_MASS_BY_SPECIES = {"DOG": 0.25}
 
 _weights = MobileNet_V2_Weights.DEFAULT
 _preprocess = _weights.transforms()
@@ -48,7 +55,7 @@ def _get_model() -> torch.nn.Module:
     return _model_cache
 
 
-def is_animal_photo(image_bytes: bytes) -> bool:
+def is_animal_photo(image_bytes: bytes, selected_species: str | None = None) -> bool:
     """True if the photo is, on balance, of an animal.
 
     Measured as the total probability mass over ImageNet's animal classes, not by whether an
@@ -63,11 +70,51 @@ def is_animal_photo(image_bytes: bytes) -> bool:
     | rule                     | non-animals let through | real photos rejected |
     |--------------------------|------------------------|----------------------|
     | any of top-5 is animal   | 2/12                   | 2/90                 |
-    | animal mass >= 0.30      | **0/12**               | 2/90                 |
+    | animal mass >= 0.30      | 0/12                   | 2/90                 |
 
-    Same cost in false rejections, and it stops everything the old rule let through. The 2%
-    that are rejected are extreme close-ups, which is why the caller's message asks for a
-    clearer photo of the animal.
+    **Retuned to 0.25 for DOG only (M16 follow-up, then made per-species — see below)**, after
+    full-scenario testing found this gate alone was rejecting 11.6% of real Dog photos — nearly
+    double the 2% figure above — because Dog's disease dataset is now entirely skin-lesion
+    close-ups (see `docs/specs/species-classifier.md`), which this generic gate finds harder
+    than a whole-body shot.
+
+    **A user-reported follow-up found the 0.25 value, applied globally, opened a different
+    gap**: diagram/chart-style images (architecture diagrams, dashboards, flowcharts — flat
+    vector graphics, not photos) were measured on a 50-image synthetic sample to pass this
+    gate 12% of the time at 0.25, vs 2% at 0.30 — e.g. a component-diagram screenshot uploaded
+    with Goat selected scored 0.261 and reached the (real, trained) health classifier, which
+    duly produced a confident-sounding "55% Unhealthy" for an image that was never a goat photo
+    at all. Raising the threshold back to 0.30 fixes that, but doing it globally would undo the
+    Dog fix above — so **the threshold is per-species**, not a single global value:
+
+    | species        | false-reject @ 0.25 | false-reject @ 0.30 | chosen |
+    |----------------|---------------------|----------------------|--------|
+    | DOG            | 5.2%                | 11.6%                | 0.25   |
+    | COW            | 2.0%                | 3.2%                 | 0.30   |
+    | CAT            | 0.8%                | 2.0%                 | 0.30   |
+    | GOAT           | 8.4%                | 9.6%                 | 0.30   |
+
+    Only Dog's own real photos are meaningfully sensitive to this knob (close-ups are
+    genuinely harder for a generic gate); the other three species pay 1-2 points either way,
+    so they get the stricter value and the much better (12% -> 2%) non-animal-diagram
+    rejection it buys. Verified the three original non-animal fixtures stay rejected at both
+    thresholds first (text-screenshot 0.21, car 0.13, table 0.07 — all comfortably below even
+    the lower 0.25) so neither the M15 nor the M16 regression reopens.
+
+    An unrecognized or missing `selected_species` (including symptom-only submissions, which
+    never call this) falls back to the stricter 0.30 — the safer default when there's no
+    Dog-specific reason to relax it.
+
+    **Remaining, disclosed gap**: even at 0.30, 2% of the synthetic diagram sample still
+    passed, and Dog specifically (which needs the lower threshold) still lets 12% of
+    diagram-style images through — this generic, off-the-shelf classifier was never trained to
+    recognize "diagram" as a concept, so a threshold on its animal-class mass can reduce but
+    not eliminate this category, the same structural ceiling `docs/specs/species-classifier.md`
+    already found and fixed for species-mismatch with a real trained classifier rather than a
+    threshold. Not chased further this pass — see that spec's pattern if this is revisited.
+    **Synthetic images (solid colours, random noise) remain a separately accepted, disclosed,
+    pre-existing gap** (see `docs/DECISIONS.md`) — this gate is for real accidental mismatched
+    uploads, not adversarial input.
 
     Undecodable bytes return True (fail open) — that case is already handled upstream as
     "uncertain" by predict_image_node's own PIL-decode step; this function should never be
@@ -85,7 +132,8 @@ def is_animal_photo(image_bytes: bytes) -> bool:
         probabilities = torch.softmax(model(tensor)[0], dim=0)
 
     animal_mass = float(probabilities[: _ANIMAL_CLASS_MAX_INDEX + 1].sum())
-    return animal_mass >= _MIN_ANIMAL_MASS
+    threshold = _MIN_ANIMAL_MASS_BY_SPECIES.get((selected_species or "").upper(), _MIN_ANIMAL_MASS_DEFAULT)
+    return animal_mass >= threshold
 
 
 # --------------------------------------------------------------------------------------

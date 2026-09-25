@@ -7,6 +7,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.validation.FieldError;
+import org.springframework.web.HttpMediaTypeNotSupportedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -50,6 +51,21 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(MissingServletRequestPartException.class)
     public ResponseEntity<ApiError> handleMissingPart(MissingServletRequestPartException ex) {
+        ApiError error = new ApiError("IMAGE_REQUIRED", "An image file is required.", null);
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(error);
+    }
+
+    // Found during full-scenario testing: a request to the multipart image endpoint with no
+    // multipart parts at all (some HTTP clients send plain form-urlencoded instead of
+    // multipart when there's nothing to attach) doesn't reach MissingServletRequestPartException
+    // above — Spring rejects the content type itself, before parameter binding runs, and that
+    // used to fall through to the catch-all below as a 500 leaking
+    // "Content-Type '...' is not supported". Same raw-exception-leak bug class as the handlers
+    // above; mapped to the same IMAGE_REQUIRED code since the practical cause is the same
+    // (nothing usable was attached). A real browser's multipart form submission never hits
+    // this — reproduced only by calling the API directly with a malformed request.
+    @ExceptionHandler(HttpMediaTypeNotSupportedException.class)
+    public ResponseEntity<ApiError> handleUnsupportedMediaType(HttpMediaTypeNotSupportedException ex) {
         ApiError error = new ApiError("IMAGE_REQUIRED", "An image file is required.", null);
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(error);
     }

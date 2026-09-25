@@ -868,3 +868,124 @@ system after the fix, real and disclosed in `docs/DISCLAIMER.md` and
 reported bug, rather than continuing to validate only the retained v1 fixture. The
 `dog-images-v1-superseded` folder is still kept, now for a different reason: it's real
 training data for the species classifier, not just a test fixture.
+
+## Full positive/negative scenario pass on `main`: two more real issues found and fixed (2026-09-24)
+
+Asked to check out `main`, pull latest, and run every positive/negative scenario across all
+five species — not a spec-driven milestone, a QA pass. Found two real issues neither prior
+session had measured.
+
+**Issue 1 — the calibration for the species-mismatch fix was measuring the wrong population
+for Dog.** `docs/specs/species-classifier.md`'s "same-species false-reject" numbers (DOG 5.5%)
+came from a held-out validation split that mixes `dog-images` (v2, close-ups — the only data
+ever actually served to real users) with `dog-images-v1-superseded` (v1, whole-body — training
+data only, never served). Measuring the full **v2-only** population directly — what a real Dog
+submission actually looks like — gives a materially different number: **8.2%** false-rejected
+as `species_mismatch`, not 5.5%. Not a new bug (the classifier and threshold are unchanged),
+but the previously-published number was optimistic. Corrected in
+`docs/specs/species-classifier.md` and `docs/DISCLAIMER.md` rather than left standing.
+
+**Issue 2 — the pre-existing "is this an animal" gate was rejecting 11.6% of real Dog photos**,
+nearly double its documented ~2% general rate, because Dog's entire served dataset became
+skin-lesion close-ups in the M16 dataset swap and this generic ImageNet-based gate (unchanged
+since M15) finds close-ups harder than whole-body shots — a real, compounding side effect of
+that swap that nothing had measured until this pass. Combined with issue 1, **nearly 1 in 5
+genuine Dog photo submissions were being refused outright** before ever reaching a diagnosis.
+
+**Decision**: lower `species_gate._MIN_ANIMAL_MASS` from 0.30 to 0.25. Verified against all
+three real non-animal fixtures before changing it — the text-screenshot fixture (0.21, the
+exact case M15 was built to catch) and the car/table fixtures (0.13/0.07) all stay
+comfortably below 0.25, so non-animal detection is unaffected. Result: Dog's `invalid_image`
+rate drops from 11.6% to 5.2% (total Dog block rate: 19.8% → 13.4%). Goat's rate also dropped
+slightly (8.0% → 7.1%) as a side benefit, since lowering this threshold can only reduce false
+rejects, never increase them, for every species at once.
+
+**Not pushed further**: 0.25 was chosen with real margin above the 0.21 screenshot fixture
+specifically so the M15 regression doesn't reopen; a lower value (0.20) would have cut Dog's
+rate to ~1% but let that exact fixture back through. Dog's remaining 13.4% total block rate
+(5.2% animal-gate + 8.2% species-mismatch) is a real, disclosed cost of an all-close-up
+dataset — not chased further this session; more/better Dog training data would be the next
+lever, not another threshold tweak.
+
+**Issue 3 — a raw exception leak on the image endpoint, same bug class fixed twice before.**
+`POST /api/diagnoses/image` with a non-multipart content type (some HTTP clients send
+`application/x-www-form-urlencoded` when there's nothing to attach — not reachable via a real
+browser's `FormData` or `curl`, but reachable by a client calling the API directly) fell
+through `GlobalExceptionHandler`'s catch-all as a raw `500` leaking
+`HttpMediaTypeNotSupportedException`'s message, the exact same class of bug this file already
+fixed twice (`MethodArgumentNotValidException`, `HttpMessageNotReadableException`). Added a
+handler mapping it to the existing `IMAGE_REQUIRED` `400` code, and added
+`DiagnosisControllerTest` — the **first real HTTP-layer test for this controller**; every
+existing test exercises `DiagnosisService` directly with a mocked ml-service client, so none
+of them ever touched `GlobalExceptionHandler` at all. That gap is why this went unnoticed.
+
+**Consequences**: `docs/specs/species-classifier.md` and `docs/DISCLAIMER.md` updated with the
+corrected v2-only Dog numbers and the retuned gate's real before/after numbers.
+
+## `species_gate._MIN_ANIMAL_MASS` made per-species: a diagram/chart false-accept the prior
+QA pass's fixture set never covered (2026-09-24, same day, direct user bug report with a
+screenshot)
+
+**What happened**: the previous entry's fix (retune `_MIN_ANIMAL_MASS` 0.30 → 0.25, applied
+globally, to fix Dog's false-reject rate) was itself verified only against the 3 existing
+non-animal fixtures (car/table/text-screenshot). The user then reported — with a screenshot —
+that selecting Goat and uploading an unrelated component-diagram image still produced a
+confident-looking "Likely: Unhealthy (55% confidence)" result. Reproduced directly: the
+diagram scored 0.261 animal-mass, above the new 0.25 threshold, so it sailed past the "is this
+even an animal" gate and reached the real Goat health classifier. Measured on a 50-image
+synthetic sample of diagrams/dashboards/flowcharts/network-topology images (a category no
+existing fixture represented): **12% pass at 0.25 vs 2% at 0.30** — a real, repeatable gap,
+not a one-off. This is the same lesson as the user's own framing: a QA pass that measures real
+positive/negative *photos* but never constructs a synthetic-diagram negative case will not
+catch this, no matter how thorough the photo-based part of it is.
+
+**Decision**: make the threshold per-species instead of a single global value —
+`_MIN_ANIMAL_MASS_BY_SPECIES = {"DOG": 0.25}`, every other species (and the no-species
+default) uses 0.30. Measured first, not guessed: only Dog's real photos are meaningfully
+sensitive to this knob (5.2% vs 11.6% false-reject at 0.25 vs 0.30); Cow/Cat/Goat each move
+only 1-2 points across the same range (Cow 2.0%→3.2%, Cat 0.8%→2.0%, Goat 8.4%→9.6%). Giving
+Dog alone the lower value keeps its M16 fix completely intact while every other species gets
+the ~6x-better (12%→2%) diagram-rejection the stricter value buys, at a cost each of them can
+absorb.
+
+**Alternatives considered**:
+- *Raise the global threshold back to 0.30.* Rejected — directly undoes the previous entry's
+  fix; Dog's false-reject rate would return to 11.6% (nearly 1 in 5 genuine Dog submissions
+  refused, combined with the species-mismatch check).
+- *A secondary "flat-color / vector-graphic" heuristic* (fraction of an image's pixels
+  covered by its 8 most common colors after a 128x128 downsample) — diagrams scored 0.85-1.00,
+  looked like a clean separator against a 60-photo-per-species sample. **Measured against the
+  full real dataset (4,616 photos) before relying on it, and rejected**: real photos —
+  particularly Cat's pre-cropped dermatology annotation images and a handful of corrupted/
+  placeholder images already contaminating the Goat dataset (see below) — reach the same
+  0.85-1.00 range, up to a literal 1.000 (single-color images). A hard cutover on this signal
+  would have false-rejected real submissions in exactly the cases it was meant to protect.
+  Same root lesson as `species-classifier.md`: a cheap statistical proxy that looks separated
+  on a small sample can still not transfer to the real population.
+- *The species classifier's own confidence as an "is this anything recognizable" signal* —
+  measured (not assumed): it was, if anything, *more* confident on synthetic diagrams (mean
+  top-1 0.62) than on the existing real non-animal fixtures (0.38-0.50), the classic
+  overconfident-on-out-of-distribution-input failure mode of an uncalibrated softmax. Rejected
+  for the same reason as above — no clean separation, measured directly rather than assumed.
+
+**Consequences**: `docs/specs/M15-image-diagnosis-quality-gate.md` (Follow-up 3),
+`docs/DISCLAIMER.md`, and `app/models/species_gate.py`'s own docstring all carry the same
+measured before/after table. Two new fixtures
+(`tests/fixtures/non-animal-diagram-flowchart.png`, `non-animal-diagram-dashboard.png`) and an
+end-to-end regression test reproducing the exact (Goat + diagram) case were added so this
+category has real coverage going forward, not just the 3 fixtures the bug slipped past.
+**Disclosed, not eliminated**: even at 0.30, 2% of the diagram sample still passes, and Dog
+specifically still lets ~12% through — a real ceiling on what a generic, not-trained-on-this-
+project classifier's class-mass threshold can catch, the same class of root cause
+`species-classifier.md` already found and fixed differently (with a real trained classifier)
+for species-mismatch. Not chased further this pass.
+
+**Also found, not fixed this pass — flagged separately**: while measuring the full real
+dataset for the rejected color-flatness heuristic above, found 14 confirmed (plus 1
+unreadable/corrupted file) placeholder images in `ml-service/data/goat-images/` — tiny 24x24
+solid-black images, almost certainly failed downloads saved as broken-image icons rather than
+real goat photos, currently being trained on as real "healthy"/"unhealthy" ground truth
+(~1.6% of the Goat dataset). A real, disclosed data-quality issue, plausibly part of why
+Goat's own accuracy (80.1%, the lowest of the four species) and confidence readings are the
+least stable — not confirmed as the cause, and not cleaned up or retrained on this pass
+(out of scope for a UI-reported gate bug); flagged as a follow-up.
