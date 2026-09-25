@@ -24,30 +24,6 @@ Agent-context files: [AGENTS.md](AGENTS.md) (canonical), [CLAUDE.md](CLAUDE.md) 
 entry point), [STATE.md](STATE.md) (current progress), [HANDOFF.md](HANDOFF.md) (session
 handoff notes). Each service has its own scoped `AGENTS.md`/`CLAUDE.md`.
 
-## Why there's no database
-
-Short answer: there used to be two (Postgres, Chroma), and removing both changed nothing a
-user could see. Measured before deleting them, not assumed:
-
-- **Postgres was write-only** — two `save()` calls, zero queries, no history endpoint — but it
-  was still a hard startup dependency (the backend didn't boot without it), and a failed save
-  would have turned a successful diagnosis into a `500`. All cost, no payoff.
-- **Chroma (a vector database) was indexing 10.8 KB of markdown** — six reference documents —
-  that both call sites already fetched by an exact key, never a similarity search. It also
-  cost a dependency (`chroma-hnswlib`) with no Python 3.13 wheel, which is why this service's
-  tests used to need Docker.
-- Symptom diagnosis was 6/6 correct, image diagnosis 5/5, escalation correct, and the
-  non-animal photo gate still worked — all measured with both databases absent, before this
-  was made permanent.
-
-**What this means in practice**: `backend` is fully stateless (no JPA/Flyway/datasource — see
-[backend/AGENTS.md](backend/AGENTS.md)), `ml-service` reads its reference docs straight off
-disk, and every test suite (including CI) runs with no database service to start, wait for, or
-tear down. The real cost is that **nothing is persisted** — there's no diagnosis history; every
-request is stateless in, stateless out. If that's ever needed again, it comes back as its own
-feature with a real read path, not by reviving this. Full measurement and reasoning:
-[docs/specs/remove-databases.md](docs/specs/remove-databases.md).
-
 ## Prerequisites
 
 There are two ways to run this (Option A / Option B below) and they need different things.
