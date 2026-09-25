@@ -10,7 +10,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
-# Hosted platforms (Railway etc.) inject PORT; default to 8000 locally. Not "::" — uvicorn
-# then listens IPv6-only and IPv4 traffic can't reach it. docker-compose.yml overrides this
-# with --reload for local dev.
-CMD ["sh", "-c", "exec uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}"]
+# Hosted platforms (Railway etc.) inject PORT; default to 8000 locally. --host "" listens on
+# every interface over both IPv4 and IPv6: Railway's private network (the backend calls
+# http://ml-service.railway.internal:8000) resolves to IPv6, so 0.0.0.0 alone is unreachable
+# there, and "::" alone is IPv6-only, which breaks plain IPv4 clients. docker-compose.yml
+# overrides this with --reload for local dev.
+CMD ["sh", "-c", "exec uvicorn app.main:app --host '' --port ${PORT:-8000}"]
