@@ -6,53 +6,7 @@ it only ever ran in Docker. It reads files now (docs/specs/remove-databases.md),
 everywhere — and the behaviour it locks in is the behaviour a farmer actually sees.
 """
 from app.agent.graph import REPORTABLE_DISEASES
-from app.rag.retrieval import DIAGNOSIS_TO_DOC_SLUG, get_precautions, retrieve
-
-
-def test_retrieve_returns_the_matching_disease_document():
-    results = retrieve("Foot and Mouth Disease", k=3)
-
-    assert len(results) > 0
-    assert all(r["source"] == "foot-and-mouth-disease" for r in results)
-    assert all({"text", "source"} <= r.keys() for r in results)
-
-
-def test_retrieve_different_diseases_return_different_sources():
-    fmd = retrieve("Foot and Mouth Disease", k=1)
-    mastitis = retrieve("Mastitis", k=1)
-
-    assert fmd[0]["source"] == "foot-and-mouth-disease"
-    assert mastitis[0]["source"] == "mastitis"
-
-
-def test_retrieve_cannot_surface_a_different_disease():
-    # Stricter than the similarity search this replaced, and deliberately so: an exact
-    # lookup can't drag in a thematically-similar neighbour's text.
-    for diagnosis, slug in DIAGNOSIS_TO_DOC_SLUG.items():
-        for chunk in retrieve(diagnosis, k=5):
-            assert chunk["source"] == slug
-
-
-def test_retrieve_unknown_diagnosis_returns_empty_list():
-    assert retrieve("Not A Real Disease") == []
-
-
-def test_retrieve_missing_docs_directory_returns_empty_list(tmp_path):
-    assert retrieve("Mastitis", docs_dir=tmp_path / "does-not-exist") == []
-
-
-def test_retrieve_respects_k():
-    assert len(retrieve("Foot and Mouth Disease", k=1)) == 1
-
-
-def test_retrieve_never_surfaces_precautions_or_next_steps_chunks():
-    # M10 put precautions/next-steps in the same documents retrieve() reads — they must stay
-    # invisible to it, since that content is never meant to feed the LLM-grounded
-    # explanation prompt (see docs/specs/M10-precautions-next-steps.md).
-    for diagnosis in ("Foot and Mouth Disease", "Lumpy Skin Disease", "Mastitis"):
-        for chunk in retrieve(diagnosis, k=10):
-            assert "Contact your veterinarian" not in chunk["text"]
-            assert "Isolate the affected animal" not in chunk["text"]
+from app.rag.retrieval import DIAGNOSIS_TO_DOC_SLUG, get_precautions
 
 
 def test_get_precautions_returns_content_for_known_disease():

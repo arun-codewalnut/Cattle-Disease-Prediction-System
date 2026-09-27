@@ -22,20 +22,16 @@
 - **CORS**: allowed origins come from `CORS_ALLOWED_ORIGINS` (comma-separated, default
   `http://localhost:5173`) in `app/main.py` — set it to the deployed frontend's URL.
 - **Structure**: `app/api/` = FastAPI routers, `app/agent/` = LangGraph graph + tools,
-  `app/models/` = ML inference wrappers, `app/rag/` = retrieval over
-  `data/veterinary-reference/*.md`. Still RAG — the explain node grounds its prompt in
-  retrieved documents; only the retrieval source is the filesystem rather than a vector
-  store. No ingest step: edit a document, restart the service.
+  `app/models/` = ML inference wrappers, `app/rag/` = precautions/next-steps lookup from
+  `data/veterinary-reference/*.md` (exact match by diagnosis, no vector store). No ingest
+  step: edit a document, restart the service.
 - **Tests**: `pytest` from `ml-service/` — the **whole** suite runs natively, no Docker and
   no skips. The public API's behaviour (every status/error code in the spec) is covered by
   `tests/test_public_api.py`. Keep unit tests here; cross-service flow tests go in the root `tests/e2e/`.
 - **Correlation ID**: read from `request.state.correlation_id` (set by
   `app/middleware.py`) — always include it when logging.
-- **LLM provider**: `app/agent/llm.py`'s `get_llm()` is the *only* place that should know
-  which provider is in use — never instantiate `ChatOllama` (or any provider) directly
-  elsewhere. Controlled by `LLM_PROVIDER`/`OLLAMA_BASE_URL`/`OLLAMA_MODEL` in `.env.example`.
-  Ollama isn't installed in this dev environment by default — the `explain` node falls back
-  to a deterministic template whenever the LLM call fails for any reason, so the app works
-  fully without it. To see real LLM-generated explanations locally: install
-  [Ollama](https://ollama.com/download), run `ollama pull llama3.1`, then `ollama serve`
-  (or just launch the Ollama app) before starting `ml-service`.
+- **Explanations**: the `explain` node always builds a deterministic template from the
+  model's own output (`_template_explanation` in `app/agent/graph.py`) — no LLM. An optional
+  Ollama path used to exist but never ran anywhere and was removed
+  ([docs/specs/remove-ollama.md](../docs/specs/remove-ollama.md)). Adding an LLM back is a
+  new spec, not a config switch.

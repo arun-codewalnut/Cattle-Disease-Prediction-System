@@ -103,13 +103,11 @@ disclosed in `docs/DISCLAIMER.md`, not glossed over.
 
 ### Redownload
 
-`roboflow` isn't in `requirements.txt` — same "on-demand, not a permanent app dependency"
-convention as `kagglehub` for the other 3 classes' datasets. Install it, add
-`ROBOFLOW_API_KEY` to `ml-service/.env` (a free Roboflow account's own API key — see its
+`roboflow` (like `kagglehub` for the other 3 classes) is installed by `requirements.txt`.
+Add `ROBOFLOW_API_KEY` to `ml-service/.env` (a free Roboflow account's own API key — see its
 account settings page), then:
 
 ```bash
-pip install roboflow
 python -m training.fetch_mastitis_data   # downloads + converts into this folder
 ```
 

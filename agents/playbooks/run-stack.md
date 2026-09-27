@@ -8,16 +8,9 @@
    - Starts: `ml-service` (FastAPI, port 8000 — also serves the public `/api/diagnoses*`
      endpoints the UI calls) and `frontend` (Vite dev server, port 5173). No databases — both were removed, see
      `docs/specs/remove-databases.md`.
-3. **One-time, required**: train the Cow symptom model. Model artifacts are gitignored, so a
-   fresh clone has none and *every* diagnosis returns `503 MODEL_NOT_TRAINED`. This is the
-   only model that needs no downloaded dataset; the bind mount puts the artifact in
-   `ml-service/models/` on the host, so it survives `make down` and rebuilds:
-   ```bash
-   docker compose run --rm ml-service python -m training.generate_synthetic_data
-   docker compose run --rm ml-service python -m training.symptom_model_train
-   ```
-   Other models (Sheep symptoms, cattle/cat/dog images) each need a real dataset first —
-   see the matching `ml-service/data/*/SOURCE.md` and README's "Training/retraining a model".
+3. **No training step**: the trained models are committed in `ml-service/models/`, so a
+   fresh clone diagnoses straight away. Retraining is optional — README's "Retraining
+   models" section and each `ml-service/data/*/SOURCE.md`.
 4. Verify each service:
    - `ml-service`: `curl http://localhost:8000/health` → `{"status":"ok"}`
    - `frontend`: open `http://localhost:5173`

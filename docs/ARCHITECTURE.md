@@ -6,8 +6,8 @@ flowchart TD
     FE -->|POST /api/diagnoses, /api/diagnoses/image<br/>X-Correlation-Id| API[Python FastAPI ml-service<br/>public API: validation, species rules]
     API -->|in-process call| ML[LangGraph agent]
     ML --> MODELS[XGBoost / CNN models]
-    ML --> RAG[RAG over markdown<br/>vet knowledge base]
-    API -->|escalate| NOTIFY[Email / WhatsApp<br/>free tier]
+    ML --> DOCS[Reference docs in markdown<br/>precautions & next steps]
+    API -.->|escalate — planned, M7| NOTIFY[Email / WhatsApp<br/>not built yet]
 ```
 
 ## Diagnosis request flow
@@ -23,11 +23,8 @@ sequenceDiagram
     FE->>API: POST /api/diagnoses (X-Correlation-Id)
     API->>API: validate request, species rules
     API->>ML: run agent in-process (worker thread)
-    ML->>ML: intake -> route -> predict -> explain
-    ML-->>API: { diagnosis, confidence, explanation, recommended_action }
-    alt recommended_action == escalate
-        API->>U: notify (email/WhatsApp)
-    end
+    ML->>ML: intake -> route -> predict -> explain (template) -> precautions -> recommend
+    ML-->>API: { diagnosis, confidence, explanation, recommended_action, precautions, next_steps }
     API-->>FE: diagnosis result (camelCase)
     FE-->>U: show result + confidence
 ```
@@ -41,6 +38,11 @@ sequenceDiagram
   its place — see [specs/remove-databases.md](specs/remove-databases.md). The service is
   stateless.
 - **React (frontend)**: symptom/image intake UI, results display.
+
+Escalation today means `recommendedAction: "escalate_to_vet"` shown prominently in the UI.
+Sending an email/WhatsApp alert is roadmap item M7 and isn't built. Explanations are a
+deterministic template built from the model's own output — there is no LLM (an optional
+Ollama path was removed: [specs/remove-ollama.md](specs/remove-ollama.md)).
 
 There used to be a third service — a stateless Java/Spring Boot gateway between the two —
 merged into `ml-service` so there's one server language and no service-to-service hop; see

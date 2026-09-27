@@ -748,6 +748,11 @@ _Last updated: 2026-09-27 (Java backend merged into ml-service — two services 
   - `docs/DISCLAIMER.md`, `models/REGISTRY.md`, `data/cattle-images/SOURCE.md` all carry the
     full, real numbers and the curation story — nothing about this shipped quietly.
 
+- **Ollama removed; complete `requirements.txt`; `.env.example` per folder; README rewrite**
+  (2026-09-27, same branch). `explain` is template-only (spec
+  [docs/specs/remove-ollama.md](docs/specs/remove-ollama.md) — output byte-identical on 15
+  sampled diagnoses); `requirements.txt` now covers everything incl. `kagglehub`/`roboflow`,
+  verified in a fresh venv; `tests/e2e/.env.example` added; leftover `backend/` removed.
 - **Java backend merged into `ml-service`** (2026-09-27, branch
   `feat/merge-backend-into-ml-service`, spec
   [docs/specs/merge-backend-into-ml-service.md](docs/specs/merge-backend-into-ml-service.md)).
@@ -783,7 +788,7 @@ See [docs/DECISIONS.md](docs/DECISIONS.md) for the full log. Summary:
 - ~~Polyglot split: Java (Spring Boot) for backend/business logic~~ — **superseded 2026-09-27**:
   the Java backend was merged into `ml-service`; two services now. Originally: Python (FastAPI + LangGraph)
   for ML/agent, React for UI — matches existing skills, keeps ML ecosystem in Python.
-- Free/open-source only: Ollama (local LLM) or free API tiers, Chroma (vector DB), Flyway
-  (migrations), free-tier hosting (Render/Railway/Vercel/Supabase).
+- Free/open-source only, free-tier hosting. (Ollama, Chroma and Flyway were all used at some
+  point and later removed — see `docs/DECISIONS.md`.)
 - Agent orchestration lives in `ml-service` (LangGraph is Python-native); since 2026-09-27
   so do the public `/api/diagnoses*` endpoints, which call the agent in-process.

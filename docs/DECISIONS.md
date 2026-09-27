@@ -1065,3 +1065,33 @@ entries above still describe the Java backend as it was — that's intended. The
 `VITE_API_BASE_URL` must point at `ml-service`'s public URL, and `ml-service` needs
 `CORS_ALLOWED_ORIGINS` set to the frontend's URL. If auth or persistence is ever needed, it
 gets added to `ml-service` (or argued for as a new service in a new entry here).
+
+## Ollama LLM path removed; one `requirements.txt` for everything (2026-09-27)
+
+**Context**: the `explain` node tried a local Ollama LLM first and fell back to a
+deterministic template on any failure. Ollama was never installed or running in any
+environment this project uses (local dev, CI, Docker, Railway), so every explanation anyone
+has seen came from the template — while the repo still carried `langchain-ollama`, three
+`LLM_*`/`OLLAMA_*` settings, a retrieval call that only fed the unused prompt, and setup docs
+telling people to install Ollama.
+
+**Decision**: make the template the only path. Delete `app/agent/llm.py`, `retrieve()` and
+the tests of the LLM path; drop `langchain-ollama` and the Ollama settings. Measured, not
+assumed: 15 representative diagnoses (symptom, photo and non-animal fixtures) produce
+byte-identical output before and after. LangGraph stays — it's the diagnosis pipeline, not
+an LLM integration. Spec: [docs/specs/remove-ollama.md](specs/remove-ollama.md).
+
+In the same pass, `ml-service/requirements.txt` became the single, complete install: it now
+lists every package the code imports directly (`numpy`, `pillow` were only there
+transitively) plus the dataset download tools (`kagglehub`, `roboflow`) that used to be
+"install on demand". Verified in a brand-new virtual environment: one
+`pip install -r requirements.txt`, then the full test suite and the app run with nothing
+else installed.
+
+**Why**: an optional path that never runs is untested in practice and misleads anyone
+reading the setup docs. A single install command is what a new contributor expects.
+
+**Consequences**: the Docker image is somewhat larger (it installs the dataset download
+tools too) — accepted for one source of truth. If LLM-written explanations are wanted later,
+that's a new spec with the DISCLAIMER constraints (no invented facts, no percentage in the
+text) re-checked against a real model.

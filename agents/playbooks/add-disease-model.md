@@ -4,7 +4,8 @@
    document the source in a `SOURCE.md` next to it).
 2. **Train**: write a training script in `ml-service/training/<disease-name>_train.py`.
    Log the run with MLflow. Save the artifact to `ml-service/models/<disease-name>_v1.pkl`
-   (or `.pt`/`.onnx`), gitignored — document versions in `ml-service/models/REGISTRY.md`.
+   (or `.pt`/`.onnx`) and commit it (model artifacts are tracked in git so a fresh clone and
+   every deployment have them) — document versions in `ml-service/models/REGISTRY.md`.
 3. **Serve**: add an inference wrapper in `ml-service/app/models/<disease_name>.py`, expose
    it as a tool the LangGraph agent can call from `ml-service/app/agent/`.
 4. **Route**: update the agent graph so it knows when to call this new tool (e.g. based on

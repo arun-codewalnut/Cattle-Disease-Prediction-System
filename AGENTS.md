@@ -28,7 +28,7 @@ concrete examples, "not in scope," and checkable acceptance criteria. Mirror the
 | Service | Stack | Responsibility | Conventions |
 |---|---|---|---|
 | `frontend/` | React (Vite) | UI for symptom/image intake, results display | [frontend/AGENTS.md](frontend/AGENTS.md) |
-| `ml-service/` | Python + FastAPI + LangGraph | Public API (`/api/diagnoses*`: request validation, species rules), ML models, agent orchestration, RAG over local markdown (stateless — no database) | [ml-service/AGENTS.md](ml-service/AGENTS.md) |
+| `ml-service/` | Python + FastAPI + LangGraph | Public API (`/api/diagnoses*`: request validation, species rules), ML models, agent orchestration, precautions/next steps from local markdown (stateless — no database) | [ml-service/AGENTS.md](ml-service/AGENTS.md) |
 
 Always read the relevant service-level `AGENTS.md` before making changes inside that folder —
 this root file only covers what's shared across both. For "where do I start / where does

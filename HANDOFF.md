@@ -30,6 +30,27 @@ for every status/error code): `docs/specs/merge-backend-into-ml-service.md`. Dec
   to the two-service layout. Historical specs in `docs/specs/` and older DECISIONS entries
   deliberately still describe the Java backend.
 
+### Same session, second pass — Ollama removed, one install, .env examples, README rewrite
+
+- **Ollama/LLM path removed** (spec `docs/specs/remove-ollama.md`): `app/agent/llm.py`,
+  `retrieve()`, `langchain-ollama` and the `LLM_*`/`OLLAMA_*` settings are gone; `explain`
+  always uses the template. Verified byte-identical output on 15 representative diagnoses
+  before/after (the template was already the only path that ran anywhere).
+- **`ml-service/requirements.txt` is the complete install** — now also `numpy`, `pillow`
+  (imported directly, were only transitive), `kagglehub`, `roboflow`. Verified with a
+  brand-new venv: one `pip install -r requirements.txt`, `pip check` clean, full suite passes.
+  Windows gotcha found doing that: a deeply nested clone path breaks the torch install
+  (260-char path limit) — documented in README.
+- **`.env.example` everywhere settings are read**: `ml-service/` (`CORS_ALLOWED_ORIGINS`,
+  `ROBOFLOW_API_KEY`, `PORT`), `frontend/` (`VITE_API_BASE_URL`), and new `tests/e2e/`
+  (`FRONTEND_URL`, `ML_SERVICE_URL`, loaded by `playwright.config.js` via Node's
+  `process.loadEnvFile`).
+- **Leftover `backend/` folder deleted** from disk (it only held an ignored `.env`).
+- **README rewritten** for someone who just cloned the repo: what it does, species table,
+  what to install (Python 3.13 + Node 22.12+), quick start, `.env` reference, API, tests,
+  retraining. Architecture diagram no longer shows email/WhatsApp notifications as built
+  (M7 is still open).
+
 ## Next session
 
 - **Railway follow-up once this merges** (dashboard, owner action — not doable from the repo):
