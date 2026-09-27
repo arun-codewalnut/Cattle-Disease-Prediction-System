@@ -50,6 +50,12 @@ for every status/error code): `docs/specs/merge-backend-into-ml-service.md`. Dec
   what to install (Python 3.13 + Node 22.12+), quick start, `.env` reference, API, tests,
   retraining. Architecture diagram no longer shows email/WhatsApp notifications as built
   (M7 is still open).
+- **One-command dataset download**: `python -m training.fetch_datasets` pulls every Kaggle
+  dataset into the right `data/` folders (skips folders that already have files; long-path
+  safe on Windows; drops `desktop.ini`-style clutter). Verified: into an empty folder it
+  produces the same file names as the existing `data/` for all 13 class folders, and the
+  Sheep CSV is byte-identical. `goat-images/SOURCE.md` was never pushed (missing
+  `.gitignore` exception) — fixed.
 
 ## Next session
 

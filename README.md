@@ -267,7 +267,7 @@ progress), [HANDOFF.md](HANDOFF.md) (latest session notes).
 
 | Suite | Command | Notes |
 |---|---|---|
-| ml-service (pytest, 135 tests) | `cd ml-service` then `.venv\Scripts\python -m pytest` | Runs natively. Tests that need the training photos skip themselves when the datasets aren't downloaded. |
+| ml-service (pytest, 135 tests) | `cd ml-service` then `.venv\Scripts\python -m pytest` | Runs natively. Tests that need the training photos skip themselves until you download the datasets (`python -m training.fetch_datasets`). |
 | frontend (Vitest, 29 tests) | `cd frontend` then `npm test` | `npm run lint` and `npm run build` are also checked in CI. |
 | end-to-end (Playwright) | start the app, then `cd tests/e2e`, `npm install`, `npx playwright install chromium` (once), `npx playwright test` | Checks both services respond and the UI loads. |
 
@@ -276,16 +276,29 @@ suites on every pull request. More: [docs/TESTING.md](docs/TESTING.md).
 
 ## Retraining models
 
-Not needed to run the app — only if you want to rebuild a model from its data. The training
-datasets are **not** in the repo (they're large); each `ml-service/data/*/SOURCE.md` names
-its source and license. All download tools are already installed by `requirements.txt`.
+Not needed to run the app — only if you want to rebuild a model from its data.
 
-1. **Download the data.** The Kaggle datasets download anonymously with `kagglehub` — each
-   `SOURCE.md` has the exact `kagglehub.dataset_download(...)` call and which folders to copy
-   where. The Cow Mastitis photos need `ROBOFLOW_API_KEY` in `ml-service/.env`, then
-   `.venv\Scripts\python -m training.fetch_mastitis_data` (read
-   [its SOURCE.md](ml-service/data/cattle-images/SOURCE.md) first — those photos were
-   hand-reviewed after download).
+The training datasets are **not** in the repo (about 800 MB of photos). Git only carries the
+small files in `ml-service/data/`: the reference documents the app uses, and a `SOURCE.md`
+per dataset naming its source and license. You download the datasets yourself, with one
+command:
+
+1. **Download the datasets**, from `ml-service/`:
+
+   ```powershell
+   .venv\Scripts\python -m training.fetch_datasets     # macOS/Linux: .venv/bin/python -m training.fetch_datasets
+   ```
+
+   This downloads the Cow, Cat, Dog and Goat photos and the Sheep symptom data from Kaggle
+   (no account needed, about 800 MB) and puts each class in the folder the training scripts
+   expect. Folders that already have files are skipped, so it's safe to re-run; downloads
+   are cached in `~/.cache/kagglehub`.
+
+   **Cow Mastitis photos are separate**: they need a free Roboflow key
+   (`ROBOFLOW_API_KEY` in `ml-service/.env`), then
+   `.venv\Scripts\python -m training.fetch_mastitis_data`. Read
+   [cattle-images/SOURCE.md](ml-service/data/cattle-images/SOURCE.md) first — the photos in
+   use were hand-reviewed after download, and a fresh download includes mislabelled images.
 2. **Train**, from `ml-service/`:
 
 | Model | Command | Data needed |

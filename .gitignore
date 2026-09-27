@@ -34,6 +34,9 @@ ml-service/data/dog-images/*
 !ml-service/data/sheep-symptoms/
 ml-service/data/sheep-symptoms/*
 !ml-service/data/sheep-symptoms/SOURCE.md
+!ml-service/data/goat-images/
+ml-service/data/goat-images/*
+!ml-service/data/goat-images/SOURCE.md
 # ml-service/models/*.pkl
 # ml-service/models/*.pt
 # ml-service/models/*.onnx
