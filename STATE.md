@@ -3,16 +3,20 @@
 Living snapshot of project state. Update this whenever you finish a meaningful chunk of work —
 this is what an agent (or you) reads first when resuming.
 
-_Last updated: 2026-09-24 (session 18 — Cow Mastitis added as a 4th image class)_
+_Last updated: 2026-09-27 (Java backend merged into ml-service — two services now)_
 
 ## Known gaps
 
-- `springdoc-openapi` Spring-Boot-4 compatibility unverified — not added to `backend/pom.xml`
-  yet. See [backend/AGENTS.md](backend/AGENTS.md).
+- `docs/api/ml-service.openapi.json` not generated/committed yet (FastAPI serves it live at
+  `/openapi.json`). The old `springdoc-openapi` gap went away with the Java backend.
 - No `LICENSE` file yet — open decision, not yet made.
 - `tests/e2e` browsers not installed yet (`npx playwright install --with-deps chromium`,
   one-time) — smoke test scaffold works, hasn't been run against a live `make up` stack yet.
-- ~~Backend tests need a real Postgres~~ — no longer true, the backend is stateless.
+- ~~Backend tests need a real Postgres~~ — moot: the Java backend is gone (merged into
+  `ml-service`, 2026-09-27); its behaviour is covered by `ml-service/tests/test_public_api.py`.
+- **Railway follow-up after this branch merges** (dashboard, owner action): delete the `java`
+  service, point the frontend's `VITE_API_BASE_URL` at `ml-service`'s public URL, and set
+  `CORS_ALLOWED_ORIGINS` on `ml-service` to the frontend's URL.
 - **Cat and Dog diagnoses return no precautions or next steps.** `DIAGNOSIS_TO_DOC_SLUG`
   has no entry for Ringworm, Mange, Scabies, Flea Allergy, Canine Distemper, Parvovirus or
   Kennel Cough, so `get_precautions()` returns empty lists for every companion-animal
@@ -744,6 +748,25 @@ _Last updated: 2026-09-24 (session 18 — Cow Mastitis added as a 4th image clas
   - `docs/DISCLAIMER.md`, `models/REGISTRY.md`, `data/cattle-images/SOURCE.md` all carry the
     full, real numbers and the curation story — nothing about this shipped quietly.
 
+- **Ollama removed; complete `requirements.txt`; `.env.example` per folder; README rewrite**
+  (2026-09-27, same branch). `explain` is template-only (spec
+  [docs/specs/remove-ollama.md](docs/specs/remove-ollama.md) — output byte-identical on 15
+  sampled diagnoses); `requirements.txt` now covers everything incl. `kagglehub`/`roboflow`,
+  verified in a fresh venv; `tests/e2e/.env.example` added; leftover `backend/` removed.
+- **Java backend merged into `ml-service`** (2026-09-27, branch
+  `feat/merge-backend-into-ml-service`, spec
+  [docs/specs/merge-backend-into-ml-service.md](docs/specs/merge-backend-into-ml-service.md)).
+  `backend/` (Spring Boot, ~600 lines of stateless gateway) deleted; its two public endpoints
+  `POST /api/diagnoses` and `POST /api/diagnoses/image` now live in
+  `ml-service/app/api/diagnoses.py`, calling the agent in-process — same paths, status codes,
+  camelCase fields and error codes, so the frontend only changed its default base URL to
+  `http://localhost:8000`. CORS via `CORS_ALLOWED_ORIGINS`; `GET /health` is the only health
+  check (`/actuator/health` gone); `ML_SERVICE_ERROR`/`ML_SERVICE_UNAVAILABLE` retired (agent
+  errors like `MODEL_NOT_TRAINED` reach the caller directly). Four deliberate differences from
+  the Java behaviour are listed in the spec and `docs/DECISIONS.md`. CI now has two jobs
+  (frontend, ml-service); the Java JUnit behaviour is covered by
+  `ml-service/tests/test_public_api.py`. Docs updated to the two-service layout.
+
 ## In Progress
 
 Nothing in progress.
@@ -762,9 +785,10 @@ Full roadmap: [docs/ROADMAP.md](docs/ROADMAP.md).
 
 See [docs/DECISIONS.md](docs/DECISIONS.md) for the full log. Summary:
 
-- Polyglot split: Java (Spring Boot) for backend/business logic, Python (FastAPI + LangGraph)
+- ~~Polyglot split: Java (Spring Boot) for backend/business logic~~ — **superseded 2026-09-27**:
+  the Java backend was merged into `ml-service`; two services now. Originally: Python (FastAPI + LangGraph)
   for ML/agent, React for UI — matches existing skills, keeps ML ecosystem in Python.
-- Free/open-source only: Ollama (local LLM) or free API tiers, Chroma (vector DB), Flyway
-  (migrations), free-tier hosting (Render/Railway/Vercel/Supabase).
-- Agent orchestration lives in `ml-service` (LangGraph is Python-native); Java stays a
-  conventional REST backend that calls into it.
+- Free/open-source only, free-tier hosting. (Ollama, Chroma and Flyway were all used at some
+  point and later removed — see `docs/DECISIONS.md`.)
+- Agent orchestration lives in `ml-service` (LangGraph is Python-native); since 2026-09-27
+  so do the public `/api/diagnoses*` endpoints, which call the agent in-process.

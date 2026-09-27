@@ -12,12 +12,12 @@ export const SPECIES_OPTIONS = [
 // M12 follow-up (docs/specs/M12-sheep-disease-detection.md): Sheep now has its own real,
 // PPR-trained symptom model — no longer a cow-model approximation. Cat/Dog/Goat's symptom
 // vocabulary still doesn't apply at all — SYMPTOM diagnosis stays blocked for them, enforced
-// backend-side too (DIAGNOSIS_NOT_SUPPORTED_FOR_SPECIES on that endpoint).
+// server-side too (DIAGNOSIS_NOT_SUPPORTED_FOR_SPECIES on that endpoint).
 export const DIAGNOSIS_SUPPORTED_SPECIES = ['COW', 'SHEEP']
 
 // M13/M14 follow-up: Cat and Dog have their own real, trained IMAGE models (see
 // ml-service/app/models/cat_image_model.py, dog_image_model.py) — image-based diagnosis works
-// for them even though symptom-based diagnosis (above) doesn't. Backend enforces this too.
+// for them even though symptom-based diagnosis (above) doesn't. ml-service enforces this too.
 // M16: Goat joins the same set — its model is real but binary only (Healthy/Unhealthy, no
 // disease-specific goat image data exists anywhere — see ml-service/app/models/goat_image_model.py).
 export const IMAGE_ONLY_SUPPORTED_SPECIES = ['CAT', 'DOG', 'GOAT']

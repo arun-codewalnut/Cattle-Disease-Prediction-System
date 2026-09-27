@@ -9,11 +9,6 @@ tests/e2e/node_modules/
 tests/e2e/playwright-report/
 tests/e2e/test-results/
 
-# --- Java / Spring Boot ---
-backend/target/
-backend/*.iml
-backend/.env
-
 # --- Python / FastAPI ---
 ml-service/.venv/
 ml-service/__pycache__/
@@ -39,6 +34,9 @@ ml-service/data/dog-images/*
 !ml-service/data/sheep-symptoms/
 ml-service/data/sheep-symptoms/*
 !ml-service/data/sheep-symptoms/SOURCE.md
+!ml-service/data/goat-images/
+ml-service/data/goat-images/*
+!ml-service/data/goat-images/SOURCE.md
 # ml-service/models/*.pkl
 # ml-service/models/*.pt
 # ml-service/models/*.onnx

@@ -1,15 +1,28 @@
+# Everything ml-service needs — running the API, training models, downloading datasets, and
+# running the tests. One `pip install -r requirements.txt` (Python 3.13) and nothing else.
+# Every package installs from a prebuilt wheel on Windows, macOS and Linux: no C++ compiler.
+
+# --- Web API ---
 fastapi==0.115.6
 uvicorn[standard]==0.34.0
 pydantic==2.10.4
 python-dotenv==1.0.1
 httpx==0.28.1
+# Parses the multipart photo uploads on POST /api/diagnoses/image (FastAPI needs it for forms).
+python-multipart==0.0.32
 
-# ML
+# --- Diagnosis pipeline (LangGraph: intake -> predict -> explain -> precautions -> recommend) ---
+langgraph==0.2.60
+# langgraph's own dependency, pinned so installs stay reproducible.
+langchain-core==0.3.28
+
+# --- Symptom models ---
 xgboost==2.1.3
 scikit-learn==1.6.0
 pandas==2.2.3
+numpy==2.5.3
 
-# Image classifier (M9) — CPU wheels. The +cpu version suffix + extra-index-url below make
+# --- Image models — CPU wheels. The +cpu version suffix + extra-index-url below make
 # `pip install -r requirements.txt` alone resolve the CPU build, same as CI does — a bare
 # `torch==2.14.0` (no +cpu) silently resolves to PyPI's default CUDA build instead, which
 # pulls in hundreds of MB of nvidia-*/triton/cuda-toolkit packages and blew past this repo's
@@ -18,14 +31,13 @@ pandas==2.2.3
 --extra-index-url https://download.pytorch.org/whl/cpu
 torch==2.14.0+cpu
 torchvision==0.29.0+cpu
+pillow==12.3.0
 
-# Agent / RAG
-# No vector store: retrieval reads the markdown reference docs directly — see
-# docs/specs/remove-databases.md. That also removed chroma-hnswlib, which had no cp313
-# wheel and was the reason this service's tests had to run in Docker.
-langgraph==0.2.60
-langchain-core==0.3.28
-langchain-ollama==0.2.2
+# --- Dataset downloads (only needed to retrain models; see data/*/SOURCE.md) ---
+# Kaggle datasets download anonymously — no account needed.
+kagglehub==1.0.2
+# Cow Mastitis photos only; needs ROBOFLOW_API_KEY in .env (see .env.example).
+roboflow==1.1.50
 
-# Dev/test
+# --- Tests ---
 pytest==8.3.4

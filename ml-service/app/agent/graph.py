@@ -5,10 +5,10 @@ tool; decisions need to stay traceable). See docs/specs/M5-langgraph-agent-orche
 and docs/specs/M6-rag-knowledge-base.md.
 
 What this graph does NOT do: it doesn't change the diagnosis, confidence, or
-recommended_action logic — those are exactly what M1/M2 already computed. `explain`
-generates real LLM text (falling back to a template if the LLM is unavailable), grounded in
-the model's own output plus (M6) retrieved reference passages — never facts invented beyond
-what it's given.
+recommended_action logic — those are exactly what M1/M2 already computed. `explain` builds a
+deterministic, plain-language template from the model's own output — never facts invented
+beyond what it's given. (An optional Ollama LLM path used to sit in front of the template; it
+never ran in any environment and was removed — see docs/specs/remove-ollama.md.)
 
 `predict_image` (M9) is a real, trained MobileNetV2-transfer-learning classifier — see
 docs/specs/M9-cattle-image-classifier.md. It covers 4 of the symptom model's 5 diseases as of
@@ -47,8 +47,8 @@ species-specific disease model. A photo that isn't of an animal at all (a car, f
 instead, a distinct sentinel from `"uncertain"` (which still means "a real animal photo, just
 not a confident disease match"). See docs/specs/M15-image-diagnosis-quality-gate.md.
 
-`precautions` (M10) is a deterministic lookup, not LLM-generated — unlike `explanation`, its
-content is reviewed, static text returned verbatim by diagnosis, so it can never soften the
+`precautions` (M10) is a deterministic lookup — reviewed, static text from
+data/veterinary-reference/ returned verbatim by diagnosis, so it can never soften the
 REPORTABLE_DISEASES escalation rule. See docs/specs/M10-precautions-next-steps.md.
 """
 from __future__ import annotations
@@ -59,20 +59,18 @@ from pathlib import Path
 from typing import Any, TypedDict
 
 import httpx
-from langchain_core.messages import HumanMessage, SystemMessage
 from langgraph.graph import END, StateGraph
 
-from app.agent.llm import get_llm
 from app.errors import ApiError
 from app.models import cat_image_model, dog_image_model, goat_image_model, species_gate
 from app.models import image_model as cattle_image_model
 from app.models import sheep_symptom_model
 from app.models import symptom_model as cattle_symptom_model
-from app.rag.retrieval import get_precautions, retrieve
+from app.rag.retrieval import get_precautions
 
 # Diseases that must always escalate regardless of model confidence, per docs/DISCLAIMER.md.
-# Deliberately a fixed, auditable list here rather than anything the model (or the LLM)
-# could drift on. PPR (Peste des Petits Ruminants) is WOAH/OIE-notifiable — same tier of
+# Deliberately a fixed, auditable list here rather than anything the model could
+# drift on. PPR (Peste des Petits Ruminants) is WOAH/OIE-notifiable — same tier of
 # seriousness as FMD/LSD, so it escalates the same way.
 REPORTABLE_DISEASES = {
     "Foot and Mouth Disease",
@@ -88,13 +86,6 @@ _IMAGE_MODEL_BY_SPECIES = {"CAT": cat_image_model, "DOG": dog_image_model, "GOAT
 # Which trained symptom model handles which species — anything not listed falls back to the
 # cattle model, same fallback pattern as the image side above.
 _SYMPTOM_MODEL_BY_SPECIES = {"SHEEP": sheep_symptom_model}
-
-EXPLAIN_SYSTEM_PROMPT = (
-    "You are explaining a machine-learning cattle disease prediction to a farmer. Only use "
-    "the diagnosis, confidence, contributing symptoms, and reference material given to you "
-    "— do not invent additional medical facts, causes, or treatment advice beyond what is "
-    "provided. Keep it to 2-3 plain-language sentences."
-)
 
 
 class DiagnosisState(TypedDict, total=False):
@@ -280,51 +271,15 @@ def predict_image_node(state: DiagnosisState) -> dict[str, Any]:
 
 
 def explain_node(state: DiagnosisState) -> dict[str, Any]:
-    if state["diagnosis"] in ("uncertain", "invalid_image", "species_mismatch"):
-        return {"explanation": _template_explanation(state), "sources": []}
-
-    # Retrieval failure (Chroma unreachable, empty collection) degrades to no retrieved
-    # context, same as an LLM failure degrades to the template — never blocks a diagnosis.
-    # retrieve() itself never raises (see app/rag/retrieval.py), but stay defensive here too.
-    try:
-        retrieved = retrieve(state["diagnosis"])
-    except Exception:
-        retrieved = []
-
-    try:
-        llm = get_llm()
-        top_feature_names = [f["feature"] for f in state.get("top_features") or []]
-        context_block = ""
-        if retrieved:
-            passages = "\n\n".join(f"[{r['source']}] {r['text']}" for r in retrieved)
-            context_block = f"\n\nReference material:\n{passages}"
-        human_prompt = (
-            f"Diagnosis: {state['diagnosis']}\n"
-            f"Confidence: {state['confidence']:.0%}\n"
-            f"Top contributing symptoms: {', '.join(top_feature_names) or 'none'}"
-            f"{context_block}\n\n"
-            "Explain this result to the farmer, drawing on the reference material above "
-            "when relevant."
-        )
-        response = llm.invoke(
-            [SystemMessage(content=EXPLAIN_SYSTEM_PROMPT), HumanMessage(content=human_prompt)]
-        )
-        # Only cite sources that were actually available to the explanation that's being
-        # shown — if the LLM call below fails instead, the except branch reports no sources,
-        # since the fallback template doesn't reference them.
-        sources = sorted({r["source"] for r in retrieved})
-        return {"explanation": response.content, "sources": sources}
-    except Exception:
-        # Any LLM failure (connection refused, timeout, malformed response, ...) degrades to
-        # the deterministic template — a diagnosis tool cannot go down because a local LLM
-        # daemon isn't running. See docs/specs/M5-langgraph-agent-orchestration.md.
-        return {"explanation": _template_explanation(state), "sources": []}
+    # Always the deterministic template. `sources` stays in the state (and on
+    # /agent/diagnose's response) as an always-empty list so that internal contract doesn't
+    # change — nothing is retrieved to cite. See docs/specs/remove-ollama.md.
+    return {"explanation": _template_explanation(state), "sources": []}
 
 
 def precautions_node(state: DiagnosisState) -> dict[str, Any]:
     # get_precautions() itself never raises (see app/rag/retrieval.py) — stay defensive
-    # here too anyway, same belt-and-suspenders principle explain_node uses around
-    # retrieve(): a diagnosis must never fail because guidance text couldn't be looked up.
+    # here too anyway: a diagnosis must never fail because guidance text couldn't be looked up.
     try:
         result = get_precautions(state["diagnosis"])
     except Exception:

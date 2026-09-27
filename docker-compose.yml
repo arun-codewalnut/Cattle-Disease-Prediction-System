@@ -9,27 +9,16 @@ services:
     volumes:
       - ./ml-service:/app
 
-  backend:
-    build: ./backend
-    env_file: ./backend/.env
-    environment:
-      ML_SERVICE_BASE_URL: http://ml-service:8000
-    ports:
-      - "8080:8080"
-    volumes:
-      - ./backend:/app
-    depends_on:
-      - ml-service
-
   frontend:
     build: ./frontend
     env_file: ./frontend/.env
     environment:
-      VITE_API_BASE_URL: http://localhost:8080
+      # The browser calls ml-service's public API directly — there's no separate backend.
+      VITE_API_BASE_URL: http://localhost:8000
     ports:
       - "5173:5173"
     volumes:
       - ./frontend:/app
       - /app/node_modules
     depends_on:
-      - backend
+      - ml-service

@@ -1,5 +1,5 @@
 name: Bug report
-description: Something in frontend/backend/ml-service isn't working as expected.
+description: Something in frontend/ml-service isn't working as expected.
 labels: ["bug"]
 body:
   - type: dropdown
@@ -8,7 +8,6 @@ body:
       label: Affected service
       options:
         - frontend
-        - backend
         - ml-service
         - cross-service (correlation ID / contract mismatch / infra)
     validations:
@@ -18,7 +17,7 @@ body:
     attributes:
       label: What happened
       description: Include the correlation ID from the logs if you have one — it's how a
-        single request is traced across all three services.
+        single request is traced across both services.
     validations:
       required: true
   - type: textarea

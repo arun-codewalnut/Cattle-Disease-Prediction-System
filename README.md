@@ -1,307 +1,324 @@
-# Cattle Disease Prediction System (learning project)
+# Cattle Disease Prediction System
 
-An agentic-AI-assisted cattle disease prediction system: symptom/image intake → ML
-diagnosis → LangGraph agent explanation and recommended action.
+A web app that suggests the likely disease of a farm or pet animal from its **symptoms** or
+**photos**, explains the result in plain language, and tells the user what to do next —
+including when to call a vet immediately.
 
-Free/open-source stack only — see [docs/DECISIONS.md](docs/DECISIONS.md) for why.
+A farmer or vet picks a species, ticks the symptoms they see (or uploads 1–5 photos), and
+gets back a result card: the likely diagnosis, how confident the model is, a short
+explanation, precautions, next steps, and a recommended action (`monitor`, `consult_vet`,
+or `escalate_to_vet` for reportable diseases such as Foot and Mouth Disease).
 
-> **Not a certified veterinary tool.** This is a learning project. See
-> [docs/DISCLAIMER.md](docs/DISCLAIMER.md) before relying on or extending its predictions.
+> **Not a certified veterinary tool.** This is a learning project. Results are model
+> estimates, not a diagnosis. Read [docs/DISCLAIMER.md](docs/DISCLAIMER.md) before relying on
+> or extending its predictions.
 
-## Structure
+## Contents
 
-| Path | Stack | Purpose |
+- [What it can diagnose](#what-it-can-diagnose)
+- [How it works](#how-it-works)
+- [What you need to install](#what-you-need-to-install)
+- [Quick start](#quick-start)
+- [Configuration (.env files)](#configuration-env-files)
+- [Using the app](#using-the-app)
+- [API](#api)
+- [Project structure](#project-structure)
+- [Running the tests](#running-the-tests)
+- [Retraining models](#retraining-models)
+- [More documentation](#more-documentation)
+
+## What it can diagnose
+
+Five species, each with the models that real data existed for. The trained models are
+**included in the repo**, so everything below works straight after installing.
+
+| Species | Symptom diagnosis | Photo diagnosis |
 |---|---|---|
-| [frontend/](frontend) | React 19 + Vite | Symptom/image intake UI |
-| [backend/](backend) | Java 21 + Spring Boot 4 | Request validation, species rules, API gateway (stateless) |
-| [ml-service/](ml-service) | Python + FastAPI + LangGraph | ML models, agent orchestration, RAG over local markdown |
-| [docs/](docs) | — | Architecture, decisions, roadmap, API contracts |
-| [agents/playbooks/](agents/playbooks) | — | Canonical how-to guides for agents/contributors |
-| [.claude/skills/](.claude/skills) | — | Claude Code adapters over the playbooks above |
-| [tests/e2e/](tests/e2e) | — | Full-stack flow tests |
+| **Cow** | ✅ 5 diseases — Foot and Mouth Disease, Lumpy Skin Disease, Mastitis, Bovine Respiratory Disease, Healthy (88.8% accuracy) | ✅ 4 classes — Healthy, Lumpy Skin Disease, Foot and Mouth Disease, Mastitis (82.5%) |
+| **Sheep** | ✅ PPR (Peste des Petits Ruminants) screen only (80.5%) — a negative result means "not PPR", not "healthy" | ⚠️ uses the Cow photo model as a disclosed approximation (no sheep photo dataset exists) |
+| **Goat** | ❌ not available (no symptom data exists) | ✅ Healthy / Unhealthy only (80.1%) — can flag a problem but not name it |
+| **Cat** | ❌ not available | ✅ Flea Allergy, Healthy, Ringworm, Scabies (83.0%) |
+| **Dog** | ❌ not available | ✅ Bacterial Dermatosis, Fungal Infection, Healthy, Hypersensitivity/Allergic Dermatosis (70.5%) |
 
-Agent-context files: [AGENTS.md](AGENTS.md) (canonical), [CLAUDE.md](CLAUDE.md) (Claude Code
-entry point), [STATE.md](STATE.md) (current progress), [HANDOFF.md](HANDOFF.md) (session
-handoff notes). Each service has its own scoped `AGENTS.md`/`CLAUDE.md`.
+Every photo is checked twice before any disease model runs: **"is this an animal at all?"**
+(a screenshot or a car is refused as `invalid_image`) and **"is it the species you
+selected?"** (a dog photo with Cow selected is refused as `species_mismatch`). Both checks
+refuse rather than guess. Per-model accuracy details: [ml-service/models/REGISTRY.md](ml-service/models/REGISTRY.md).
 
-## Prerequisites
+## How it works
 
-There are two ways to run this (Option A / Option B below) and they need different things.
-**Option A needs only Docker** — nothing in the table below it except Docker itself.
+```mermaid
+flowchart LR
+    U[Farmer / Vet] --> FE[frontend<br/>React + Vite, :5173]
+    FE -->|POST /api/diagnoses<br/>POST /api/diagnoses/image| API[ml-service<br/>Python + FastAPI, :8000]
+    API --> G[LangGraph pipeline<br/>intake → predict → explain → precautions → recommend]
+    G --> M[Trained models<br/>XGBoost for symptoms, MobileNetV2 for photos]
+    G --> D[Reference docs in markdown<br/>precautions & next steps]
+```
 
-| Tool | Needed for | Notes |
+- **Two services**: a React frontend and a Python `ml-service`. The browser talks to
+  `ml-service` directly; there is no other backend.
+- **No database.** Nothing is stored; each request is diagnosed and answered.
+- **No LLM / AI API.** Explanations are a fixed, plain-language template built from the
+  model's own output, and precautions/next steps come from hand-written reference documents
+  in [ml-service/data/veterinary-reference/](ml-service/data/veterinary-reference). No API keys
+  or paid services are needed.
+- **Reportable diseases always escalate**, whatever the confidence — a fixed rule in the
+  pipeline, not something a model can change.
+
+More detail: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+
+## What you need to install
+
+The app needs only **Python** and **Node.js**:
+
+| Software | Version | Used for |
 |---|---|---|
-| [Docker Desktop](https://www.docker.com/products/docker-desktop/) | **Option A only** — running all three services in one command | nothing else needs it: there is no database, and every test suite runs natively |
-| [GNU Make](https://www.gnu.org/software/make/) (optional) | the `make` shortcuts | not installed on Windows by default — every target is a one-line `docker compose …` you can run directly instead, see [Makefile](Makefile) |
-| [Node.js](https://nodejs.org/) 20.19+ or 22.12+ | Option B `frontend` | Vite 8 rejects 20.0–20.18, 21.x and 22.0–22.11; the frontend **tests** (Vitest 5) need 22.12+. CI and `frontend/Dockerfile` both use Node 24 |
-| [Java 21](https://adoptium.net/) + [Maven](https://maven.apache.org/) | Option B `backend` | every Maven command runs **from `backend/`** — there's no root `pom.xml`. `backend/mvnw` (`mvnw.cmd` on Windows) is a fallback if you have no system Maven, but it downloads its own Maven distribution and can fail behind a restricted network — see [backend/AGENTS.md](backend/AGENTS.md) |
-| [Python 3.13](https://www.python.org/) | Option B `ml-service` | Windows: use the `py` launcher. Read the native-install note below before `pip install` |
-| [Ollama](https://ollama.com/download) (optional, either option) | real LLM-generated explanations | without it, explanations use a deterministic template — the app works fully either way, see `docs/DECISIONS.md` |
-| [Roboflow](https://roboflow.com/) account (optional, free) | retraining the Cow **Mastitis** image class specifically | unlike the Kaggle datasets below (which download anonymously), this one needs its own free API key — see `ml-service/data/cattle-images/SOURCE.md`. Every other model trains without any account of any kind |
+| [Python](https://www.python.org/downloads/) | **3.13** | `ml-service` (the API and the models) |
+| [Node.js](https://nodejs.org/) | **22.12 or newer** (24 recommended) | `frontend` (the web UI) |
+| [Git](https://git-scm.com/) | any | getting the code |
 
-**You must train at least one model before the app can diagnose anything** — model
-artifacts are gitignored, so a fresh clone has none and every diagnosis returns
-`503 MODEL_NOT_TRAINED`. It's one command and it's a step in both options below.
+Optional:
 
-**Internet access on the first *image* diagnosis**: M15's "is this even a photo of an
-animal?" gate uses an off-the-shelf pretrained ImageNet MobileNetV2, and `torchvision`
-downloads those weights (~14MB) the first time an image is diagnosed, caching them under
-`~/.cache/torch` (image *training* pulls the same weights). Symptom-only diagnosis never
-needs this.
-
-**No C++ compiler needed**: every dependency installs from a prebuilt wheel, including on
-Windows + Python 3.13. (`shap` used to need Microsoft C++ Build Tools there; it was never
-imported — M1 uses XGBoost's own `pred_contribs` — so it's been removed from
-`requirements.txt`. `chromadb` went the same way, see
-[docs/specs/remove-databases.md](docs/specs/remove-databases.md).)
-
-**Disk space** (measured, not estimated): the `ml-service` Docker image is **~3.9GB** built,
-and a native `ml-service` venv is **~1.2GB** — `torch`/`torchvision` dominate both, and
-they're required for *any* install, not optional. Add a few hundred MB more if you want the
-real image classifiers trained locally (the cattle/cat/dog photo datasets). Only the Cow
-symptom model needs no dataset at all.
-
-## Running locally
-
-### Option A — Docker Compose (recommended: all three services in one command)
-
-**1. Create the three `.env` files.** Not optional — `docker-compose.yml` declares an
-`env_file` for each service, so compose fails to start if any is missing. The checked-in
-examples hold working local-dev defaults, so a plain copy is all you need:
-
-```bash
-cp backend/.env.example backend/.env
-cp ml-service/.env.example ml-service/.env
-cp frontend/.env.example frontend/.env
-```
-
-**2. Start the stack** (`make up` wraps `docker compose up --build`; use the right-hand
-command if you don't have `make`):
-
-```bash
-make up          # or: docker compose up --build
-```
-
-**3. Train the Cow symptom model** — **required once**, otherwise every diagnosis returns
-`503 MODEL_NOT_TRAINED` (see the prerequisites note). This is the one model that needs no
-downloaded dataset; it generates its own synthetic training data. The container writes the
-artifact to `ml-service/models/` on your machine through the bind mount, so it survives
-`make down` and image rebuilds — you only do this once:
-
-```bash
-docker compose run --rm ml-service python -m training.generate_synthetic_data
-docker compose run --rm ml-service python -m training.symptom_model_train
-```
-
-Every *other* model (Sheep symptoms, and the cattle/cat/dog/goat image classifiers) needs a
-real dataset downloaded first — see [Training/retraining a model](#trainingretraining-a-model)
-below. Nothing forces you to train them; a species/mode you haven't trained just returns
-`503` until you do.
-
-**4. Verify and open.** Both health checks should answer before you use the UI:
-
-```bash
-curl http://localhost:8000/health           # ml-service  -> {"status":"ok"}
-curl http://localhost:8080/actuator/health  # backend     -> {"status":"UP"}
-```
-
-Open **http://localhost:5173**. (`backend` at `:8080`, `ml-service` at `:8000`. No
-database — see [docs/specs/remove-databases.md](docs/specs/remove-databases.md).)
-
-Other targets: `make up-d` (background), `make logs`, `make ps`, `make down` (stop and
-remove), `make test-e2e`. Each maps to one `docker compose` command in the [Makefile](Makefile).
-
-### Option B — native (faster iteration; full functionality)
-
-One-time setup per service:
-
-```bash
-# ml-service
-cd ml-service
-py -m venv .venv                           # macOS/Linux: python3 -m venv .venv
-.venv\Scripts\activate                     # macOS/Linux: source .venv/bin/activate
-pip install -r requirements.txt
-python -m training.generate_synthetic_data # required once — trains the Cow symptom
-python -m training.symptom_model_train     #   model, no dataset download needed
-
-# frontend
-cd frontend && npm install
-```
-
-`backend` needs no setup at all — it's stateless, with no database to provision.
-
-Then run each service in its own terminal:
-
-```bash
-cd ml-service && .venv\Scripts\activate && uvicorn app.main:app --reload   # :8000
-cd backend && mvn spring-boot:run                                          # :8080  (must be run from backend/)
-cd frontend && npm run dev                                                 # :5173
-```
-
-This is full functionality, not a reduced mode: precautions, next steps and grounded
-citations all work, because the reference documents are read straight from
-`ml-service/data/veterinary-reference/`. Only LLM-written explanations need anything extra
-(Ollama), and without it the deterministic template takes over.
-
-Full instructions: [agents/playbooks/run-stack.md](agents/playbooks/run-stack.md) and
-[ml-service/AGENTS.md](ml-service/AGENTS.md).
-
-## Testing the application
-
-Once all three services are up (either option above), open **http://localhost:5173**. The
-intake form: pick a species, then submit symptoms and/or up to 5 photos. There's nothing
-else to fill in — animal tag numbers and farm IDs were removed (see
-[docs/specs/remove-animal-identity.md](docs/specs/remove-animal-identity.md)); species is the
-only field the diagnosis actually needs, because it selects which trained model runs. What's actually supported differs by species — this isn't a bug if a
-species behaves differently, it's how the underlying models were scoped. **Buffalo was
-removed as a supported species** (no usable dataset was ever found for it — see
-`docs/specs/M11-buffalo-disease-detection.md`'s superseded note):
-
-| Species | Symptom diagnosis | Image diagnosis | Notes |
-|---|---|---|---|
-| Cow | ✅ real model, 5 diseases (88.8% acc) | ✅ real model, 4 diseases (82.5% acc) | The only species with both a symptom and an image model trained specifically on it, and the most complete. Image classes: Healthy / Lumpy Skin Disease / Foot and Mouth Disease / **Mastitis**. Mastitis is the newest and thinnest of the four — only 47 manually-curated real photos (vs 746-1291 for the other three), so it's tuned for high recall at a real precision cost (~41%) — see `ml-service/data/cattle-images/SOURCE.md`. Bovine Respiratory Disease is symptom-only — no image dataset exists for it anywhere |
-| Sheep | ✅ real model — PPR screen only (80.5% acc) | ✅ Cow's model, as a disclosed approximation | Symptoms: a real, trained binary screen for one disease (Peste des Petits Ruminants) — not a broader disease list like Cow's. A negative result means "not PPR," not "healthy." Image: no sheep-specific dataset exists anywhere, still an approximation |
-| Goat | ❌ falls back to Cow's model (names the wrong species' diseases — a known, disclosed gap) | ✅ real model, **binary only** (80.1% acc) | Can only flag `Healthy` vs `Unhealthy` — no disease-specific goat photo dataset exists, so it can never name what's actually wrong |
-| Cat | ❌ blocked (no symptom model) | ✅ real model, 4 diseases (83.0% acc) | Flea Allergy / Healthy / Ringworm / Scabies |
-| Dog | ❌ blocked (no symptom model) | ✅ real model, 4 diseases (70.5% acc) | Bacterial Dermatosis / Fungal Infection / Healthy / Hypersensitivity-Allergic Dermatosis — a v2 dataset that replaced the original 52.6%-accuracy, no-`Healthy`-class v1 model |
-
-### Symptom-based diagnosis
-
-Check boxes matching a real disease profile and submit. A few that reliably produce a
-confident, correct diagnosis (from the training data's actual per-class symptom frequencies,
-not guesses):
-- Fever + Mouth lesions + Excessive salivation + Lameness → **Foot and Mouth Disease** (escalates)
-- Fever + Skin nodules + Drop in milk yield → **Lumpy Skin Disease** (escalates)
-- Fever + Udder swelling + Drop in milk yield → **Mastitis**
-- Fever + Nasal discharge + Coughing + Labored breathing → **Bovine Respiratory Disease**
-- Nothing checked → **Healthy**
-
-Switching the species to Sheep swaps the checklist entirely (a completely different, real
-model — see the table above): checking **Nasal discharge + Sores in mouth or nose** reliably
-produces a confident **PPR (Peste des Petits Ruminants)** diagnosis (escalates); nothing
-checked reliably produces **PPR Negative**.
-
-### Image-based diagnosis (single or multi-photo)
-
-Upload 1–5 JPEG/PNG photos in one submission — one file picker takes them all at once
-(ctrl/shift-click, or drag a multi-selection), and each chosen photo is then listed with its
-own remove button. Picking more than 5 keeps the first 5 and says how many it dropped, rather
-than silently trimming the selection. Real sample photos to test with live under
-`ml-service/data/{cattle,cat,dog,goat}-images/<class-name>/` once you've populated them (see
-"Training/retraining a model" below) — e.g. `ml-service/data/cat-images/ringworm/` for a real
-Ringworm photo, or `ml-service/data/cattle-images/mastitis/` for the newest class.
-
-- **1 photo**: a single diagnosis result, same as the old flow.
-- **2–5 photos**: each photo is diagnosed independently, and results are shown together. If
-  they don't all agree on the same diagnosis, the UI shows a **"diagnoses disagree"** warning
-  banner above the results — this is a signal to the user to look more closely or take a
-  clearer/different photo, not an error. Deliberately not a species-mismatch check (no
-  species-detection model exists) — it only compares the diagnoses themselves, so it also
-  fires for two photos of the same problem area showing genuinely different severity.
-  Try it: upload one clearly healthy-looking photo alongside one diseased photo of the same
-  species to trigger the warning; upload two photos of the same class to see it agree.
-- **6th photo**: rejected with `400 TOO_MANY_IMAGES` before anything is sent to `ml-service`
-  (limit is enforced in `backend`, see `DiagnosisService.MAX_IMAGES`).
-
-### Wrong-photo detection (species-mismatch and non-animal gate)
-
-Every uploaded photo passes two checks *before* any disease model runs, and both are worth
-demoing deliberately rather than only hitting by accident:
-
-1. **"Is this even an animal?"** — a photo that isn't of an animal at all (a screenshot, a
-   diagram, a random object) is refused with `diagnosis: "invalid_image"` rather than handed
-   to a disease classifier that was never trained to say "I don't recognize this." Try
-   uploading any non-photo image (a screenshot works) with any species selected.
-2. **"Is this the selected species?"** — a real animal photo submitted with the *wrong*
-   species selected (e.g. a dog photo with Cow selected) is refused with
-   `diagnosis: "species_mismatch"`, never a confident-sounding wrong-species diagnosis. Try
-   uploading a photo from one species' data folder while a *different* species is selected in
-   the form.
-
-Neither check is perfect (both are real, trained/tuned models, not hardcoded rules — catch
-rates and false-reject rates per species/pair are in `docs/DISCLAIMER.md`), but both fail
-toward refusing rather than guessing, which is the safety property that matters for a
-diagnosis tool. See `ml-service/app/models/species_gate.py` and
-`docs/specs/M15-image-diagnosis-quality-gate.md` / `docs/specs/species-classifier.md`.
-
-### Testing the API directly (skipping the UI)
-
-Useful if you want to see the raw request/response shapes (full contract:
-[docs/API_CONTRACTS.md](docs/API_CONTRACTS.md)):
-
-```bash
-# Symptom-based diagnosis (Foot and Mouth Disease profile). One call — species is required
-# and has no default, since it picks which trained model runs.
-curl -X POST http://localhost:8080/api/diagnoses \
-  -H "Content-Type: application/json" \
-  -d '{ "species": "COW", "symptoms": { "fever": true, "mouthLesions": true, "excessiveSalivation": true, "lameness": true } }'
-
-# Or, multi-photo diagnosis (1-5 photos; response includes "diagnosesAgree": true|false).
-# species travels as a form field here because the request is multipart.
-curl -X POST http://localhost:8080/api/diagnoses/image \
-  -F "species=COW" -F "images=@/path/to/photo1.jpg" -F "images=@/path/to/photo2.jpg"
-```
-
-`ml-service` can also be hit directly (bypassing `backend`, e.g. to isolate whether an issue
-is in the ML layer or the gateway) at `POST http://localhost:8000/agent/diagnose` — see
-`ml-service/app/api/diagnose.py` for its request/response shape.
-
-### Error scenarios worth exercising
-
-| Trigger | Response |
+| Software | Only needed if you want to… |
 |---|---|
-| More than 5 images in one submission | `400 TOO_MANY_IMAGES` |
-| Missing `species` in the request | `400 VALIDATION_FAILED` — never defaulted, since it picks the model |
-| Unrecognized `species` value | `400 INVALID_REQUEST_BODY` |
-| Symptom diagnosis requested for Cat/Dog | blocked client-side (no symptom model exists for them) |
-| A model artifact isn't present locally yet | `503 MODEL_NOT_TRAINED` — see below to train it |
-| Unreadable/corrupt image bytes | ml-service degrades to `diagnosis: "uncertain"` rather than erroring |
-| A photo that isn't of an animal at all | `diagnosis: "invalid_image"` — never reaches a disease model, see "Wrong-photo detection" above |
-| A real animal photo of the wrong species | `diagnosis: "species_mismatch"` — same section, a real but imperfect trained check |
+| [Docker Desktop](https://www.docker.com/products/docker-desktop/) | run both services with one command instead of two terminals |
+| [GNU Make](https://www.gnu.org/software/make/) | use the `make` shortcuts (every target is a one-line `docker compose` command you can run directly — see the [Makefile](Makefile)) |
 
-### Training/retraining a model
+Worth knowing:
 
-If a diagnosis attempt returns `503 MODEL_NOT_TRAINED`, the corresponding model artifact
-(`ml-service/models/*.pkl`/`*.pt`, all gitignored) isn't present locally yet:
+- **All Python packages come from one file**, [ml-service/requirements.txt](ml-service/requirements.txt):
+  the API, the models, the dataset download tools and the test runner. Every package
+  installs from a prebuilt wheel, so **no C++ compiler** is needed on Windows, macOS or
+  Linux. The frontend's packages come from `npm install` as usual.
+- **Internet on the first photo diagnosis**: the "is this an animal?" check uses a small
+  pretrained model (~14 MB) that PyTorch downloads the first time a photo is diagnosed and
+  then caches (`~/.cache/torch`). Symptom diagnosis never needs this.
+- **Disk space**: about 1.5 GB for the Python environment (PyTorch is most of it), plus
+  ~100 MB for the frontend's `node_modules`.
+- **Windows: keep the project path short.** One PyTorch file has a 140-character path inside
+  the virtual environment, so if the folder you clone into is deeply nested (e.g. inside
+  `OneDrive\Documents\...`), `pip install` can fail with *"No such file or directory … Long
+  Path support"*. Clone somewhere short like `C:\Projects\`, or
+  [enable Windows long paths](https://pip.pypa.io/warnings/enable-long-paths) once.
 
-| Model | Train with | Needs real data first? |
+## Quick start
+
+Commands are shown for **Windows (PowerShell)**; macOS/Linux equivalents are in the comments.
+
+### 1. Get the code
+
+```powershell
+git clone <this-repo-url>
+cd <repo-folder>
+```
+
+### 2. Start ml-service (terminal 1)
+
+```powershell
+cd ml-service
+py -3.13 -m venv .venv                          # macOS/Linux: python3.13 -m venv .venv
+.venv\Scripts\python -m pip install -r requirements.txt
+                                                # macOS/Linux: .venv/bin/python -m pip install -r requirements.txt
+Copy-Item .env.example .env                     # macOS/Linux: cp .env.example .env
+.venv\Scripts\python -m uvicorn app.main:app --reload
+                                                # macOS/Linux: .venv/bin/python -m uvicorn app.main:app --reload
+```
+
+It's ready when the log shows `Application startup complete`. Check it at
+http://localhost:8000/health — it answers `{"status":"ok"}`.
+
+Calling `.venv\Scripts\python` directly means you never need to "activate" the virtual
+environment (activation is often blocked by PowerShell's script policy).
+
+### 3. Start the frontend (terminal 2)
+
+```powershell
+cd frontend
+npm install
+Copy-Item .env.example .env                     # macOS/Linux: cp .env.example .env
+npm run dev
+```
+
+### 4. Open the app
+
+Go to **http://localhost:5173**. That's it — the trained models ship with the repo, so
+there's nothing to train.
+
+### Alternative: Docker (both services, one command)
+
+```powershell
+Copy-Item ml-service\.env.example ml-service\.env   # macOS/Linux: cp ml-service/.env.example ml-service/.env
+Copy-Item frontend\.env.example frontend\.env       # macOS/Linux: cp frontend/.env.example frontend/.env
+docker compose up --build                            # or: make up
+```
+
+Then open http://localhost:5173. Stop with `Ctrl+C`, or `docker compose down` (`make down`).
+Both `.env` files must exist — Docker Compose refuses to start without them. The first build
+downloads PyTorch, so expect a few minutes and an image of about 3–4 GB.
+
+## Configuration (.env files)
+
+Each folder that reads settings has a `.env.example` listing every setting it uses, with a
+working default. Copy it to `.env` in the same folder (`.env` files are git-ignored — never
+commit one).
+
+| File | Setting | Default | What it does |
+|---|---|---|---|
+| [ml-service/.env.example](ml-service/.env.example) | `CORS_ALLOWED_ORIGINS` | `http://localhost:5173` | Which browser origins may call the API. Comma-separated. Add your frontend's URL when you host it somewhere. |
+| | `ROBOFLOW_API_KEY` | *(empty)* | Only for re-downloading the Cow Mastitis training photos. Free key from [roboflow.com](https://roboflow.com). |
+| | `PORT` | `8000` | Port for the Docker image's start command (hosting platforms set it for you). |
+| [frontend/.env.example](frontend/.env.example) | `VITE_API_BASE_URL` | `http://localhost:8000` | Where the UI sends API requests (the `ml-service` URL). Restart `npm run dev` after changing it. |
+| [tests/e2e/.env.example](tests/e2e/.env.example) | `FRONTEND_URL`, `ML_SERVICE_URL` | the local ports | Only if the end-to-end tests should target a stack on other ports. |
+
+No setting is secret except `ROBOFLOW_API_KEY`, and the app runs without it.
+
+## Using the app
+
+### Symptom diagnosis
+
+Pick a species (Cow or Sheep), tick symptoms, press **Get diagnosis**. Combinations that
+reliably give a confident result:
+
+| Species | Tick | Result |
 |---|---|---|
-| Symptom model (Cow) | `python -m training.generate_synthetic_data && python -m training.symptom_model_train` | No — synthetic, generates its own data |
-| Sheep symptom model (PPR screen) | `python -m training.sheep_symptom_model_train` | Yes — see `ml-service/data/sheep-symptoms/SOURCE.md` |
-| Cattle image model | `python -m training.image_model_train` | Yes — **two separate datasets now**: the original 3-class Kaggle set (anonymous download) plus a manually-curated Mastitis set that needs a Roboflow account. See `ml-service/data/cattle-images/SOURCE.md` for both — the Mastitis one specifically is not a "just re-download it" pipeline, read that file before trusting a fresh pull |
-| Cat image model | `python -m training.cat_image_model_train` | Yes — see `ml-service/data/cat-images/SOURCE.md` |
-| Dog image model | `python -m training.dog_image_model_train` | Yes — see `ml-service/data/dog-images/SOURCE.md` |
-| Goat image model (binary Healthy/Unhealthy) | `python -m training.goat_image_model_train` | Yes — see `ml-service/data/goat-images/SOURCE.md` |
-| Species classifier (powers the wrong-species-photo check above — not a disease model itself) | `python -m training.species_classifier_train` | Yes, but reuses the cat/cattle/dog/goat datasets above — train those first. Optional: the wrong-species check simply never fires (fails open) if this artifact is missing, so nothing 503s without it |
+| Cow | Fever + Mouth lesions + Excessive salivation + Lameness | **Foot and Mouth Disease** — escalate to vet |
+| Cow | Fever + Skin nodules + Drop in milk yield | **Lumpy Skin Disease** — escalate to vet |
+| Cow | Fever + Udder swelling + Drop in milk yield | **Mastitis** — consult vet |
+| Cow | Fever + Nasal discharge + Coughing + Labored breathing | **Bovine Respiratory Disease** — consult vet |
+| Cow | nothing | **Healthy** — monitor |
+| Sheep | Nasal discharge + Sores in mouth or nose | **PPR** — escalate to vet |
+| Sheep | nothing | **PPR Negative** |
 
-Each image/symptom `SOURCE.md` (except the Mastitis one, see above) has the exact
-`kagglehub.dataset_download(...)` snippet — those datasets all download anonymously, no Kaggle
-account needed. Neither `kagglehub` nor `roboflow` is in `requirements.txt` — both are
-one-off, on-demand installs (`pip install kagglehub` / `pip install roboflow`) only needed if
-you're actually (re)training that specific model, not to run the app.
+### Photo diagnosis
 
-Run the commands above from `ml-service/` with the venv active (Option B), or prefix them
-with `docker compose run --rm ml-service` if you're on the Docker path (Option A) and have
-no local venv — `docker-compose.yml` bind-mounts `./ml-service` into the container, so the
-artifact lands in `ml-service/models/` on your machine either way. Each training run prints
-its real accuracy/F1 and appends a row to `ml-service/models/REGISTRY.md`.
+Upload 1–5 JPEG or PNG photos (up to 5 MB each). Each photo is diagnosed separately; if
+they don't all agree, the result shows a **"diagnoses disagree"** warning so the user looks
+more closely. Sample photos to try: the training datasets, if you've downloaded them (see
+[Retraining models](#retraining-models)), or any photo of the animal's affected area.
 
-## Running the automated tests
+Try the safety checks too: upload a screenshot (→ "not a valid photo"), or a dog photo with
+Cow selected (→ "wrong species").
 
-These are the same commands CI runs ([.github/workflows/ci.yml](.github/workflows/ci.yml)).
-Strategy and per-service conventions: [docs/TESTING.md](docs/TESTING.md).
+## API
 
-| Suite | Command | Also needs |
+`ml-service` serves the frontend's API. Interactive docs: http://localhost:8000/docs.
+Full contract: [docs/API_CONTRACTS.md](docs/API_CONTRACTS.md).
+
+```bash
+# Symptom diagnosis → 201 with the result
+curl -X POST http://localhost:8000/api/diagnoses \
+  -H "Content-Type: application/json" \
+  -d '{"species": "COW", "symptoms": {"fever": true, "mouth_lesions": true, "excessive_salivation": true, "lameness": true}}'
+
+# Photo diagnosis (1-5 photos) → 201 with {"results": [...], "diagnosesAgree": true|false}
+curl -X POST http://localhost:8000/api/diagnoses/image \
+  -F "species=COW" -F "images=@photo1.jpg" -F "images=@photo2.jpg"
+```
+
+Response for a symptom diagnosis:
+
+```json
+{
+  "species": "COW",
+  "diagnosis": "Foot and Mouth Disease",
+  "confidence": 0.9951,
+  "explanation": "Foot and Mouth Disease is the closest match — the strongest signs were mouth lesions, excessive salivation and lameness.",
+  "recommendedAction": "escalate_to_vet",
+  "precautions": ["Isolate the affected animal from the rest of the herd immediately.", "..."],
+  "nextSteps": ["Contact your veterinarian or local animal health authority immediately — ...", "..."],
+  "createdAt": "2026-09-27T10:15:30.123456Z"
+}
+```
+
+Errors always have the same shape — `{"code": "...", "message": "...", "details": ...}`:
+
+| Situation | Status and code |
+|---|---|
+| `species` or `symptoms` missing | `400 VALIDATION_FAILED` |
+| Unknown species, or a malformed body | `400 INVALID_REQUEST_BODY` |
+| Symptom diagnosis for Cat, Dog or Goat | `400 DIAGNOSIS_NOT_SUPPORTED_FOR_SPECIES` |
+| No photo, empty photo, or not a multipart upload | `400 IMAGE_REQUIRED` |
+| More than 5 photos | `400 TOO_MANY_IMAGES` |
+| Not JPEG/PNG | `400 UNSUPPORTED_IMAGE_TYPE` |
+| A photo over 5 MB | `400 IMAGE_TOO_LARGE` |
+| A model file is missing | `503 MODEL_NOT_TRAINED` |
+
+Every response carries an `X-Correlation-Id` header (sent by the frontend, or generated),
+which also appears in `ml-service`'s log line for that request.
+
+## Project structure
+
+| Path | What's there |
+|---|---|
+| [frontend/](frontend) | React 19 + Vite web UI — symptom form, photo upload, result card |
+| [ml-service/](ml-service) | Python FastAPI service — the public API (`app/api/`), the LangGraph pipeline (`app/agent/`), model wrappers (`app/models/`) |
+| [ml-service/models/](ml-service/models) | The trained model files, and [REGISTRY.md](ml-service/models/REGISTRY.md) with each one's accuracy |
+| [ml-service/training/](ml-service/training) | Scripts that download data and (re)train each model |
+| [ml-service/data/](ml-service/data) | Reference documents (precautions/next steps) and, once downloaded, the training datasets — each folder's `SOURCE.md` says where its data comes from |
+| [tests/e2e/](tests/e2e) | Playwright end-to-end tests against the running app |
+| [docs/](docs) | Architecture, API contract, decisions log, specs, roadmap |
+| [agents/playbooks/](agents/playbooks), [.claude/skills/](.claude/skills) | How-to guides for contributors and AI coding agents |
+
+Agent-context files: [AGENTS.md](AGENTS.md) (conventions), [STATE.md](STATE.md) (current
+progress), [HANDOFF.md](HANDOFF.md) (latest session notes).
+
+## Running the tests
+
+| Suite | Command | Notes |
 |---|---|---|
-| `frontend` (Vitest) | `cd frontend && npm ci && npm test` | Node 22.12+ — Vitest 5 refuses to run on older versions even though Vite itself allows 20.19+ |
-| `backend` (JUnit) | `cd backend && mvn -B verify` | nothing — the backend is stateless, so the full Spring context boots without a database |
-| `ml-service` (pytest) | `cd ml-service && pytest` | the venv. The whole suite runs natively with no skips — Docker is no longer needed for any of it |
-| e2e (Playwright) | `make test-e2e` | all three services running, plus one-time `cd tests/e2e && npm install && npx playwright install --with-deps chromium`. The smoke test posts a real symptom diagnosis, so the Cow symptom model must be trained first |
+| ml-service (pytest, 135 tests) | `cd ml-service` then `.venv\Scripts\python -m pytest` | Runs natively. Tests that need the training photos skip themselves until you download the datasets (`python -m training.fetch_datasets`). |
+| frontend (Vitest, 29 tests) | `cd frontend` then `npm test` | `npm run lint` and `npm run build` are also checked in CI. |
+| end-to-end (Playwright) | start the app, then `cd tests/e2e`, `npm install`, `npx playwright install chromium` (once), `npx playwright test` | Checks both services respond and the UI loads. |
 
-## Roadmap
+CI ([.github/workflows/ci.yml](.github/workflows/ci.yml)) runs the frontend and ml-service
+suites on every pull request. More: [docs/TESTING.md](docs/TESTING.md).
 
-See [docs/ROADMAP.md](docs/ROADMAP.md).
+## Retraining models
 
-## Contributing
+Not needed to run the app — only if you want to rebuild a model from its data.
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for branch/commit conventions and the issue/PR flow.
+The training datasets are **not** in the repo (about 800 MB of photos). Git only carries the
+small files in `ml-service/data/`: the reference documents the app uses, and a `SOURCE.md`
+per dataset naming its source and license. You download the datasets yourself, with one
+command:
+
+1. **Download the datasets**, from `ml-service/`:
+
+   ```powershell
+   .venv\Scripts\python -m training.fetch_datasets     # macOS/Linux: .venv/bin/python -m training.fetch_datasets
+   ```
+
+   This downloads the Cow, Cat, Dog and Goat photos and the Sheep symptom data from Kaggle
+   (no account needed, about 800 MB) and puts each class in the folder the training scripts
+   expect. Folders that already have files are skipped, so it's safe to re-run; downloads
+   are cached in `~/.cache/kagglehub`.
+
+   **Cow Mastitis photos are separate**: they need a free Roboflow key
+   (`ROBOFLOW_API_KEY` in `ml-service/.env`), then
+   `.venv\Scripts\python -m training.fetch_mastitis_data`. Read
+   [cattle-images/SOURCE.md](ml-service/data/cattle-images/SOURCE.md) first — the photos in
+   use were hand-reviewed after download, and a fresh download includes mislabelled images.
+2. **Train**, from `ml-service/`:
+
+| Model | Command | Data needed |
+|---|---|---|
+| Cow symptoms | `.venv\Scripts\python -m training.generate_synthetic_data` then `-m training.symptom_model_train` | none — generates its own synthetic data |
+| Sheep symptoms (PPR) | `.venv\Scripts\python -m training.sheep_symptom_model_train` | `data/sheep-symptoms/` |
+| Cow photos | `.venv\Scripts\python -m training.image_model_train` | `data/cattle-images/`, **including** `mastitis/` — without it the retrained model loses Mastitis |
+| Cat photos | `.venv\Scripts\python -m training.cat_image_model_train` | `data/cat-images/` |
+| Dog photos | `.venv\Scripts\python -m training.dog_image_model_train` | `data/dog-images/` |
+| Goat photos | `.venv\Scripts\python -m training.goat_image_model_train` | `data/goat-images/` |
+| Species check | `.venv\Scripts\python -m training.species_classifier_train` | all four photo datasets — train it last |
+
+Each run overwrites the model file in `ml-service/models/` and appends its accuracy to
+`models/REGISTRY.md`. To undo a local retrain: `git checkout -- ml-service/models`.
+
+## More documentation
+
+- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — how the pieces fit together
+- [docs/API_CONTRACTS.md](docs/API_CONTRACTS.md) — every endpoint, field and error code
+- [docs/DECISIONS.md](docs/DECISIONS.md) — why things are the way they are
+- [docs/DISCLAIMER.md](docs/DISCLAIMER.md) — safety limits of the predictions
+- [docs/ROADMAP.md](docs/ROADMAP.md) — what's done and what's next
+- [CONTRIBUTING.md](CONTRIBUTING.md) — branches, commits, issues and pull requests

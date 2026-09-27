@@ -1,6 +1,5 @@
 import base64
 from pathlib import Path
-from types import SimpleNamespace
 
 import app.agent.graph as graph_module
 import app.models.cat_image_model as cat_image_model_module
@@ -22,9 +21,7 @@ CONFIDENT_SYMPTOMS = {
 }
 
 
-def test_explain_falls_back_to_template_when_llm_unavailable():
-    # conftest.py's autouse fixture makes get_llm() raise by default — this is the honest
-    # "no Ollama running" state of this environment, exercised without any extra mocking.
+def test_explain_uses_the_deterministic_template():
     result = run_diagnosis(CONFIDENT_SYMPTOMS)
 
     assert result["diagnosis"] != "uncertain"
@@ -37,43 +34,6 @@ def test_explain_falls_back_to_template_when_llm_unavailable():
     # Feature keys are humanised, never shown raw.
     assert "mouth_lesions" not in result["explanation"]
     assert "mouth lesions" in result["explanation"]
-
-
-def test_explain_uses_llm_output_when_available(monkeypatch):
-    fake_response = SimpleNamespace(content="The cow likely has FMD based on the classic symptom triad.")
-
-    class FakeLLM:
-        def invoke(self, messages):
-            return fake_response
-
-    monkeypatch.setattr(graph_module, "get_llm", lambda: FakeLLM())
-
-    result = run_diagnosis(CONFIDENT_SYMPTOMS)
-
-    assert result["explanation"] == fake_response.content
-
-
-def test_explain_llm_failure_mid_call_still_falls_back(monkeypatch):
-    class BrokenLLM:
-        def invoke(self, messages):
-            raise TimeoutError("simulated LLM timeout")
-
-    monkeypatch.setattr(graph_module, "get_llm", lambda: BrokenLLM())
-
-    result = run_diagnosis(CONFIDENT_SYMPTOMS)
-
-    assert result["diagnosis"] in result["explanation"]
-    assert result["diagnosis"] != "uncertain"
-
-
-def test_uncertain_diagnosis_never_calls_the_llm(monkeypatch):
-    calls = []
-    monkeypatch.setattr(graph_module, "get_llm", lambda: calls.append("called"))
-
-    result = run_diagnosis({})
-
-    assert result["diagnosis"] == "uncertain"
-    assert calls == []
 
 
 # M9: the image datasets are gitignored (large, unverified-license real photos), so CI won't
@@ -121,25 +81,6 @@ def test_image_base64_produces_a_real_diagnosis_per_class():
 
 
 @pytest.mark.skipif(not _HAS_TRAINED_IMAGE_MODEL, reason="no local image_model.pt or data/cattle-images/")
-def test_image_diagnosis_uses_the_real_llm_rag_explain_path(monkeypatch):
-    # Unlike the M8 placeholder, a real image diagnosis now goes through the same explain
-    # path as symptoms — get_llm() gets called, not skipped.
-    calls = []
-
-    class FakeLLM:
-        def invoke(self, messages):
-            calls.append("called")
-            return SimpleNamespace(content="Grounded explanation.")
-
-    monkeypatch.setattr(graph_module, "get_llm", lambda: FakeLLM())
-
-    result = run_diagnosis({}, image_base64=_sample_image_base64("lumpy"))
-
-    assert calls == ["called"]
-    assert result["explanation"] == "Grounded explanation."
-
-
-@pytest.mark.skipif(not _HAS_TRAINED_IMAGE_MODEL, reason="no local image_model.pt or data/cattle-images/")
 def test_image_diagnosis_still_escalates_for_reportable_disease():
     result = run_diagnosis({}, image_base64=_sample_image_base64("lumpy"))
 
@@ -148,7 +89,7 @@ def test_image_diagnosis_still_escalates_for_reportable_disease():
 
 
 # M13/M14 follow-up: Cat/Dog each have their own real, trained IMAGE model — same
-# gitignored-artifact-so-skip-in-CI reasoning as the cattle model above. Species picks which
+# skip-when-the-photos-aren't-downloaded reasoning as the cattle model above. Species picks which
 # model predict_image_node calls; see app.agent.graph._IMAGE_MODEL_BY_SPECIES.
 _CAT_IMAGE_MODEL_PATH = cat_image_model_module.DEFAULT_MODEL_PATH
 _CAT_IMAGES_DIR = Path(__file__).resolve().parents[1] / "data" / "cat-images"
@@ -158,7 +99,7 @@ _DOG_IMAGE_MODEL_PATH = dog_image_model_module.DEFAULT_MODEL_PATH
 _DOG_IMAGES_DIR = Path(__file__).resolve().parents[1] / "data" / "dog-images"
 _HAS_TRAINED_DOG_IMAGE_MODEL = _DOG_IMAGE_MODEL_PATH.exists() and _has_sample_photos(_DOG_IMAGES_DIR)
 
-# M16: Goat gets its own real, trained IMAGE model too — same gitignored-artifact reasoning.
+# M16: Goat gets its own real, trained IMAGE model too — same skip-without-photos reasoning.
 _GOAT_IMAGE_MODEL_PATH = goat_image_model_module.DEFAULT_MODEL_PATH
 _GOAT_IMAGES_DIR = Path(__file__).resolve().parents[1] / "data" / "goat-images"
 _HAS_TRAINED_GOAT_IMAGE_MODEL = _GOAT_IMAGE_MODEL_PATH.exists() and _has_sample_photos(_GOAT_IMAGES_DIR)
@@ -318,17 +259,6 @@ def test_non_animal_photo_is_rejected_as_invalid_image_for_every_species(species
     assert result["next_steps"] == []
 
 
-def test_invalid_image_never_calls_the_llm_or_retrieval(monkeypatch):
-    calls = []
-    monkeypatch.setattr(graph_module, "get_llm", lambda: calls.append("llm"))
-    monkeypatch.setattr(graph_module, "retrieve", lambda *a, **k: calls.append("retrieve"))
-
-    result = run_diagnosis({}, image_base64=_fixture_image_base64("non-animal-car.jpg"))
-
-    assert result["diagnosis"] == "invalid_image"
-    assert calls == []
-
-
 # A tiny real 1x1 PNG, already base64-encoded — genuinely decodable, so tests using it
 # exercise the "model missing" path specifically, not the "not a real image" decode-failure
 # path tested above.
@@ -403,49 +333,12 @@ def test_recommended_action_still_escalates_for_reportable_disease():
     assert result["recommended_action"] == "escalate_to_vet"
 
 
-def test_sources_populated_when_llm_and_retrieval_both_succeed(monkeypatch):
-    # This used to need chromadb, and therefore Docker. Retrieval reads the checked-in
-    # markdown directly now (docs/specs/remove-databases.md), so it runs natively.
-    fake_response = SimpleNamespace(content="Grounded explanation using the reference material.")
-    monkeypatch.setattr(graph_module, "get_llm", lambda: SimpleNamespace(invoke=lambda messages: fake_response))
-
-    result = run_diagnosis(CONFIDENT_SYMPTOMS)
-
-    assert result["explanation"] == fake_response.content
-    # Exact lookup, so this is now stricter than it could be under similarity search: the
-    # diagnosis maps to exactly one document and no thematically-similar neighbour can be
-    # dragged in with it.
-    assert result["sources"] == ["foot-and-mouth-disease"]
-
-
-def test_sources_empty_when_llm_falls_back_to_template():
-    # Default autouse fixture makes get_llm() raise — explanation falls back to the
-    # template, which doesn't cite anything, so sources must not claim retrieval was used.
+def test_sources_are_always_empty():
+    # The template cites nothing, so the internal contract's `sources` stays empty
+    # (docs/specs/remove-ollama.md).
     result = run_diagnosis(CONFIDENT_SYMPTOMS)
 
     assert result["sources"] == []
-
-
-def test_retrieval_failure_does_not_block_diagnosis(monkeypatch):
-    def _broken_retrieve(query, k=3):
-        raise RuntimeError("simulated Chroma failure")
-
-    monkeypatch.setattr(graph_module, "retrieve", _broken_retrieve)
-
-    result = run_diagnosis(CONFIDENT_SYMPTOMS)
-
-    assert result["diagnosis"] == "Foot and Mouth Disease"
-    assert result["sources"] == []
-
-
-def test_uncertain_diagnosis_never_calls_retrieval(monkeypatch):
-    calls = []
-    monkeypatch.setattr(graph_module, "retrieve", lambda query, k=3: calls.append(query))
-
-    result = run_diagnosis({})
-
-    assert result["diagnosis"] == "uncertain"
-    assert calls == []
 
 
 def test_uncertain_diagnosis_gets_hardcoded_precautions():

@@ -27,7 +27,6 @@ body:
       label: Primarily affects
       options:
         - frontend
-        - backend
         - ml-service
         - cross-service / docs / infra
     validations:

@@ -10,11 +10,6 @@ echo "$CHANGED" | grep -q '^frontend/' && {
   (cd frontend && npm run lint)
 }
 
-echo "$CHANGED" | grep -q '^backend/' && {
-  echo "-> backend changed, compiling"
-  (cd backend && mvn -q compile)
-}
-
 echo "$CHANGED" | grep -qE '^ml-service/.*\.py$' && {
   echo "-> ml-service changed, running tests"
   (cd ml-service && .venv/Scripts/python.exe -m pytest -q 2>/dev/null || .venv/bin/python -m pytest -q)

@@ -187,7 +187,7 @@ describe('DiagnosisIntake', () => {
             recommendedAction: 'retry_upload', precautions: [], nextSteps: [], createdAt: '2026-01-01T00:00:00Z',
           },
         ],
-        // Backend excludes invalid_image from the comparison — still "agree".
+        // ml-service excludes invalid_image from the comparison — still "agree".
         diagnosesAgree: true,
       })
     )

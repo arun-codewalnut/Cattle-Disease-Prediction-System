@@ -1,25 +1,24 @@
 # Testing Strategy
 
-Test pyramid across three services — most coverage at the fast/cheap layers, thinnest at
+Test pyramid across two services — most coverage at the fast/cheap layers, thinnest at
 the slow/expensive one.
 
 ```
         /\
        /e2e\        few — critical user journeys only (tests/e2e, Playwright)
       /------\
-     /integr. \     some — service contracts (e.g. backend <-> ml-service)
+     /integr. \     some — service contracts (e.g. frontend <-> ml-service public API)
     /----------\
-   /    unit    \   most — fast, isolated logic (JUnit / pytest / Vitest)
+   /    unit    \   most — fast, isolated logic (pytest / Vitest)
   /--------------\
 ```
 
 | Layer | Tool | Location | Scope |
 |---|---|---|---|
-| Unit — backend | JUnit 5 | `backend/src/test/java/` | Business logic, validators, mappers |
-| Unit — ml-service | pytest | `ml-service/tests/` | Model wrappers, agent routing logic, error shapes |
+| Unit — ml-service | pytest | `ml-service/tests/` | Model wrappers, agent routing logic, error shapes, public API validation/species rules (`test_public_api.py`) |
 | Unit — frontend | Vitest + React Testing Library | `frontend/src/**/*.test.jsx` | Components, hooks |
-| Integration | pytest / JUnit (`@SpringBootTest`) | within each service's test dir | Real DB (Testcontainers) or real HTTP call between two services |
-| E2E | Playwright | `tests/e2e/` | Full flow: submit symptoms in the UI → diagnosis returned, across all three running services |
+| Integration | pytest (FastAPI `TestClient`) | within each service's test dir | Real HTTP request through the app, middleware and exception handlers |
+| E2E | Playwright | `tests/e2e/` | Full flow: submit symptoms in the UI → diagnosis returned, across both running services |
 
 ## Rules (from the agentic-testing playbook, applied here)
 
@@ -38,10 +37,12 @@ the slow/expensive one.
 
 ## Current status
 
-- `backend`: default JUnit scaffold only (`BackendApplicationTests.java`) — grows with M3.
+- `backend`: removed (2026-09-27). Its JUnit suite's behaviour is covered by pytest in
+  `ml-service/tests/test_public_api.py` — see
+  [docs/specs/merge-backend-into-ml-service.md](specs/merge-backend-into-ml-service.md).
 - `ml-service`: `tests/test_health.py` covers `/health` and the stub `/agent/diagnose` —
   real coverage lands with M1/M2 per [docs/specs/M1-baseline-symptom-model.md](specs/M1-baseline-symptom-model.md).
 - `frontend`: Vitest configured (see `frontend/AGENTS.md`), no component tests yet — none
   exist to test until M4 builds the UI.
-- `tests/e2e`: Playwright configured, one real smoke test (`smoke.spec.js`) that checks all
-  three services' health endpoints respond — this already works today, run it after `make up`.
+- `tests/e2e`: Playwright configured, one real smoke test (`smoke.spec.js`) that checks the
+  services respond — this already works today, run it after `make up`.

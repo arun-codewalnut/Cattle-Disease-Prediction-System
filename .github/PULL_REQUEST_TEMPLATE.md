@@ -5,7 +5,6 @@
 ## Affected service(s)
 
 - [ ] frontend
-- [ ] backend
 - [ ] ml-service
 - [ ] docs / infra / cross-service
 
@@ -21,4 +20,4 @@
 
 ## How was this tested?
 
-<!-- e.g. mvn test / pytest / npm run lint / manual make up + click-through -->
+<!-- e.g. pytest / npm test / npm run lint / manual make up + click-through -->

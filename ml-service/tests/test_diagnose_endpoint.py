@@ -100,7 +100,7 @@ def test_healthy_recommends_monitor() -> None:
 
 
 @pytest.mark.skipif(not _HAS_TRAINED_IMAGE_MODEL, reason="no local image_model.pt or data/cattle-images/")
-def test_image_base64_returns_real_diagnosis_via_llm_rag_path() -> None:
+def test_image_base64_returns_real_diagnosis() -> None:
     image_base64 = _sample_image_base64("lumpy")
 
     response = client.post(
@@ -111,8 +111,8 @@ def test_image_base64_returns_real_diagnosis_via_llm_rag_path() -> None:
     assert response.status_code == 200
     assert body["diagnosis"] == "Lumpy Skin Disease"
     assert body["recommended_action"] == "escalate_to_vet"
-    # M9: real model now, so explanation goes through the same LLM/template path symptom
-    # diagnoses use — no more "this is a placeholder" wording.
+    # M9: real model now, so explanation uses the same template symptom diagnoses use — no
+    # more "this is a placeholder" wording.
     assert "placeholder" not in body["explanation"].lower()
 
 
