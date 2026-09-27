@@ -9,11 +9,6 @@ tests/e2e/node_modules/
 tests/e2e/playwright-report/
 tests/e2e/test-results/
 
-# --- Java / Spring Boot ---
-backend/target/
-backend/*.iml
-backend/.env
-
 # --- Python / FastAPI ---
 ml-service/.venv/
 ml-service/__pycache__/

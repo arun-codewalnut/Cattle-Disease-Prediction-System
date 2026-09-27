@@ -3,6 +3,8 @@ uvicorn[standard]==0.34.0
 pydantic==2.10.4
 python-dotenv==1.0.1
 httpx==0.28.1
+# Parses the multipart photo uploads on POST /api/diagnoses/image (FastAPI needs it for forms).
+python-multipart==0.0.32
 
 # ML
 xgboost==2.1.3

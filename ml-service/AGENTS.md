@@ -13,13 +13,22 @@
   `--reload`); `docker-compose.yml` overrides it with `--reload` for local dev.
   `.dockerignore` keeps `.venv/` and training datasets out of the image — only
   `data/veterinary-reference/` is read at runtime.
+- **Public API**: `app/api/diagnoses.py` serves the frontend directly —
+  `POST /api/diagnoses` and `POST /api/diagnoses/image` (validation, species rules, camelCase
+  response shaping; calls the agent in-process via `run_in_threadpool`). `app/api/diagnose.py`
+  (`POST /agent/diagnose`) is the internal agent endpoint; `GET /health` is the only health
+  check. Errors go through `app/errors.py` (`ApiError` → `{code, message, details}`); keep that
+  shape. Contract: `docs/API_CONTRACTS.md`, spec: `docs/specs/merge-backend-into-ml-service.md`.
+- **CORS**: allowed origins come from `CORS_ALLOWED_ORIGINS` (comma-separated, default
+  `http://localhost:5173`) in `app/main.py` — set it to the deployed frontend's URL.
 - **Structure**: `app/api/` = FastAPI routers, `app/agent/` = LangGraph graph + tools,
   `app/models/` = ML inference wrappers, `app/rag/` = retrieval over
   `data/veterinary-reference/*.md`. Still RAG — the explain node grounds its prompt in
   retrieved documents; only the retrieval source is the filesystem rather than a vector
   store. No ingest step: edit a document, restart the service.
 - **Tests**: `pytest` from `ml-service/` — the **whole** suite runs natively, no Docker and
-  no skips. Keep unit tests here; cross-service flow tests go in the root `tests/e2e/`.
+  no skips. The public API's behaviour (every status/error code in the spec) is covered by
+  `tests/test_public_api.py`. Keep unit tests here; cross-service flow tests go in the root `tests/e2e/`.
 - **Correlation ID**: read from `request.state.correlation_id` (set by
   `app/middleware.py`) — always include it when logging.
 - **LLM provider**: `app/agent/llm.py`'s `get_llm()` is the *only* place that should know

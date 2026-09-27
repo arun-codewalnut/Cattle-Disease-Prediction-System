@@ -28,22 +28,21 @@ concrete examples, "not in scope," and checkable acceptance criteria. Mirror the
 | Service | Stack | Responsibility | Conventions |
 |---|---|---|---|
 | `frontend/` | React (Vite) | UI for symptom/image intake, results display | [frontend/AGENTS.md](frontend/AGENTS.md) |
-| `backend/` | Java 21 + Spring Boot | Request validation, species rules, API gateway to ml-service (stateless — no database) | [backend/AGENTS.md](backend/AGENTS.md) |
-| `ml-service/` | Python + FastAPI + LangGraph | ML models, agent orchestration, RAG over local markdown | [ml-service/AGENTS.md](ml-service/AGENTS.md) |
+| `ml-service/` | Python + FastAPI + LangGraph | Public API (`/api/diagnoses*`: request validation, species rules), ML models, agent orchestration, RAG over local markdown (stateless — no database) | [ml-service/AGENTS.md](ml-service/AGENTS.md) |
 
 Always read the relevant service-level `AGENTS.md` before making changes inside that folder —
-this root file only covers what's shared across all three. For "where do I start / where does
+this root file only covers what's shared across both. For "where do I start / where does
 X live," see [docs/REPO_MAP.md](docs/REPO_MAP.md).
 
 ## Cross-cutting conventions
 
 - **Correlation ID**: every request generates/forwards an `X-Correlation-Id` header from
-  frontend → backend → ml-service. Always log it. This is how you trace one user request
-  across all three services' logs.
-- **Error shape**: both `backend` and `ml-service` return errors as
+  frontend → ml-service. Always log it. This is how you trace one user request across both
+  services' logs.
+- **Error shape**: `ml-service` returns errors as
   `{ "code": string, "message": string, "details": object|null }`. Don't deviate — the
   frontend has one error-handling path that expects this shape.
-- **API contracts**: both `backend` and `ml-service` expose OpenAPI specs. Don't hand-edit
+- **API contracts**: `ml-service` exposes an OpenAPI spec. Don't hand-edit
   `docs/api/*.openapi.json` — they're generated. See [docs/API_CONTRACTS.md](docs/API_CONTRACTS.md).
 - **Commits**: small, focused commits. Reference the milestone/issue in the message when one exists.
 - **Secrets**: never commit real `.env` files — only `.env.example` with placeholder values.
@@ -61,7 +60,7 @@ X live," see [docs/REPO_MAP.md](docs/REPO_MAP.md).
 
 ## Local dev
 
-`make up` boots all three services via Docker Compose. See [README.md](README.md) and the
+`make up` boots both services via Docker Compose. See [README.md](README.md) and the
 `agents/playbooks/run-stack.md` playbook for details.
 
 ## Running independent work in parallel

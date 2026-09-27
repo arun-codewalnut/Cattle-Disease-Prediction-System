@@ -1,7 +1,7 @@
-// Shared fetch wrapper — every backend call goes through here so there's exactly one
+// Shared fetch wrapper — every ml-service API call goes through here so there's exactly one
 // error-handling path, per frontend/AGENTS.md's convention.
 
-const BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8080'
+const BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000'
 
 export class ApiError extends Error {
   constructor(code, message, details) {

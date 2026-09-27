@@ -1,6 +1,6 @@
 ---
 name: run-stack
-description: Use when the user wants to run, start, boot, or preview the full cattle disease prediction stack (frontend + backend + ml-service) locally, or a single service of it.
+description: Use when the user wants to run, start, boot, or preview the full cattle disease prediction stack (frontend + ml-service) locally, or a single service of it.
 ---
 
 Full instructions: read [agents/playbooks/run-stack.md](../../../agents/playbooks/run-stack.md)

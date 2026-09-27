@@ -67,7 +67,10 @@ Tracked as GitHub Milestones + Issues on the repo.
 something hosted for real users. Don't add a deployment milestone back without checking
 with the user first (see `docs/DECISIONS.md`).
 
-Also tracked (not milestone-numbered): frontend UI redesign (cattle-themed, responsive,
+Also tracked (not milestone-numbered): **Java backend merged into `ml-service`** (2026-09-27,
+post-M16 refactor) — two services instead of three, no Java/Spring. Spec:
+[docs/specs/merge-backend-into-ml-service.md](specs/merge-backend-into-ml-service.md). And the
+frontend UI redesign (cattle-themed, responsive,
 colorful, icon-driven) — issue:
 [#15](https://github.com/arun-codewalnut/Cattle-Disease-Prediction-System/issues/15).
 

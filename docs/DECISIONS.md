@@ -1011,3 +1011,57 @@ about 46MB, and none is over 10MB, well under GitHub's 100MB per-file limit.
 **Consequences**: each retrain adds roughly one artifact's size to git history, so commit a
 retrained model only when it's meant to ship. `models/REGISTRY.md` stays the record of what
 each committed artifact is.
+
+## Java backend merged into ml-service (2026-09-27)
+
+**Supersedes**: "2026-09-16 — Polyglot split: Java backend + Python ML/agent service + React
+frontend" (and, as a consequence, the Java-specific entries that followed from it: the
+`RestClient.Builder`, `WebConfig` CORS and `MlServiceClient` HTTP/1.1 entries).
+
+**Context**: by now the Java `backend` was ~600 lines of stateless gateway — validate the
+request, apply species rules, call `ml-service`'s `POST /agent/diagnose` over HTTP, reshape
+the answer for the frontend. The persistence it originally existed for was removed on
+2026-09-23 (see "Removed both databases" above). Meanwhile the service-to-service hop was the
+main source of deployment pain on Railway (wrong private hostname, IPv4 vs IPv6, wrong port).
+
+**Decision**: delete `backend/` and re-implement its two public endpoints —
+`POST /api/diagnoses` and `POST /api/diagnoses/image` — inside `ml-service`
+(`app/api/diagnoses.py`), calling the agent **in-process** (worker thread). Same paths,
+status codes, camelCase field names and error codes, so the frontend only changes its
+default base URL (`:8080` → `:8000`). CORS moves to `ml-service` via `CORS_ALLOWED_ORIGINS`.
+The JUnit suite's behaviour is carried over as pytest in `ml-service/tests/test_public_api.py`.
+Spec: [docs/specs/merge-backend-into-ml-service.md](specs/merge-backend-into-ml-service.md).
+
+**Why**: one server language, one less service to build, deploy, run in CI and pay for, and
+no service-to-service networking at all — the Railway failure modes disappear because there's
+no second hop. The original reason for Java — matching existing React + Java skills — is
+the one real cost: this project no longer exercises Java/Spring.
+
+**Deliberate differences from the Java backend** (each only affects direct API callers or
+removes a failure mode; none changes what the UI shows for a valid request):
+1. `ML_SERVICE_ERROR` (502) / `ML_SERVICE_UNAVAILABLE` (503) are retired. Agent errors (e.g.
+   `MODEL_NOT_TRAINED`, 503) reach the caller with their own code and a readable message
+   instead of a nested upstream JSON string.
+2. Total upload size: Spring capped the whole request at 5MB, rejecting even two ordinary
+   3MB phone photos despite the UI allowing five. The per-photo 5MB limit is kept; the request
+   cap is now 5 × 5MB (+1MB overhead).
+3. A non-JSON body on `POST /api/diagnoses` returns `INVALID_REQUEST_BODY`; Spring's shared
+   handler returned the unrelated `IMAGE_REQUIRED` there.
+4. `GET /actuator/health` is gone; `GET /health` (`{"status":"ok"}`) is the single health
+   check.
+
+**Alternatives considered**:
+- *Keep the split and keep fixing Railway networking* — already patched once (IPv4+IPv6
+  listen, #49), but each fix treats a symptom of a hop that adds nothing for a stateless
+  gateway.
+- *Rewrite the gateway as its own Python service* (three services, no Java) — keeps a
+  gateway/ML boundary for future auth or rate limiting, but keeps the second hop and the
+  second deployment too. Rejected for now; nothing on the roadmap needs that boundary.
+
+**Consequences**: two services (`frontend` :5173, `ml-service` :8000); no Java, Maven or JDK
+anywhere in the toolchain, CI or pre-commit hook. Historical specs in `docs/specs/` and the
+entries above still describe the Java backend as it was — that's intended. The Railway
+`java` service can be deleted from the dashboard; the deployed frontend's
+`VITE_API_BASE_URL` must point at `ml-service`'s public URL, and `ml-service` needs
+`CORS_ALLOWED_ORIGINS` set to the frontend's URL. If auth or persistence is ever needed, it
+gets added to `ml-service` (or argued for as a new service in a new entry here).

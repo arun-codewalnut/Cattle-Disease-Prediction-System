@@ -13,8 +13,7 @@ Free/open-source stack only — see [docs/DECISIONS.md](docs/DECISIONS.md) for w
 | Path | Stack | Purpose |
 |---|---|---|
 | [frontend/](frontend) | React 19 + Vite | Symptom/image intake UI |
-| [backend/](backend) | Java 21 + Spring Boot 4 | Request validation, species rules, API gateway (stateless) |
-| [ml-service/](ml-service) | Python + FastAPI + LangGraph | ML models, agent orchestration, RAG over local markdown |
+| [ml-service/](ml-service) | Python + FastAPI + LangGraph | Public API (request validation, species rules), ML models, agent orchestration, RAG over local markdown — stateless |
 | [docs/](docs) | — | Architecture, decisions, roadmap, API contracts |
 | [agents/playbooks/](agents/playbooks) | — | Canonical how-to guides for agents/contributors |
 | [.claude/skills/](.claude/skills) | — | Claude Code adapters over the playbooks above |
@@ -31,10 +30,9 @@ There are two ways to run this (Option A / Option B below) and they need differe
 
 | Tool | Needed for | Notes |
 |---|---|---|
-| [Docker Desktop](https://www.docker.com/products/docker-desktop/) | **Option A only** — running all three services in one command | nothing else needs it: there is no database, and every test suite runs natively |
+| [Docker Desktop](https://www.docker.com/products/docker-desktop/) | **Option A only** — running both services in one command | nothing else needs it: there is no database, and every test suite runs natively |
 | [GNU Make](https://www.gnu.org/software/make/) (optional) | the `make` shortcuts | not installed on Windows by default — every target is a one-line `docker compose …` you can run directly instead, see [Makefile](Makefile) |
 | [Node.js](https://nodejs.org/) 20.19+ or 22.12+ | Option B `frontend` | Vite 8 rejects 20.0–20.18, 21.x and 22.0–22.11; the frontend **tests** (Vitest 5) need 22.12+. CI and `frontend/Dockerfile` both use Node 24 |
-| [Java 21](https://adoptium.net/) + [Maven](https://maven.apache.org/) | Option B `backend` | every Maven command runs **from `backend/`** — there's no root `pom.xml`. `backend/mvnw` (`mvnw.cmd` on Windows) is a fallback if you have no system Maven, but it downloads its own Maven distribution and can fail behind a restricted network — see [backend/AGENTS.md](backend/AGENTS.md) |
 | [Python 3.13](https://www.python.org/) | Option B `ml-service` | Windows: use the `py` launcher. Read the native-install note below before `pip install` |
 | [Ollama](https://ollama.com/download) (optional, either option) | real LLM-generated explanations | without it, explanations use a deterministic template — the app works fully either way, see `docs/DECISIONS.md` |
 | [Roboflow](https://roboflow.com/) account (optional, free) | retraining the Cow **Mastitis** image class specifically | unlike the Kaggle datasets below (which download anonymously), this one needs its own free API key — see `ml-service/data/cattle-images/SOURCE.md`. Every other model trains without any account of any kind |
@@ -63,14 +61,13 @@ symptom model needs no dataset at all.
 
 ## Running locally
 
-### Option A — Docker Compose (recommended: all three services in one command)
+### Option A — Docker Compose (recommended: both services in one command)
 
-**1. Create the three `.env` files.** Not optional — `docker-compose.yml` declares an
+**1. Create the two `.env` files.** Not optional — `docker-compose.yml` declares an
 `env_file` for each service, so compose fails to start if any is missing. The checked-in
 examples hold working local-dev defaults, so a plain copy is all you need:
 
 ```bash
-cp backend/.env.example backend/.env
 cp ml-service/.env.example ml-service/.env
 cp frontend/.env.example frontend/.env
 ```
@@ -98,14 +95,13 @@ real dataset downloaded first — see [Training/retraining a model](#trainingret
 below. Nothing forces you to train them; a species/mode you haven't trained just returns
 `503` until you do.
 
-**4. Verify and open.** Both health checks should answer before you use the UI:
+**4. Verify and open.** The health check should answer before you use the UI:
 
 ```bash
 curl http://localhost:8000/health           # ml-service  -> {"status":"ok"}
-curl http://localhost:8080/actuator/health  # backend     -> {"status":"UP"}
 ```
 
-Open **http://localhost:5173**. (`backend` at `:8080`, `ml-service` at `:8000`. No
+Open **http://localhost:5173**. (`ml-service` — the API the UI calls — at `:8000`. No
 database — see [docs/specs/remove-databases.md](docs/specs/remove-databases.md).)
 
 Other targets: `make up-d` (background), `make logs`, `make ps`, `make down` (stop and
@@ -128,13 +124,10 @@ python -m training.symptom_model_train     #   model, no dataset download needed
 cd frontend && npm install
 ```
 
-`backend` needs no setup at all — it's stateless, with no database to provision.
-
 Then run each service in its own terminal:
 
 ```bash
-cd ml-service && .venv\Scripts\activate && uvicorn app.main:app --reload   # :8000
-cd backend && mvn spring-boot:run                                          # :8080  (must be run from backend/)
+cd ml-service && .venv\Scripts\python -m uvicorn app.main:app --reload     # :8000  (macOS/Linux: .venv/bin/python)
 cd frontend && npm run dev                                                 # :5173
 ```
 
@@ -148,7 +141,7 @@ Full instructions: [agents/playbooks/run-stack.md](agents/playbooks/run-stack.md
 
 ## Testing the application
 
-Once all three services are up (either option above), open **http://localhost:5173**. The
+Once both services are up (either option above), open **http://localhost:5173**. The
 intake form: pick a species, then submit symptoms and/or up to 5 photos. There's nothing
 else to fill in — animal tag numbers and farm IDs were removed (see
 [docs/specs/remove-animal-identity.md](docs/specs/remove-animal-identity.md)); species is the
@@ -201,7 +194,7 @@ Ringworm photo, or `ml-service/data/cattle-images/mastitis/` for the newest clas
   Try it: upload one clearly healthy-looking photo alongside one diseased photo of the same
   species to trigger the warning; upload two photos of the same class to see it agree.
 - **6th photo**: rejected with `400 TOO_MANY_IMAGES` before anything is sent to `ml-service`
-  (limit is enforced in `backend`, see `DiagnosisService.MAX_IMAGES`).
+  (limit is enforced by `ml-service`'s public `/api/diagnoses/image` endpoint).
 
 ### Wrong-photo detection (species-mismatch and non-animal gate)
 
@@ -232,19 +225,20 @@ Useful if you want to see the raw request/response shapes (full contract:
 ```bash
 # Symptom-based diagnosis (Foot and Mouth Disease profile). One call — species is required
 # and has no default, since it picks which trained model runs.
-curl -X POST http://localhost:8080/api/diagnoses \
+curl -X POST http://localhost:8000/api/diagnoses \
   -H "Content-Type: application/json" \
   -d '{ "species": "COW", "symptoms": { "fever": true, "mouthLesions": true, "excessiveSalivation": true, "lameness": true } }'
 
 # Or, multi-photo diagnosis (1-5 photos; response includes "diagnosesAgree": true|false).
 # species travels as a form field here because the request is multipart.
-curl -X POST http://localhost:8080/api/diagnoses/image \
+curl -X POST http://localhost:8000/api/diagnoses/image \
   -F "species=COW" -F "images=@/path/to/photo1.jpg" -F "images=@/path/to/photo2.jpg"
 ```
 
-`ml-service` can also be hit directly (bypassing `backend`, e.g. to isolate whether an issue
-is in the ML layer or the gateway) at `POST http://localhost:8000/agent/diagnose` — see
-`ml-service/app/api/diagnose.py` for its request/response shape.
+The agent itself can also be hit directly (bypassing the public `/api/...` validation layer,
+e.g. to isolate whether an issue is in the ML layer or the request handling) at
+`POST http://localhost:8000/agent/diagnose` — see `ml-service/app/api/diagnose.py` for its
+request/response shape.
 
 ### Error scenarios worth exercising
 
@@ -294,9 +288,19 @@ Strategy and per-service conventions: [docs/TESTING.md](docs/TESTING.md).
 | Suite | Command | Also needs |
 |---|---|---|
 | `frontend` (Vitest) | `cd frontend && npm ci && npm test` | Node 22.12+ — Vitest 5 refuses to run on older versions even though Vite itself allows 20.19+ |
-| `backend` (JUnit) | `cd backend && mvn -B verify` | nothing — the backend is stateless, so the full Spring context boots without a database |
-| `ml-service` (pytest) | `cd ml-service && pytest` | the venv. The whole suite runs natively with no skips — Docker is no longer needed for any of it |
-| e2e (Playwright) | `make test-e2e` | all three services running, plus one-time `cd tests/e2e && npm install && npx playwright install --with-deps chromium`. The smoke test posts a real symptom diagnosis, so the Cow symptom model must be trained first |
+| `ml-service` (pytest) | `cd ml-service && pytest` | the venv. The whole suite runs natively with no skips — Docker is no longer needed for any of it. Includes the public API tests (`tests/test_public_api.py`) |
+| e2e (Playwright) | `make test-e2e` | both services running, plus one-time `cd tests/e2e && npm install && npx playwright install --with-deps chromium`. The smoke test posts a real symptom diagnosis, so the Cow symptom model must be trained first |
+
+## Deploying (Railway)
+
+Two Railway services, built from this repo: `frontend` and `ml-service`. The browser calls
+`ml-service` directly — there's no private-network hop between services any more.
+
+- `frontend`: set `VITE_API_BASE_URL` to `ml-service`'s **public** URL.
+- `ml-service`: set `CORS_ALLOWED_ORIGINS` to the frontend's public URL (comma-separated if
+  more than one; defaults to `http://localhost:5173`).
+- The old `java` service is no longer built from this repo and can be deleted in the Railway
+  dashboard.
 
 ## Roadmap
 
