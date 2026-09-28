@@ -858,6 +858,19 @@ describe('DiagnosisIntake', () => {
       expect(resultRegion()).not.toBeInTheDocument()
     })
 
+    it('counts the ticked symptoms as they change', async () => {
+      const user = userEvent.setup()
+      render(<DiagnosisIntake />)
+
+      expect(screen.getByText(/tick everything you see/i)).toBeInTheDocument()
+      await user.click(screen.getByLabelText(/fever/i))
+      expect(screen.getByText(/1 sign ticked/i)).toBeInTheDocument()
+      await user.click(screen.getByLabelText(/lameness/i))
+      expect(screen.getByText(/2 signs ticked/i)).toBeInTheDocument()
+      await user.click(screen.getByLabelText(/fever/i))
+      expect(screen.getByText(/1 sign ticked/i)).toBeInTheDocument()
+    })
+
     it('keeps the result beside the form while symptoms are edited', async () => {
       const user = userEvent.setup()
       fetchMock.mockResolvedValueOnce(jsonResponse(true, {

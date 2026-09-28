@@ -174,9 +174,9 @@
 }
 
 .mode-tab[aria-selected="true"] {
-  color: var(--text-h);
+  color: var(--accent);
   background: var(--card-bg);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12), inset 0 -3px 0 var(--accent);
 }
 
 .mode-tab:focus-visible {
@@ -207,12 +207,14 @@ input[type='number'],
 select {
   width: 100%;
   box-sizing: border-box;
-  padding: 10px 14px;
-  font-size: 15px;
-  border: 1.5px solid var(--border);
-  border-radius: 10px;
-  background: var(--bg);
+  padding: 12px 14px;
+  font-size: 16px;
+  font-weight: 600;
+  border: 2px solid var(--border);
+  border-radius: 12px;
+  background: #ffffff;
   color: var(--text-h);
+  cursor: pointer;
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
@@ -220,33 +222,44 @@ input[type='text']:hover,
 input[type='number']:hover,
 select:hover {
   border-color: var(--accent);
+  box-shadow: 0 0 0 4px var(--accent-bg);
 }
 
 input[type='text']:focus-visible,
 input[type='number']:focus-visible,
 select:focus-visible {
-  outline: 3px solid var(--accent-border);
-  outline-offset: 1px;
+  outline: none;
   border-color: var(--accent);
+  box-shadow: 0 0 0 4px var(--accent-border);
+}
+
+select:disabled {
+  cursor: progress;
+  opacity: 0.7;
 }
 
 .species-summary {
   margin: 8px 0 0;
+  padding: 7px 12px;
   font-size: 13px;
   color: var(--text);
-  opacity: 0.75;
+  background: var(--info-bg);
+  border-left: 3px solid var(--info);
+  border-radius: 8px;
 }
 
 fieldset {
-  border: 1px solid var(--border);
-  border-radius: 14px;
-  margin: 16px 0;
-  padding: 16px;
+  border: 1.5px solid var(--accent-border);
+  border-radius: 16px;
+  margin: 18px 0;
+  padding: 14px 16px 16px;
   background: var(--accent-bg);
 }
 
 legend {
-  font-size: 14px;
+  display: flex;
+  align-items: center;
+  font-size: 15px;
   font-weight: 700;
   color: var(--text-h);
   padding: 0 8px;
@@ -267,21 +280,33 @@ legend {
   padding: 10px 12px;
   border: 1.5px solid var(--border);
   border-radius: 12px;
-  background: var(--bg);
+  background: #ffffff;
   cursor: pointer;
   font-size: 14px;
   font-weight: 500;
-  transition: border-color 0.15s ease, background 0.15s ease;
+  color: var(--text);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+  transition: border-color 0.15s ease, background 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease;
 }
 
 .symptom-chip:hover {
   border-color: var(--accent);
-  background: var(--accent-bg);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 10px rgba(47, 143, 78, 0.18);
 }
 
+.symptom-chip:active {
+  transform: translateY(0) scale(0.98);
+}
+
+/* Ticked: tinted, a thick green left edge, and bold text — readable at a glance which ones
+   are in, without looking for the tiny checkbox. */
 .symptom-chip:has(input:checked) {
   border-color: var(--accent);
-  background: var(--accent-bg);
+  background: rgba(47, 143, 78, 0.14);
+  box-shadow: inset 5px 0 0 var(--accent);
+  color: var(--text-h);
+  font-weight: 700;
 }
 
 .symptom-chip:has(input:focus-visible) {
@@ -317,6 +342,10 @@ button[type='submit']:hover:not(:disabled) {
   box-shadow: 0 10px 18px rgba(47, 143, 78, 0.4);
 }
 
+button[type='submit']:active:not(:disabled) {
+  transform: translateY(0) scale(0.98);
+}
+
 button[type='submit']:focus-visible {
   outline: 3px solid var(--accent-border);
   outline-offset: 2px;
@@ -347,8 +376,11 @@ button[type='submit']:disabled {
 }
 
 .image-upload-form__label {
-  margin: 0 0 8px;
-  font-weight: 600;
+  display: flex;
+  align-items: center;
+  margin: 0 0 10px;
+  font-size: 15px;
+  font-weight: 700;
   color: var(--text-h);
 }
 
@@ -358,21 +390,22 @@ button[type='submit']:disabled {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
-  padding: 14px 16px;
-  border: 2px dashed var(--border);
-  border-radius: 10px;
-  background: var(--accent-bg);
-  color: var(--text);
+  gap: 10px;
+  padding: 24px 16px;
+  border: 2px dashed var(--accent-border);
+  border-radius: 14px;
+  background: #ffffff;
+  color: var(--text-h);
   cursor: pointer;
-  opacity: 0.85;
-  transition: border-color 0.15s ease, background 0.15s ease, transform 0.15s ease, opacity 0.15s ease;
+  transition: border-color 0.15s ease, background 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
 }
 
 .photo-picker:hover {
   border-color: var(--accent);
+  border-style: solid;
+  background: var(--accent-bg);
   transform: translateY(-1px);
-  opacity: 1;
+  box-shadow: 0 4px 12px rgba(47, 143, 78, 0.18);
 }
 
 .photo-picker:has(.photo-tray__input:focus-visible) {
@@ -389,8 +422,16 @@ button[type='submit']:disabled {
 }
 
 .photo-picker__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
   font-size: 20px;
   line-height: 1;
+  color: #ffffff;
+  background: var(--accent);
 }
 
 .photo-picker__text {
@@ -1095,4 +1136,40 @@ button[type='submit']:disabled {
   margin-top: 10px;
   font-size: 14px;
   opacity: 0.8;
+}
+
+/* Step numbers beside "Species" (1) and the checklist / photos (2). */
+.step-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  margin-right: 8px;
+  border-radius: 50%;
+  font-size: 12px;
+  font-weight: 800;
+  color: #ffffff;
+  background: var(--accent);
+}
+
+.species-field > label {
+  display: flex;
+  align-items: center;
+  font-size: 15px;
+}
+
+/* How many symptoms are ticked — goes green once there's at least one. */
+.symptom-count {
+  margin: 2px 0 10px;
+  font-size: 13px;
+  color: var(--text);
+  opacity: 0.8;
+}
+
+.symptom-count--active {
+  color: var(--accent);
+  font-weight: 700;
+  opacity: 1;
 }

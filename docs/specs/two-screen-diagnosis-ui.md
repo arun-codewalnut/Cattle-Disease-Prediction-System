@@ -90,3 +90,17 @@ Owner request: a distinct page background, and the main items easy to pick out.
   a larger heading in the urgency colour; "Meanwhile" has its own blue info treatment.
 - The per-result "probabilistic estimate… always consult a vet" line was removed (owner's
   call); docs/DISCLAIMER.md records how the result still reads as an estimate.
+
+## Follow-up: form and field emphasis (2026-09-28)
+
+Owner request: make the form, its fields and their behaviour stand out.
+
+- Numbered steps: a "1" badge beside Species, "2" beside the checklist / photos (decorative,
+  `aria-hidden`, so accessible names are unchanged).
+- Species select: white, bolder border, green border + ring on hover and keyboard focus; its
+  capability line is a small blue note.
+- Symptom options: white chips that lift and turn green-bordered on hover; ticked ones get a
+  green tint, a thick green left edge and bold text. A "N signs ticked" count under the
+  heading turns green once anything is ticked (plain text, deliberately not a live region).
+- Active tab: green text with an underline. Photo drop zone: white with a dashed green border,
+  solid green and tinted on hover. Buttons compress slightly when pressed.

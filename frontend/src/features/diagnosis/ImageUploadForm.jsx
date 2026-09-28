@@ -67,7 +67,9 @@ export default function ImageUploadForm({ images, onImagesChange, onSubmit, disa
     <form onSubmit={handleSubmit} className="image-upload-form">
       <div>
         <p className="image-upload-form__label">
-          <span aria-hidden="true">📷 </span>
+          <span className="step-badge" aria-hidden="true">
+            2
+          </span>
           Photos of the affected area — up to {MAX_IMAGES}, selectable in one go
         </p>
 

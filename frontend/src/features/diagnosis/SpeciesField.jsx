@@ -19,7 +19,10 @@ const SpeciesField = forwardRef(function SpeciesField(
   return (
     <div className="species-field">
       <label htmlFor="species">
-        <span aria-hidden="true">🔎 </span>
+        {/* Step number, decorative — the label's accessible name stays just "Species". */}
+        <span className="step-badge" aria-hidden="true">
+          1
+        </span>
         Species
       </label>
       <select

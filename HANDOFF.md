@@ -25,6 +25,8 @@ both). Spec: `docs/specs/two-screen-diagnosis-ui.md`.
   coloured result header, highlighted action block and blue "Meanwhile" block; the
   "probabilistic estimate… consult a vet" line under results was removed at the owner's
   request (DISCLAIMER.md notes how results still read as estimates).
+- **Form emphasis follow-up**: numbered steps, highlighted fields (hover/focus/ticked states),
+  a live "N signs ticked" count, underlined active tab, clearer photo drop zone.
 - **Gotcha for local dev**: Vite inside Docker on Windows doesn't see file changes through
   the bind mount — `docker compose restart frontend` after editing, or run `npm run dev`
   natively.
