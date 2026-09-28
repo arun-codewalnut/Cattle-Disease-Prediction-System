@@ -4,7 +4,8 @@ A web app that suggests the likely disease of a farm or pet animal from its **sy
 **photos**, explains the result in plain language, and tells the user what to do next —
 including when to call a vet immediately.
 
-A farmer or vet picks a species, ticks the symptoms they see (or uploads 1–5 photos), and
+A farmer or vet chooses the **Symptoms** or **Photo** screen, picks a species, ticks the
+symptoms they see (or uploads 1–5 photos), and
 gets back a result card: the likely diagnosis, how confident the model is, a short
 explanation, precautions, next steps, and a recommended action (`monitor`, `consult_vet`,
 or `escalate_to_vet` for reportable diseases such as Foot and Mouth Disease).
@@ -29,14 +30,15 @@ or `escalate_to_vet` for reportable diseases such as Foot and Mouth Disease).
 
 ## What it can diagnose
 
-Five species, each with the models that real data existed for. The trained models are
+Six species, each with the models that real data existed for (Buffalo borrows the Cow model). The trained models are
 **included in the repo**, so everything below works straight after installing.
 
 | Species | Symptom diagnosis | Photo diagnosis |
 |---|---|---|
 | **Cow** | ✅ 5 diseases — Foot and Mouth Disease, Lumpy Skin Disease, Mastitis, Bovine Respiratory Disease, Healthy (88.8% accuracy) | ✅ 4 classes — Healthy, Lumpy Skin Disease, Foot and Mouth Disease, Mastitis (82.5%) |
+| **Buffalo** | ⚠️ uses the Cow symptom model as a labelled approximation — no buffalo dataset exists. Can't detect haemorrhagic septicaemia, and never says "Monitor" (a vet check instead) | ❌ not available — the Cow photo model has never seen a buffalo |
 | **Sheep** | ✅ PPR (Peste des Petits Ruminants) screen only (80.5%) — a negative result means "not PPR", not "healthy" | ⚠️ uses the Cow photo model as a disclosed approximation (no sheep photo dataset exists) |
-| **Goat** | ❌ not available (no symptom data exists) | ✅ Healthy / Unhealthy only (80.1%) — can flag a problem but not name it |
+| **Goat** | ✅ the same PPR screen as Sheep (~80% on goat records) — a negative result means "not PPR" | ✅ Healthy / Unhealthy only (80.1%) — can flag a problem but not name it |
 | **Cat** | ❌ not available | ✅ Flea Allergy, Healthy, Ringworm, Scabies (83.0%) |
 | **Dog** | ❌ not available | ✅ Bacterial Dermatosis, Fungal Infection, Healthy, Hypersensitivity/Allergic Dermatosis (70.5%) |
 
@@ -175,9 +177,15 @@ No setting is secret except `ROBOFLOW_API_KEY`, and the app runs without it.
 
 ## Using the app
 
+The app has two screens, switched with the **Symptoms | Photo** toggle at the top of the
+form. The form starts centred; when you submit, it moves to the left and the result appears
+on the right (on a phone, the result appears below the form). **New diagnosis** under the
+result — or switching screen or species — clears it and re-centres the form.
+
 ### Symptom diagnosis
 
-Pick a species (Cow or Sheep), tick symptoms, press **Get diagnosis**. Combinations that
+On **Symptoms**, pick a species (Cow, Buffalo, Sheep or Goat — Buffalo uses the Cow model and says so), tick
+what you see, press **Get diagnosis**. Combinations that
 reliably give a confident result:
 
 | Species | Tick | Result |
@@ -187,12 +195,13 @@ reliably give a confident result:
 | Cow | Fever + Udder swelling + Drop in milk yield | **Mastitis** — consult vet |
 | Cow | Fever + Nasal discharge + Coughing + Labored breathing | **Bovine Respiratory Disease** — consult vet |
 | Cow | nothing | **Healthy** — monitor |
-| Sheep | Nasal discharge + Sores in mouth or nose | **PPR** — escalate to vet |
-| Sheep | nothing | **PPR Negative** |
+| Buffalo | the same as Cow | the same disease as Cow, with a "based on the cow model" note — and **Healthy** becomes consult vet |
+| Sheep or Goat | Nasal discharge + Sores in mouth or nose | **PPR** — escalate to vet |
+| Sheep or Goat | nothing | **PPR Negative** |
 
 ### Photo diagnosis
 
-Upload 1–5 JPEG or PNG photos (up to 5 MB each). Each photo is diagnosed separately; if
+On **Photo**, pick Cow, Sheep, Goat, Cat or Dog and upload 1–5 JPEG or PNG photos (up to 5 MB each). Each photo is diagnosed separately; if
 they don't all agree, the result shows a **"diagnoses disagree"** warning so the user looks
 more closely. Sample photos to try: the training datasets, if you've downloaded them (see
 [Retraining models](#retraining-models)), or any photo of the animal's affected area.
@@ -237,7 +246,7 @@ Errors always have the same shape — `{"code": "...", "message": "...", "detail
 |---|---|
 | `species` or `symptoms` missing | `400 VALIDATION_FAILED` |
 | Unknown species, or a malformed body | `400 INVALID_REQUEST_BODY` |
-| Symptom diagnosis for Cat, Dog or Goat | `400 DIAGNOSIS_NOT_SUPPORTED_FOR_SPECIES` |
+| Symptom diagnosis for Cat or Dog, or photo diagnosis for Buffalo | `400 DIAGNOSIS_NOT_SUPPORTED_FOR_SPECIES` |
 | No photo, empty photo, or not a multipart upload | `400 IMAGE_REQUIRED` |
 | More than 5 photos | `400 TOO_MANY_IMAGES` |
 | Not JPEG/PNG | `400 UNSUPPORTED_IMAGE_TYPE` |

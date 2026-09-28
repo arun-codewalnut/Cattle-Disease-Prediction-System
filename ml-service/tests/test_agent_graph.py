@@ -213,6 +213,22 @@ def test_sheep_species_routes_symptoms_to_the_sheep_model():
 @pytest.mark.skipif(
     not _HAS_TRAINED_SHEEP_SYMPTOM_MODEL, reason="no local ml-service/models/sheep_symptom_model.pkl"
 )
+def test_goat_species_routes_symptoms_to_the_ppr_model():
+    # Goat shares Sheep's PPR model (docs/specs/goat-ppr-symptom-screen.md): same features,
+    # same two outcomes, and a positive result escalates like any reportable disease.
+    all_present = {f: True for f in sheep_symptom_model_module.FEATURES}
+    result = run_diagnosis(all_present, species="GOAT")
+    assert result["diagnosis"] == "PPR (Peste des Petits Ruminants)"
+    assert result["recommended_action"] == "escalate_to_vet"
+
+    result = run_diagnosis({f: False for f in sheep_symptom_model_module.FEATURES}, species="GOAT")
+    assert result["diagnosis"] == "PPR Negative"
+    assert result["recommended_action"] != "escalate_to_vet"
+
+
+@pytest.mark.skipif(
+    not _HAS_TRAINED_SHEEP_SYMPTOM_MODEL, reason="no local ml-service/models/sheep_symptom_model.pkl"
+)
 def test_sheep_symptoms_still_use_the_cattle_model_for_other_species():
     # Same symptom dict, no species — must land on the cattle model, not sheep's, since the
     # cattle CONFIDENT_SYMPTOMS fixture uses cattle-only feature names sheep_symptom_model
@@ -331,6 +347,31 @@ def test_recommended_action_still_escalates_for_reportable_disease():
 
     assert result["diagnosis"] == "Foot and Mouth Disease"
     assert result["recommended_action"] == "escalate_to_vet"
+
+
+def test_buffalo_symptoms_use_the_cattle_model():
+    # Buffalo has no model of its own and borrows the cattle one
+    # (docs/specs/buffalo-symptoms-cow-model.md) — same symptoms, same diagnosis as a cow.
+    result = run_diagnosis(CONFIDENT_SYMPTOMS, species="BUFFALO")
+
+    assert result["diagnosis"] == "Foot and Mouth Disease"
+    assert result["recommended_action"] == "escalate_to_vet"
+
+
+@pytest.mark.parametrize(
+    "diagnosis, species, expected",
+    [
+        # A borrowed model's "all clear" isn't enough to say "just watch" — see the spec.
+        ("Healthy", "BUFFALO", "consult_vet"),
+        ("Healthy", "COW", "monitor"),
+        ("Healthy", None, "monitor"),
+        ("Foot and Mouth Disease", "BUFFALO", "escalate_to_vet"),
+        ("Mastitis", "BUFFALO", "consult_vet"),
+        ("uncertain", "BUFFALO", "consult_vet"),
+    ],
+)
+def test_buffalo_never_gets_monitor(diagnosis, species, expected):
+    assert graph_module._recommended_action(diagnosis, species) == expected
 
 
 def test_sources_are_always_empty():

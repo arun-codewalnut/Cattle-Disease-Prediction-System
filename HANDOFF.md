@@ -5,7 +5,62 @@ End-of-session notes. Overwrite this each session — it's a handoff to "next se
 
 ---
 
-## This session (2026-09-27) — Java backend merged into ml-service
+## This session (2026-09-28, part 3) — Buffalo on the cow model (Symptoms only)
+
+Branch `feat/buffalo-symptoms-cow-model`, stacked on `feat/two-screen-diagnosis-ui`. Spec:
+`docs/specs/buffalo-symptoms-cow-model.md`; decision logged (supersedes the 2026-09-22 removal).
+
+- Re-searched for a buffalo dataset first: still none downloadable (two textbook-built sets
+  in papers, unpublished). Owner chose a labelled cow-model estimate over nothing.
+- ml-service: `BUFFALO` appended to `Species`; in `SYMPTOM_SUPPORTED_SPECIES`, not in
+  `IMAGE_SUPPORTED_SPECIES` (now an explicit set); `BORROWED_MODEL_SPECIES` turns `monitor`
+  into `consult_vet`. Routing needed no change — unlisted species already fall back to the
+  cattle model.
+- Frontend: Buffalo after Cow on Symptoms only (Photo tab falls back to Cow); species note and
+  a blue "based on the cow model… can't detect haemorrhagic septicaemia" note on each result.
+- Not pushed; no PR yet.
+
+## Previous session (2026-09-28, part 2) — Two-screen diagnosis UI
+
+Branch `feat/two-screen-diagnosis-ui` (branched from `feat/goat-and-species-symptom-models`,
+so it includes the Goat PPR change — merge that one first, or merge this one alone to get
+both). Spec: `docs/specs/two-screen-diagnosis-ui.md`.
+
+- **Symptoms | Photo tabs** (real ARIA tab list, arrow keys work). Symptoms lists Cow, Sheep,
+  Goat; Photo lists all five.
+- **Layout**: form centred until submit; then the result pane grows in on the right and the
+  form glides left (CSS only, ~0.6s, off under reduced motion); below 900px the result stacks
+  under the form and the page scrolls to it. Loading skeleton and API errors appear in the
+  result area.
+- Fixed along the way: the "Escalate to vet" action box is now tinted with the card's
+  urgency colour (was always green); alert text uses the theme token, so it's readable in
+  dark mode.
+- **Visual emphasis follow-up**: white-and-gray page background, app is light-only (dark
+  theme removed — an OS in dark mode showed charcoal/green), white cards, solid urgency-
+  coloured result header, highlighted action block and blue "Meanwhile" block; the
+  "probabilistic estimate… consult a vet" line under results was removed at the owner's
+  request (DISCLAIMER.md notes how results still read as estimates).
+- **Form emphasis follow-up**: numbered steps, highlighted fields (hover/focus/ticked states),
+  a live "N signs ticked" count, underlined active tab, clearer photo drop zone.
+- **Gotcha for local dev**: Vite inside Docker on Windows doesn't see file changes through
+  the bind mount — `docker compose restart frontend` after editing, or run `npm run dev`
+  natively.
+
+## This session (2026-09-28) — Goat PPR symptom screen + symptom-dataset search
+
+Branch `feat/goat-and-species-symptom-models`. Spec: `docs/specs/goat-ppr-symptom-screen.md`.
+
+- **Goat can now be diagnosed from symptoms** — the same PPR screen as Sheep (routing entry in
+  `app/agent/graph.py`, `GOAT` added to `SYMPTOM_SUPPORTED_SPECIES`, Goat gets the PPR
+  checklist in the frontend and keeps its photo model).
+- **Why it's valid for goats**: the PPR model's accuracy was measured per `animal` code
+  (undecodable goat/sheep column) with the training script's own 5-fold setup — 80.0% and
+  80.7%, PPR recall 78.9% and 87.9%.
+- **Dataset search**: seven Kaggle candidates for Sheep/Goat/Cat/Dog symptom data inspected
+  and rejected (generated data with impossible labels, no disease column, or too small and
+  contradictory) — reasons per dataset in the spec. Cat/Dog stay symptom-blocked per owner.
+
+## Previous session (2026-09-27) — Java backend merged into ml-service
 
 Branch `feat/merge-backend-into-ml-service`. Spec (read this first — it's the source of truth
 for every status/error code): `docs/specs/merge-backend-into-ml-service.md`. Decision entry:

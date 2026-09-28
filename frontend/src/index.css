@@ -11,7 +11,23 @@
   --shadow:
     rgba(0, 0, 0, 0.1) 0 10px 15px -3px, rgba(0, 0, 0, 0.05) 0 4px 6px -2px;
 
-  --card-bg: #fffdf6;
+  --card-bg: #ffffff;
+
+  /* Page backdrop — a soft white-to-gray blend; the white cards stand out through their
+     border and shadow. */
+  --page-bg-top: #ffffff;
+  --page-bg-mid: #f1f2f4;
+  --page-bg-bottom: #dfe2e6;
+  /* Neutral tones for the drifting background glows (LiveBackground.jsx). */
+  --glow-warm: #ffffff;
+  --glow-cool: #aab1ba;
+
+  /* "Meanwhile" guidance — its own calm blue, so it never competes with the urgency colour. */
+  --info: #1f6fb2;
+  --info-bg: rgba(31, 111, 178, 0.08);
+
+  /* Text on a solid urgency-coloured bar. */
+  --on-urgency: #ffffff;
 
   --urgency-monitor: #2f8f4e;
   --urgency-monitor-bg: rgba(47, 143, 78, 0.1);
@@ -26,54 +42,36 @@
 
   font: 16px/1.6 var(--sans);
   letter-spacing: 0.1px;
-  color-scheme: light dark;
+  /* Light only: the app always uses its white-and-gray look, whatever the OS theme (owner's
+     choice — dark mode was removed). */
+  color-scheme: light;
   color: var(--text);
-  background: var(--bg);
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --text: #d7dbc9;
-    --text-h: #f3f4f6;
-    --bg: #14201a;
-    --border: #35402f;
-    --code-bg: #1f2028;
-    --accent: #5fd889;
-    --accent-bg: rgba(95, 216, 137, 0.15);
-    --accent-border: rgba(95, 216, 137, 0.5);
-    --social-bg: rgba(47, 48, 58, 0.5);
-    --shadow:
-      rgba(0, 0, 0, 0.4) 0 10px 15px -3px, rgba(0, 0, 0, 0.25) 0 4px 6px -2px;
+/* A soft white-and-gray backdrop: white at the top, easing into light gray, so the cards —
+   form and result — stand out through their border and shadow. Still no illustrated
+   scenery: a calm, professional tool, not a theme.
 
-    --card-bg: #1b2a20;
-
-    --urgency-monitor: #5fd889;
-    --urgency-monitor-bg: rgba(95, 216, 137, 0.12);
-    --urgency-consult: #e0b84a;
-    --urgency-consult-bg: rgba(224, 184, 74, 0.14);
-    --urgency-escalate: #ff8a75;
-    --urgency-escalate-bg: rgba(255, 138, 117, 0.14);
-  }
-
-  #social .button-icon {
-    filter: invert(1) brightness(2);
-  }
+   Painted on <html> and sized to the whole page, not fixed to the viewport: a fixed
+   background stopped at the first screen's edge and left a hard line across long pages. */
+html {
+  min-height: 100%;
+  background: linear-gradient(
+      165deg,
+      var(--page-bg-top) 0%,
+      var(--page-bg-mid) 38%,
+      var(--page-bg-bottom) 100%
+    )
+    var(--page-bg-bottom);
 }
 
-/* Clean, understated backdrop: the page's own --bg, plus a soft accent-tinted glow anchored
-   top-center. No illustrated scenery — it should read as a calm, professional tool, not a
-   theme. Both layers are built from tokens that already flip for dark mode. */
 body {
   margin: 0;
   min-height: 100svh;
-  background:
-    radial-gradient(1100px 560px at 50% -12%, var(--accent-bg), transparent 65%),
-    var(--bg);
-  background-attachment: fixed;
 }
 
 #root {

@@ -15,6 +15,15 @@ async function fillAndSubmit(user) {
   await user.click(screen.getByRole('button', { name: /get diagnosis/i }))
 }
 
+// Photo upload lives on its own screen now — docs/specs/two-screen-diagnosis-ui.md.
+async function openPhotoScreen(user) {
+  await user.click(screen.getByRole('tab', { name: /photo/i }))
+}
+
+function resultRegion() {
+  return screen.queryByRole('region', { name: /diagnosis result/i })
+}
+
 describe('DiagnosisIntake', () => {
   let fetchMock
 
@@ -115,6 +124,7 @@ describe('DiagnosisIntake', () => {
     const image = new File(['fake-image-bytes'], 'cow.jpg', { type: 'image/jpeg' })
 
     render(<DiagnosisIntake />)
+    await openPhotoScreen(user)
     await user.upload(screen.getByLabelText(/add photos/i), image)
     await user.click(screen.getByRole('button', { name: /diagnose from photo/i }))
 
@@ -156,6 +166,7 @@ describe('DiagnosisIntake', () => {
     const photo2 = new File(['b'], 'b.jpg', { type: 'image/jpeg' })
 
     render(<DiagnosisIntake />)
+    await openPhotoScreen(user)
     await user.selectOptions(screen.getByLabelText(/species/i), 'CAT')
     // Both photos in a single pick — the form takes a multi-file selection now.
     await user.upload(screen.getByLabelText(/add photos/i), [photo1, photo2])
@@ -196,6 +207,7 @@ describe('DiagnosisIntake', () => {
     const photo2 = new File(['car'], 'car.jpg', { type: 'image/jpeg' })
 
     render(<DiagnosisIntake />)
+    await openPhotoScreen(user)
     await user.selectOptions(screen.getByLabelText(/species/i), 'CAT')
     await user.upload(screen.getByLabelText(/add photos/i), [photo1, photo2])
     await user.click(screen.getByRole('button', { name: /diagnose from photos/i }))
@@ -219,6 +231,7 @@ describe('DiagnosisIntake', () => {
     const c = new File(['c'], 'c.jpg', { type: 'image/jpeg' })
 
     render(<DiagnosisIntake />)
+    await openPhotoScreen(user)
 
     // Only one file input, and it accepts multiple.
     expect(screen.queryByLabelText(/add photo 1/i)).not.toBeInTheDocument()
@@ -239,6 +252,7 @@ describe('DiagnosisIntake', () => {
     )
 
     render(<DiagnosisIntake />)
+    await openPhotoScreen(user)
     await user.upload(screen.getByLabelText(/add photos/i), files)
 
     expect(screen.getByText(/5 of 5 selected/i)).toBeInTheDocument()
@@ -254,6 +268,7 @@ describe('DiagnosisIntake', () => {
     const b = new File(['b'], 'b.jpg', { type: 'image/jpeg' })
 
     render(<DiagnosisIntake />)
+    await openPhotoScreen(user)
     await user.upload(screen.getByLabelText(/add photos/i), [a, b])
     expect(screen.getByText(/2 of 5 selected/i)).toBeInTheDocument()
 
@@ -287,10 +302,12 @@ describe('DiagnosisIntake', () => {
     await screen.findByText(/likely: foot and mouth disease/i)
 
     expect(live).toHaveTextContent(/likely foot and mouth disease, 81% confidence/i)
-    expect(document.querySelector('.diagnosis-outcome')).toHaveFocus()
+    expect(resultRegion()).toHaveFocus()
   })
 
-  it('shows the disclaimer once for a multi-photo result, not once per card', async () => {
+  // The "probabilistic estimate… always consult a vet" line under results was removed at the
+  // owner's request — each card already reads "Likely: X (Y% confidence)" with its own action.
+  it('renders one card per photo, with no disclaimer line under them', async () => {
     const user = userEvent.setup()
     const card = (id, diagnosis) => ({
       species: 'CAT', diagnosis, confidence: 0.9, explanation: 'x',
@@ -302,6 +319,7 @@ describe('DiagnosisIntake', () => {
     )
 
     render(<DiagnosisIntake />)
+    await openPhotoScreen(user)
     await user.selectOptions(screen.getByLabelText(/species/i), 'CAT')
     await user.upload(screen.getByLabelText(/add photos/i), [
       new File(['a'], 'a.jpg', { type: 'image/jpeg' }),
@@ -310,8 +328,8 @@ describe('DiagnosisIntake', () => {
     ])
     await user.click(screen.getByRole('button', { name: /diagnose from photos/i }))
 
-    await screen.findAllByText(/likely: ringworm/i)
-    expect(screen.getAllByText(/probabilistic estimate, not a confirmed diagnosis/i)).toHaveLength(1)
+    expect(await screen.findAllByText(/likely: ringworm/i)).toHaveLength(3)
+    expect(screen.queryByText(/probabilistic estimate, not a confirmed diagnosis/i)).not.toBeInTheDocument()
   })
 
   // docs/DISCLAIMER.md requires "likely X, confidence Y%" wording — the meter reinforces the
@@ -331,6 +349,7 @@ describe('DiagnosisIntake', () => {
     )
 
     render(<DiagnosisIntake />)
+    await openPhotoScreen(user)
     await user.selectOptions(screen.getByLabelText(/species/i), 'DOG')
     await user.upload(screen.getByLabelText(/add photos/i), new File(['a'], 'a.jpg', { type: 'image/jpeg' }))
     await user.click(screen.getByRole('button', { name: /diagnose from photo/i }))
@@ -339,7 +358,7 @@ describe('DiagnosisIntake', () => {
     expect(screen.getByText(/low confidence/i)).toBeInTheDocument()
   })
 
-  it('clears the result and the checked symptoms when checking another species', async () => {
+  it('New diagnosis clears the result and the checked symptoms, and re-centres the form', async () => {
     const user = userEvent.setup()
     fetchMock.mockResolvedValueOnce(
       jsonResponse(true, {
@@ -354,15 +373,16 @@ describe('DiagnosisIntake', () => {
     await screen.findByText(/likely: healthy/i)
     expect(screen.getByLabelText(/fever/i)).toBeChecked()
 
-    await user.click(screen.getByRole('button', { name: /check for other species/i }))
+    await user.click(screen.getByRole('button', { name: /new diagnosis/i }))
 
-    // The result clears and so does everything that was filled in (symptoms here, a photo
+    // The result area goes (the form moves back to the centre), and and so does everything that was filled in (symptoms here, a photo
     // elsewhere) — a genuinely fresh form, so the user picks the right species and re-enters
     // what's actually relevant rather than resubmitting stale, possibly-wrong-species input.
     expect(screen.queryByText(/likely: healthy/i)).not.toBeInTheDocument()
     expect(screen.getByLabelText(/fever/i)).not.toBeChecked()
     expect(screen.getByLabelText(/species/i)).toHaveValue('COW')
     expect(screen.getByLabelText(/species/i)).toHaveFocus()
+    expect(resultRegion()).not.toBeInTheDocument()
   })
 
   it('renders real thumbnails and releases them when a photo is removed', async () => {
@@ -373,6 +393,7 @@ describe('DiagnosisIntake', () => {
     vi.stubGlobal('URL', { ...URL, createObjectURL, revokeObjectURL })
 
     render(<DiagnosisIntake />)
+    await openPhotoScreen(user)
     await user.upload(screen.getByLabelText(/add photos/i), new File(['a'], 'lesion.jpg', { type: 'image/jpeg' }))
 
     const thumb = document.querySelector('.photo-tray__thumb')
@@ -402,6 +423,7 @@ describe('DiagnosisIntake', () => {
     )
 
     render(<DiagnosisIntake />)
+    await openPhotoScreen(user)
     await user.upload(screen.getByLabelText(/add photos/i), new File(['a'], 'dog.jpg', { type: 'image/jpeg' }))
     await user.click(screen.getByRole('button', { name: /diagnose from photo/i }))
 
@@ -428,6 +450,7 @@ describe('DiagnosisIntake', () => {
     )
 
     render(<DiagnosisIntake />)
+    await openPhotoScreen(user)
     await user.upload(screen.getByLabelText(/add photos/i), new File(['a'], 'cow.jpg', { type: 'image/jpeg' }))
     await user.click(screen.getByRole('button', { name: /diagnose from photo/i }))
 
@@ -456,7 +479,7 @@ describe('DiagnosisIntake', () => {
     await screen.findByText(/likely: foot and mouth disease/i)
 
     // Exactly one percentage anywhere in the result.
-    const percentages = document.querySelector('.diagnosis-outcome').textContent.match(/\d+%/g)
+    const percentages = resultRegion().textContent.match(/\d+%/g)
     expect(percentages).toHaveLength(1)
 
     // Next steps render as an ordered list inside the action block, above the explanation.
@@ -469,8 +492,10 @@ describe('DiagnosisIntake', () => {
     expect(actions.compareDocumentPosition(explanation) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
   })
 
-  it('disables the photo submit button until a file is chosen', () => {
+  it('disables the photo submit button until a file is chosen', async () => {
+    const user = userEvent.setup()
     render(<DiagnosisIntake />)
+    await openPhotoScreen(user)
 
     expect(screen.getByRole('button', { name: /diagnose from photo/i })).toBeDisabled()
   })
@@ -520,46 +545,77 @@ describe('DiagnosisIntake', () => {
     })
   })
 
-  it('shows image-only diagnosis for Cat — no symptom form, but a real photo model', async () => {
+  it('offers Cat only on the Photo screen, with its own photo model', async () => {
     const user = userEvent.setup()
 
     render(<DiagnosisIntake />)
+    // No symptom model for cats, so the Symptoms screen doesn't list them at all.
+    expect(screen.queryByRole('option', { name: /cat/i })).not.toBeInTheDocument()
+
+    await openPhotoScreen(user)
     await user.selectOptions(screen.getByLabelText(/species/i), 'CAT')
 
-    expect(screen.getByText(/photo only.*cat-specific model/i)).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: /get diagnosis/i })).not.toBeInTheDocument()
+    expect(screen.getByText(/cat-specific model/i)).toBeInTheDocument()
     expect(screen.queryByLabelText(/fever/i)).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: /diagnose from photo/i })).toBeInTheDocument()
-
     expect(fetchMock).not.toHaveBeenCalled()
   })
 
-  it('shows image-only diagnosis for Dog, with the retrained skin-disease model summary', async () => {
+  it('offers Dog only on the Photo screen, with the retrained skin-disease model summary', async () => {
     const user = userEvent.setup()
 
     render(<DiagnosisIntake />)
+    expect(screen.queryByRole('option', { name: /dog/i })).not.toBeInTheDocument()
+
+    await openPhotoScreen(user)
     await user.selectOptions(screen.getByLabelText(/species/i), 'DOG')
 
-    expect(screen.getByText(/photo only.*dog-specific skin-disease model/i)).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: /get diagnosis/i })).not.toBeInTheDocument()
+    expect(screen.getByText(/dog-specific skin-disease model/i)).toBeInTheDocument()
     expect(screen.queryByLabelText(/fever/i)).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: /diagnose from photo/i })).toBeInTheDocument()
-
     expect(fetchMock).not.toHaveBeenCalled()
   })
 
-  it('shows image-only diagnosis for Goat — binary Healthy/Unhealthy model, no symptom form', async () => {
+  it('gives Goat the PPR symptom screen and still offers photo diagnosis', async () => {
     const user = userEvent.setup()
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse(true, {
+        species: 'GOAT',
+        diagnosis: 'PPR (Peste des Petits Ruminants)',
+        confidence: 0.93,
+        explanation: 'PPR (Peste des Petits Ruminants) is the closest match.',
+        recommendedAction: 'escalate_to_vet',
+        precautions: [],
+        nextSteps: [],
+        createdAt: '2026-01-01T00:00:00Z',
+      })
+    )
 
     render(<DiagnosisIntake />)
     await user.selectOptions(screen.getByLabelText(/species/i), 'GOAT')
 
-    expect(screen.getByText(/photo only.*binary.*can.t name a specific disease/i)).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: /get diagnosis/i })).not.toBeInTheDocument()
-    expect(screen.queryByLabelText(/fever/i)).not.toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /diagnose from photo/i })).toBeInTheDocument()
+    expect(screen.getByText(/real ppr-only screen/i)).toBeInTheDocument()
+    // The PPR model's own 6 symptoms, not cattle's.
+    expect(screen.queryByLabelText(/mouth lesions/i)).not.toBeInTheDocument()
+    expect(screen.getByLabelText(/sores in mouth or nose/i)).toBeInTheDocument()
 
-    expect(fetchMock).not.toHaveBeenCalled()
+    await user.click(screen.getByLabelText(/nasal discharge/i))
+    await user.click(screen.getByLabelText(/sores in mouth or nose/i))
+    await user.click(screen.getByRole('button', { name: /get diagnosis/i }))
+
+    await screen.findByText(/likely: ppr \(peste des petits ruminants\) \(93% confidence\)/i)
+    expect(screen.getByText(/escalate to vet/i)).toBeInTheDocument()
+
+    const [diagnosisCall] = fetchMock.mock.calls
+    expect(JSON.parse(diagnosisCall[1].body)).toMatchObject({
+      species: 'GOAT',
+      symptoms: { nasal_discharge: true, oral_nasal_lesion: true, temp: false },
+    })
+
+    // Goat is on the Photo screen too, with its own (binary) photo model.
+    await openPhotoScreen(user)
+    expect(screen.getByLabelText(/species/i)).toHaveValue('GOAT')
+    expect(screen.getByText(/binary \(healthy\/unhealthy/i)).toBeInTheDocument()
   })
 
   it('submits a Cat photo diagnosis end to end', async () => {
@@ -583,6 +639,7 @@ describe('DiagnosisIntake', () => {
     )
 
     render(<DiagnosisIntake />)
+    await openPhotoScreen(user)
     await user.selectOptions(screen.getByLabelText(/species/i), 'CAT')
     const file = new File(['fake-image-bytes'], 'cat.jpg', { type: 'image/jpeg' })
     await user.upload(screen.getByLabelText(/add photos/i), file)
@@ -600,7 +657,7 @@ describe('DiagnosisIntake', () => {
   // means the attached photo was of the wrong animal in the first place, so this button clears
   // it along with the result: the user picks the right species and attaches the right photo,
   // rather than re-running the same (wrong) photo against a different species' model.
-  it('clears the uploaded photo and result when checking for another species', async () => {
+  it('New diagnosis clears the uploaded photo and result, ready for a different species', async () => {
     const user = userEvent.setup()
     fetchMock.mockResolvedValueOnce(
       jsonResponse(true, {
@@ -621,14 +678,14 @@ describe('DiagnosisIntake', () => {
     )
 
     render(<DiagnosisIntake />)
+    await openPhotoScreen(user)
     const file = new File(['fake-image-bytes'], 'maybe-a-dog.jpg', { type: 'image/jpeg' })
     await user.upload(screen.getByLabelText(/add photos/i), file)
     await user.click(screen.getByRole('button', { name: /diagnose from photo/i }))
 
     await screen.findByText(/likely: foot and mouth disease/i)
 
-    const retryButton = screen.getByRole('button', { name: /check for other species/i })
-    await user.click(retryButton)
+    await user.click(screen.getByRole('button', { name: /new diagnosis/i }))
 
     // The result clears, the photo is gone (not just the result), and the species selector is
     // ready for input again — a genuinely fresh form, not a partial reset.
@@ -664,7 +721,7 @@ describe('DiagnosisIntake', () => {
     expect(secondCall[1].body.get('species')).toBe('DOG')
   })
 
-  it('shows "Check for Other Species" even after a symptom-only submission with no photo', async () => {
+  it('shows New diagnosis after a symptom submission too', async () => {
     const user = userEvent.setup()
     fetchMock.mockResolvedValueOnce(
       jsonResponse(true, {
@@ -685,7 +742,200 @@ describe('DiagnosisIntake', () => {
     await screen.findByText(/likely: healthy/i)
     // It's the only post-result action now (no separate "Start a new check"), so it has to be
     // available regardless of whether the result came from symptoms or a photo.
-    expect(screen.getByRole('button', { name: /check for other species/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /new diagnosis/i })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /start a new check/i })).not.toBeInTheDocument()
+  })
+
+  // docs/specs/two-screen-diagnosis-ui.md
+  describe('two screens and the result layout', () => {
+    it('shows Symptoms and Photo as tabs, each with only its own form', async () => {
+      const user = userEvent.setup()
+      render(<DiagnosisIntake />)
+
+      expect(screen.getByRole('tab', { name: /symptoms/i })).toHaveAttribute('aria-selected', 'true')
+      expect(screen.getByRole('button', { name: /get diagnosis/i })).toBeInTheDocument()
+      expect(screen.queryByLabelText(/add photos/i)).not.toBeInTheDocument()
+
+      await openPhotoScreen(user)
+
+      expect(screen.getByRole('tab', { name: /photo/i })).toHaveAttribute('aria-selected', 'true')
+      expect(screen.getByLabelText(/add photos/i)).toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: /get diagnosis/i })).not.toBeInTheDocument()
+    })
+
+    it('lists each screen’s own species — Buffalo on Symptoms only, Cat and Dog on Photo only', async () => {
+      const user = userEvent.setup()
+      render(<DiagnosisIntake />)
+
+      const optionValues = () => Array.from(screen.getByLabelText(/species/i).options).map((o) => o.value)
+      expect(optionValues()).toEqual(['COW', 'BUFFALO', 'SHEEP', 'GOAT'])
+
+      await openPhotoScreen(user)
+      expect(optionValues()).toEqual(['COW', 'SHEEP', 'GOAT', 'CAT', 'DOG'])
+    })
+
+    it('falls back to Cow when switching to Photo with Buffalo selected', async () => {
+      const user = userEvent.setup()
+      render(<DiagnosisIntake />)
+      await user.selectOptions(screen.getByLabelText(/species/i), 'BUFFALO')
+
+      await openPhotoScreen(user)
+
+      expect(screen.getByLabelText(/species/i)).toHaveValue('COW')
+    })
+
+    // docs/specs/buffalo-symptoms-cow-model.md — labelled before and after submitting.
+    it('says Buffalo uses the cow model, on the form and on the result', async () => {
+      const user = userEvent.setup()
+      fetchMock.mockResolvedValueOnce(
+        jsonResponse(true, {
+          species: 'BUFFALO', diagnosis: 'Healthy', confidence: 0.9,
+          explanation: 'Healthy is the closest match.', recommendedAction: 'consult_vet',
+          precautions: [], nextSteps: [], createdAt: '2026-01-01T00:00:00Z',
+        })
+      )
+      render(<DiagnosisIntake />)
+      await user.selectOptions(screen.getByLabelText(/species/i), 'BUFFALO')
+
+      expect(screen.getByText(/uses the cow model as an approximation/i)).toBeInTheDocument()
+      // Same cattle checklist as Cow.
+      expect(screen.getByLabelText(/skin nodules/i)).toBeInTheDocument()
+
+      await fillAndSubmit(user)
+
+      expect(await screen.findByText(/likely: healthy \(90% confidence\)/i)).toBeInTheDocument()
+      expect(screen.getByText(/trained on cattle cases, not buffalo/i)).toBeInTheDocument()
+      expect(screen.getByText(/haemorrhagic septicaemia/i)).toBeInTheDocument()
+      expect(screen.getByText(/consult a vet/i)).toBeInTheDocument()
+      expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toMatchObject({ species: 'BUFFALO', symptoms: { fever: true } })
+    })
+
+    it('shows no cow-model note on a Cow result', async () => {
+      const user = userEvent.setup()
+      fetchMock.mockResolvedValueOnce(
+        jsonResponse(true, {
+          species: 'COW', diagnosis: 'Healthy', confidence: 0.9,
+          explanation: 'Healthy is the closest match.', recommendedAction: 'monitor',
+          precautions: [], nextSteps: [], createdAt: '2026-01-01T00:00:00Z',
+        })
+      )
+      render(<DiagnosisIntake />)
+      await fillAndSubmit(user)
+
+      expect(await screen.findByText(/likely: healthy/i)).toBeInTheDocument()
+      expect(screen.queryByText(/trained on cattle cases/i)).not.toBeInTheDocument()
+    })
+
+    it('falls back to Cow when switching to Symptoms with Cat selected', async () => {
+      const user = userEvent.setup()
+      render(<DiagnosisIntake />)
+      await openPhotoScreen(user)
+      await user.selectOptions(screen.getByLabelText(/species/i), 'CAT')
+
+      await user.click(screen.getByRole('tab', { name: /symptoms/i }))
+
+      expect(screen.getByLabelText(/species/i)).toHaveValue('COW')
+      expect(screen.getByLabelText(/fever/i)).toBeInTheDocument()
+    })
+
+    it('moves between tabs with the arrow keys', async () => {
+      const user = userEvent.setup()
+      render(<DiagnosisIntake />)
+
+      screen.getByRole('tab', { name: /symptoms/i }).focus()
+      await user.keyboard('{ArrowRight}')
+
+      expect(screen.getByRole('tab', { name: /photo/i })).toHaveAttribute('aria-selected', 'true')
+      expect(screen.getByRole('tab', { name: /photo/i })).toHaveFocus()
+    })
+
+    it('has no result area until a diagnosis starts, shows a loading state, then the result', async () => {
+      const user = userEvent.setup()
+      let respond
+      fetchMock.mockReturnValueOnce(new Promise((resolve) => { respond = resolve }))
+      render(<DiagnosisIntake />)
+
+      // Nothing on the right yet — the form sits centred on its own.
+      expect(resultRegion()).not.toBeInTheDocument()
+
+      await fillAndSubmit(user)
+
+      expect(resultRegion()).toBeInTheDocument()
+      expect(resultRegion()).toHaveAttribute('aria-busy', 'true')
+      expect(screen.getByText(/analysing symptoms/i)).toBeInTheDocument()
+
+      respond(jsonResponse(true, {
+        species: 'COW', diagnosis: 'Healthy', confidence: 0.95, explanation: 'x',
+        recommendedAction: 'monitor', precautions: [], nextSteps: [], createdAt: '2026-01-01T00:00:00Z',
+      }))
+
+      expect(await screen.findByText(/likely: healthy/i)).toBeInTheDocument()
+      expect(resultRegion()).toHaveAttribute('aria-busy', 'false')
+      expect(screen.queryByText(/analysing symptoms/i)).not.toBeInTheDocument()
+    })
+
+    it('shows an API error in the result area', async () => {
+      const user = userEvent.setup()
+      fetchMock.mockResolvedValueOnce(
+        jsonResponse(false, { code: 'MODEL_NOT_TRAINED', message: "The symptom_model hasn't been trained yet.", details: null })
+      )
+      vi.spyOn(console, 'error').mockImplementation(() => {})
+      render(<DiagnosisIntake />)
+
+      await fillAndSubmit(user)
+
+      const alert = await screen.findByRole('alert')
+      expect(alert).toHaveTextContent(/hasn't been trained yet/i)
+      expect(resultRegion()).toContainElement(alert)
+    })
+
+    it('clears the result and re-centres the form when switching tab or species', async () => {
+      const user = userEvent.setup()
+      const healthy = {
+        species: 'COW', diagnosis: 'Healthy', confidence: 0.95, explanation: 'x',
+        recommendedAction: 'monitor', precautions: [], nextSteps: [], createdAt: '2026-01-01T00:00:00Z',
+      }
+      fetchMock.mockResolvedValueOnce(jsonResponse(true, healthy)).mockResolvedValueOnce(jsonResponse(true, healthy))
+      render(<DiagnosisIntake />)
+
+      await fillAndSubmit(user)
+      await screen.findByText(/likely: healthy/i)
+      await openPhotoScreen(user)
+      expect(resultRegion()).not.toBeInTheDocument()
+
+      await user.click(screen.getByRole('tab', { name: /symptoms/i }))
+      await fillAndSubmit(user)
+      await screen.findByText(/likely: healthy/i)
+      await user.selectOptions(screen.getByLabelText(/species/i), 'SHEEP')
+      expect(resultRegion()).not.toBeInTheDocument()
+    })
+
+    it('counts the ticked symptoms as they change', async () => {
+      const user = userEvent.setup()
+      render(<DiagnosisIntake />)
+
+      expect(screen.getByText(/tick everything you see/i)).toBeInTheDocument()
+      await user.click(screen.getByLabelText(/fever/i))
+      expect(screen.getByText(/1 sign ticked/i)).toBeInTheDocument()
+      await user.click(screen.getByLabelText(/lameness/i))
+      expect(screen.getByText(/2 signs ticked/i)).toBeInTheDocument()
+      await user.click(screen.getByLabelText(/fever/i))
+      expect(screen.getByText(/1 sign ticked/i)).toBeInTheDocument()
+    })
+
+    it('keeps the result beside the form while symptoms are edited', async () => {
+      const user = userEvent.setup()
+      fetchMock.mockResolvedValueOnce(jsonResponse(true, {
+        species: 'COW', diagnosis: 'Healthy', confidence: 0.95, explanation: 'x',
+        recommendedAction: 'monitor', precautions: [], nextSteps: [], createdAt: '2026-01-01T00:00:00Z',
+      }))
+      render(<DiagnosisIntake />)
+
+      await fillAndSubmit(user)
+      await screen.findByText(/likely: healthy/i)
+      await user.click(screen.getByLabelText(/lameness/i))
+
+      expect(screen.getByText(/likely: healthy/i)).toBeInTheDocument()
+    })
   })
 })

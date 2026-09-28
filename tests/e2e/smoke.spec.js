@@ -34,5 +34,5 @@ test('public symptom diagnosis endpoint returns a diagnosis', async ({ request }
 
 test('frontend loads', async ({ page }) => {
   await page.goto(FRONTEND_URL)
-  await expect(page.getByRole('heading', { name: /livestock symptom checker/i })).toBeVisible()
+  await expect(page.getByRole('heading', { name: /animal health checker/i })).toBeVisible()
 })

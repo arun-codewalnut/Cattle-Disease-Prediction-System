@@ -17,8 +17,8 @@ const CATTLE_SYMPTOM_FIELDS = [
 
 // M12 follow-up (docs/specs/M12-sheep-disease-detection.md): a completely different symptom
 // vocabulary from cattle's — must match app/models/sheep_symptom_model.py's FEATURES exactly.
-// Sheep's real PPR model was trained on these 6 features only; nothing else it's ever seen.
-const SHEEP_SYMPTOM_FIELDS = [
+// The PPR model (used for Sheep and Goat) was trained on these 6 features only.
+const PPR_SYMPTOM_FIELDS = [
   { key: 'temp', label: 'Fever / high temperature', icon: '🤒' },
   { key: 'nasal_discharge', label: 'Nasal discharge', icon: '👃' },
   { key: 'diarrhea', label: 'Diarrhea', icon: '🤢' },
@@ -28,7 +28,9 @@ const SHEEP_SYMPTOM_FIELDS = [
 ]
 
 const SYMPTOM_FIELDS_BY_SPECIES = {
-  SHEEP: SHEEP_SYMPTOM_FIELDS,
+  SHEEP: PPR_SYMPTOM_FIELDS,
+  // docs/specs/goat-ppr-symptom-screen.md — same model, so the same checklist.
+  GOAT: PPR_SYMPTOM_FIELDS,
 }
 
 // Falls back to the cattle vocabulary for any species without its own (Cow, or any future

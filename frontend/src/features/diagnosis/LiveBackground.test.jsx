@@ -35,7 +35,7 @@ describe('LiveBackground', () => {
 
     // The form is still the only thing queries can see; the backdrop contributes no roles,
     // no labels and no text for getByRole/getByText to trip over.
-    expect(screen.getByRole('heading', { name: /livestock symptom checker/i })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: /animal health checker/i })).toBeInTheDocument()
     expect(screen.getByLabelText(/species/i)).toBeInTheDocument()
     expect(screen.queryByRole('img')).not.toBeInTheDocument()
   })

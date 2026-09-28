@@ -40,6 +40,11 @@ which is exactly why this study grouped them), so this is a reasonable, disclose
 cross-species choice, not a silent one. It's applied to sheep in the UI because Sheep is the
 species this project needed a real model for; the model itself doesn't distinguish species.
 
+**Also used for Goat** (2026-09-28, `docs/specs/goat-ppr-symptom-screen.md`). Out-of-fold
+accuracy measured separately on each `animal` code, with the training script's own setup:
+`animal=0` (8,045 rows) 80.0% accuracy / 78.9% PPR recall; `animal=1` (13,154 rows) 80.7% /
+87.9%. Whichever code is goat, the model works at the same level for it.
+
 ## Scope
 
 **Single disease only: PPR (Peste des Petits Ruminants), binary positive/negative.** This is

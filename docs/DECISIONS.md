@@ -1095,3 +1095,51 @@ reading the setup docs. A single install command is what a new contributor expec
 tools too) — accepted for one source of truth. If LLM-written explanations are wanted later,
 that's a new spec with the DISCLAIMER constraints (no invented facts, no percentage in the
 text) re-checked against a real model.
+
+## Goat gets the PPR symptom screen; no other symptom datasets were usable (2026-09-28)
+
+**Decision**: route Goat symptom diagnosis to the existing PPR model (Sheep's), instead of
+blocking it. Cat and Dog stay blocked. Spec:
+[docs/specs/goat-ppr-symptom-screen.md](specs/goat-ppr-symptom-screen.md).
+
+**Why**: the PPR model was trained on goat and sheep field records together; the dataset's
+species code is undocumented, so rather than guess, accuracy was measured on each code
+separately with the training script's own cross-validation — 80.0% and 80.7%, PPR recall
+78.9% and 87.9%. Whichever code is goat, the model is as good for goats as for the flock as a
+whole. PPR is primarily a goat disease, so leaving goat owners with photo-only
+Healthy/Unhealthy was the weaker option.
+
+**Alternatives considered**: a real multi-disease symptom dataset for Sheep, Goat, Cat or
+Dog — searched and rejected (seven candidates, each generated with medically impossible
+labels, missing a disease column, or too small and contradictory; the spec lists each).
+Synthetic data for Cat and Dog — declined by the owner; it would also need a rabies
+escalation rule (docs/DISCLAIMER.md) designed first.
+
+**Consequences**: Goat shows the same 6-symptom PPR checklist as Sheep and keeps its photo
+model. "PPR Negative" means "not PPR", not "healthy", for both species. Revisit if a real,
+species-labelled small-ruminant or companion-animal symptom dataset appears.
+
+## Buffalo returns on the Symptoms screen, using the cow model (2026-09-28)
+
+**Decision**: offer Buffalo again, on the Symptoms screen only, diagnosed by the cattle symptom
+model and labelled as an approximation. This supersedes "Buffalo removed" (2026-09-22) above.
+Spec: [docs/specs/buffalo-symptoms-cow-model.md](specs/buffalo-symptoms-cow-model.md).
+
+**Why**: a third search still found no downloadable buffalo dataset — two papers built
+buffalo symptom sets from textbooks, neither published. The owner judged a clearly labelled
+estimate more useful to buffalo keepers than no option. The 2026-09-22 objection was to an
+approximation passed off as an interim state; this one is permanent by design and says so on
+the form and on every result.
+
+**Safeguards (what's different from M11)**: no photo diagnosis for Buffalo (the cattle photo
+model has never seen buffalo skin); a note on every result that it's based on cattle cases and
+can't detect haemorrhagic septicaemia; and `monitor` becomes `consult_vet` for Buffalo, since a
+borrowed model's "Healthy" isn't strong enough to tell someone to just watch.
+
+**Alternatives considered**: keep Buffalo out (the 2026-09-22 position) — rejected by the owner;
+also offer photos — rejected, the photo model's input is too different; drop the percentage for
+Buffalo — rejected, the percentage drives the low-confidence caveat.
+
+**Consequences**: `BUFFALO` is back in the `Species` enum and both frontend species lists.
+Revisit if a buffalo dataset becomes available (e.g. from either paper's authors) — that would
+be a real buffalo model and a new spec.

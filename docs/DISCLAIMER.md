@@ -10,6 +10,12 @@ This system is a **learning project**, not a certified veterinary diagnostic too
 - Do not use this system's output as the sole basis for a real animal-health or
   herd-management decision.
 
+How the UI meets this (2026-09-28): every result heading reads "Likely: X (Y% confidence)",
+low-confidence results carry a "treat this as a hint" caveat, and every result shows a vet
+action (monitor / consult / escalate). The separate "This is a probabilistic estimate, not a
+confirmed diagnosis. Always consult a vet…" line under results was removed at the owner's
+request as redundant with those.
+
 Any feature that adds real-world action (notifications, escalation, reporting to an
 authority) must preserve this behavior. See
 [docs/API_CONTRACTS.md](API_CONTRACTS.md) for the `recommended_action` field this maps to.
@@ -29,6 +35,15 @@ small validation set (a real photo showing mastitis should get flagged), but at 
 roughly 2 in 5 "Mastitis" predictions are a false positive (a Lumpy Skin Disease or Foot and
 Mouth Disease photo misclassified as Mastitis), and the other 3 classes each lost 2-4 points
 of F1 from before Mastitis was added. Full numbers: `ml-service/models/REGISTRY.md`.
+
+## Buffalo (cow model, symptoms only — 2026-09-28)
+
+Buffalo has no model of its own and is diagnosed by the **cattle symptom model**
+([docs/specs/buffalo-symptoms-cow-model.md](specs/buffalo-symptoms-cow-model.md)). Every
+buffalo result carries a note that it's based on cattle cases and can't detect haemorrhagic
+septicaemia (a major buffalo disease the cattle model has no class for); a buffalo result
+never says "Monitor" — `monitor` becomes `consult_vet`; and photos aren't offered for Buffalo
+at all. Any change to this logic keeps all three.
 
 ## Companion animals (M13+)
 
@@ -77,10 +92,14 @@ validation accuracy. No disease-specific goat image dataset was found anywhere i
 session's search, so **the model can flag that a goat photo looks off, but it can never say
 what's wrong**. An `Unhealthy` result gets generic guidance (isolate the animal, consult a
 vet, take a closer photo of the area of concern) rather than disease-specific precautions,
-because there is no specific disease identified. Goat has no symptom model either — the
-closest candidate data (the PPR dataset Sheep's symptom model uses) can't be reliably split
-by species (see `ml-service/data/sheep-symptoms/SOURCE.md`), so symptom-based diagnosis stays
-blocked for Goat, same as Cat and Dog.
+because there is no specific disease identified.
+
+**Goat symptom diagnosis is a PPR screen only** — the same model Sheep uses, trained on goat
+and sheep records together (their species code can't be decoded, so it was measured on both
+groups instead: ~80% accuracy, 79–88% of PPR cases caught, whichever group is goat — see
+`docs/specs/goat-ppr-symptom-screen.md`). It answers one question — PPR or not — so a
+negative result means "not PPR", never "healthy"; a goat can still have any other disease.
+A positive result always escalates to a vet, as PPR is a notifiable disease.
 
 **The species-mismatch detector was rewritten** (see "Species-mismatch detection" below) —
 the Dog dataset swap above had temporarily weakened it (dog-as-cow catch rate dropped to

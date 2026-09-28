@@ -1,3 +1,5 @@
+import { BORROWED_MODEL_NOTES } from './species'
+
 const ACTION_LABELS = {
   escalate_to_vet: 'Escalate to vet',
   consult_vet: 'Consult a vet',
@@ -76,6 +78,7 @@ function DiagnosisResultCard({ result }) {
   const isUrgent = result.recommendedAction === 'escalate_to_vet'
   const urgencyIcon = ACTION_ICONS[result.recommendedAction] ?? 'ℹ️'
   const lowConfidence = isLowConfidence(confidencePercent)
+  const borrowedModelNote = BORROWED_MODEL_NOTES[result.species]
 
   return (
     <section data-urgent={isUrgent} className={`diagnosis-result urgency-${result.recommendedAction}`}>
@@ -105,6 +108,14 @@ function DiagnosisResultCard({ result }) {
       </div>
 
       <div className="diagnosis-result__body">
+        {/* A species with no model of its own (Buffalo) — the percentage above is the cow
+            model's, so say so on every result. docs/specs/buffalo-symptoms-cow-model.md */}
+        {borrowedModelNote && (
+          <p className="borrowed-model-note">
+            <span aria-hidden="true">ℹ️</span> {borrowedModelNote}
+          </p>
+        )}
+
         {lowConfidence && (
           <p className="confidence__caveat">
             <span aria-hidden="true">⚠️</span> Low confidence — treat this as a hint to look
@@ -149,20 +160,11 @@ function DiagnosisResultCard({ result }) {
   )
 }
 
-// One disclaimer per submission, not one per card. A five-photo result used to repeat the
-// same paragraph five times, which trains people to skip exactly the sentence
-// docs/DISCLAIMER.md needs them to read.
-function ResultDisclaimer() {
-  return (
-    <p className="disclaimer">
-      <em>
-        This is a probabilistic estimate, not a confirmed diagnosis. Always consult a vet
-        before making treatment decisions.
-      </em>
-    </p>
-  )
-}
-
+// There used to be a "This is a probabilistic estimate, not a confirmed diagnosis. Always
+// consult a vet…" line under every result. Removed at the owner's request: each card already
+// frames itself as an estimate ("Likely: X (Y% confidence)", plus the low-confidence caveat)
+// and carries its own vet action (consult or escalate). See docs/DISCLAIMER.md.
+//
 // Multi-photo follow-up: an image submission returns { results: [...], diagnosesAgree } —
 // one card per photo, plus a warning banner when the photos didn't all get the same
 // diagnosis. A symptom submission still returns a single result object, rendered as one card.
@@ -171,7 +173,6 @@ export default function DiagnosisResult({ result }) {
     return (
       <div className="diagnosis-result-list">
         <DiagnosisResultCard result={result} />
-        <ResultDisclaimer />
       </div>
     )
   }
@@ -187,7 +188,6 @@ export default function DiagnosisResult({ result }) {
       {result.results.map((item, index) => (
         <DiagnosisResultCard key={item.id ?? index} result={item} />
       ))}
-      <ResultDisclaimer />
     </div>
   )
 }

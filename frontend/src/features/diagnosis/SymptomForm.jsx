@@ -1,4 +1,6 @@
 export default function SymptomForm({ fields, symptoms, onSymptomChange, onSubmit, disabled }) {
+  const tickedCount = fields.filter((field) => symptoms[field.key]).length
+
   function handleSubmit(event) {
     event.preventDefault()
     onSubmit()
@@ -7,7 +9,19 @@ export default function SymptomForm({ fields, symptoms, onSymptomChange, onSubmi
   return (
     <form onSubmit={handleSubmit}>
       <fieldset disabled={disabled}>
-        <legend>🩺 Symptoms</legend>
+        <legend>
+          <span className="step-badge" aria-hidden="true">
+            2
+          </span>
+          What signs do you see?
+        </legend>
+        {/* Plain text, not a live region: the page's single polite live region is reserved
+            for the result, and a second one here would talk over it on every tick. */}
+        <p className={`symptom-count${tickedCount > 0 ? ' symptom-count--active' : ''}`}>
+          {tickedCount === 0
+            ? 'Tick everything you see'
+            : `${tickedCount} ${tickedCount === 1 ? 'sign' : 'signs'} ticked`}
+        </p>
         <div className="symptom-grid">
           {fields.map((field) => (
             <label key={field.key} htmlFor={field.key} className="symptom-chip">
