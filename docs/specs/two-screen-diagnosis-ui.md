@@ -80,8 +80,9 @@ in the result area.
 
 Owner request: a distinct page background, and the main items easy to pick out.
 
-- Page background is a sage-green gradient (deep green in dark mode); form and result sit on
-  white cards with a stronger shadow; the form card has a green accent strip on top.
+- Page background is a soft white-to-gray gradient (neutral charcoal in dark mode; the
+  drifting background glows are neutral too — was sage green first, changed at the owner's
+  request); form and result sit on white cards with a stronger shadow; the form card has a green accent strip on top.
 - Result header is a solid bar in the urgency colour (red escalate / amber consult / green
   monitor) with white text — darkened in light mode so white text stays readable.
 - The action block ("Escalate to vet" / "Consult a vet" / "Monitor") has a thick left bar and

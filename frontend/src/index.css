@@ -13,9 +13,14 @@
 
   --card-bg: #ffffff;
 
-  /* Page backdrop — a distinct sage green, so the white cards stand out from it. */
-  --page-bg-top: #cfe2d3;
-  --page-bg-bottom: #eaf1e8;
+  /* Page backdrop — a soft white-to-gray blend; the white cards stand out through their
+     border and shadow. */
+  --page-bg-top: #ffffff;
+  --page-bg-mid: #f1f2f4;
+  --page-bg-bottom: #dfe2e6;
+  /* Neutral tones for the drifting background glows (LiveBackground.jsx). */
+  --glow-warm: #ffffff;
+  --glow-cool: #aab1ba;
 
   /* "Meanwhile" guidance — its own calm blue, so it never competes with the urgency colour. */
   --info: #1f6fb2;
@@ -62,8 +67,11 @@
 
     --card-bg: #1b2a20;
 
-    --page-bg-top: #0f2418;
-    --page-bg-bottom: #0b140f;
+    --page-bg-top: #2a2e33;
+    --page-bg-mid: #1d2024;
+    --page-bg-bottom: #131517;
+    --glow-warm: #4a5058;
+    --glow-cool: #3a4048;
 
     --info: #7cb8f0;
     --info-bg: rgba(124, 184, 240, 0.1);
@@ -84,15 +92,18 @@
   }
 }
 
-/* A distinct sage-green backdrop (deep green in dark mode) so the white cards — form and
-   result — stand out clearly. Still no illustrated scenery: a calm, professional tool, not a
-   theme. Built from tokens that flip for dark mode. */
+/* A soft white-and-gray backdrop (charcoal in dark mode): white at the top, easing into
+   light gray, so the cards — form and result — stand out through their border and shadow.
+   Still no illustrated scenery: a calm, professional tool, not a theme. */
 body {
   margin: 0;
   min-height: 100svh;
-  background:
-    radial-gradient(1100px 560px at 50% -12%, var(--accent-bg), transparent 65%),
-    linear-gradient(180deg, var(--page-bg-top) 0%, var(--page-bg-bottom) 55%);
+  background: linear-gradient(
+    165deg,
+    var(--page-bg-top) 0%,
+    var(--page-bg-mid) 38%,
+    var(--page-bg-bottom) 100%
+  );
   background-color: var(--page-bg-bottom);
   background-attachment: fixed;
 }

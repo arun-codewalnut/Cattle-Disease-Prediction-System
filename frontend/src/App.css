@@ -816,7 +816,7 @@ button[type='submit']:disabled {
   height: 78vmax;
   top: -34vmax;
   left: -18vmax;
-  background: radial-gradient(circle, color-mix(in srgb, var(--urgency-consult) 20%, transparent), transparent 66%);
+  background: radial-gradient(circle, color-mix(in srgb, var(--glow-warm) 70%, transparent), transparent 66%);
   animation: bg-drift-sun 78s ease-in-out infinite;
 }
 
@@ -826,7 +826,7 @@ button[type='submit']:disabled {
   height: 64vmax;
   top: -26vmax;
   right: -20vmax;
-  background: radial-gradient(circle, color-mix(in srgb, var(--accent) 18%, transparent), transparent 68%);
+  background: radial-gradient(circle, color-mix(in srgb, var(--glow-cool) 22%, transparent), transparent 68%);
   animation: bg-drift-sky 92s ease-in-out infinite;
 }
 
@@ -837,7 +837,7 @@ button[type='submit']:disabled {
   bottom: -34vmax;
   left: 50%;
   margin-left: -48vmax;
-  background: radial-gradient(ellipse at center, color-mix(in srgb, var(--accent) 24%, transparent), transparent 62%);
+  background: radial-gradient(ellipse at center, color-mix(in srgb, var(--glow-cool) 26%, transparent), transparent 62%);
   animation: bg-drift-field 86s ease-in-out infinite;
 }
 
@@ -848,7 +848,7 @@ button[type='submit']:disabled {
   right: -6%;
   bottom: 0;
   height: 34vh;
-  background: linear-gradient(to top, color-mix(in srgb, var(--accent) 22%, transparent), transparent 82%);
+  background: linear-gradient(to top, color-mix(in srgb, var(--glow-cool) 24%, transparent), transparent 82%);
   opacity: 0.85;
   will-change: transform, opacity;
   animation: bg-horizon 64s ease-in-out infinite;
@@ -868,7 +868,7 @@ button[type='submit']:disabled {
   width: var(--mote-size);
   height: var(--mote-size);
   border-radius: 50%;
-  background: var(--accent);
+  background: var(--glow-cool);
   opacity: 0;
   will-change: transform, opacity;
   animation: bg-mote-rise var(--mote-duration) linear var(--mote-delay) infinite;
