@@ -305,7 +305,9 @@ describe('DiagnosisIntake', () => {
     expect(resultRegion()).toHaveFocus()
   })
 
-  it('shows the disclaimer once for a multi-photo result, not once per card', async () => {
+  // The "probabilistic estimate… always consult a vet" line under results was removed at the
+  // owner's request — each card already reads "Likely: X (Y% confidence)" with its own action.
+  it('renders one card per photo, with no disclaimer line under them', async () => {
     const user = userEvent.setup()
     const card = (id, diagnosis) => ({
       species: 'CAT', diagnosis, confidence: 0.9, explanation: 'x',
@@ -326,8 +328,8 @@ describe('DiagnosisIntake', () => {
     ])
     await user.click(screen.getByRole('button', { name: /diagnose from photos/i }))
 
-    await screen.findAllByText(/likely: ringworm/i)
-    expect(screen.getAllByText(/probabilistic estimate, not a confirmed diagnosis/i)).toHaveLength(1)
+    expect(await screen.findAllByText(/likely: ringworm/i)).toHaveLength(3)
+    expect(screen.queryByText(/probabilistic estimate, not a confirmed diagnosis/i)).not.toBeInTheDocument()
   })
 
   // docs/DISCLAIMER.md requires "likely X, confidence Y%" wording — the meter reinforces the

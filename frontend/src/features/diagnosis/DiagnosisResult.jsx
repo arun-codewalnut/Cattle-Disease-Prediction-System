@@ -149,20 +149,11 @@ function DiagnosisResultCard({ result }) {
   )
 }
 
-// One disclaimer per submission, not one per card. A five-photo result used to repeat the
-// same paragraph five times, which trains people to skip exactly the sentence
-// docs/DISCLAIMER.md needs them to read.
-function ResultDisclaimer() {
-  return (
-    <p className="disclaimer">
-      <em>
-        This is a probabilistic estimate, not a confirmed diagnosis. Always consult a vet
-        before making treatment decisions.
-      </em>
-    </p>
-  )
-}
-
+// There used to be a "This is a probabilistic estimate, not a confirmed diagnosis. Always
+// consult a vet…" line under every result. Removed at the owner's request: each card already
+// frames itself as an estimate ("Likely: X (Y% confidence)", plus the low-confidence caveat)
+// and carries its own vet action (consult or escalate). See docs/DISCLAIMER.md.
+//
 // Multi-photo follow-up: an image submission returns { results: [...], diagnosesAgree } —
 // one card per photo, plus a warning banner when the photos didn't all get the same
 // diagnosis. A symptom submission still returns a single result object, rendered as one card.
@@ -171,7 +162,6 @@ export default function DiagnosisResult({ result }) {
     return (
       <div className="diagnosis-result-list">
         <DiagnosisResultCard result={result} />
-        <ResultDisclaimer />
       </div>
     )
   }
@@ -187,7 +177,6 @@ export default function DiagnosisResult({ result }) {
       {result.results.map((item, index) => (
         <DiagnosisResultCard key={item.id ?? index} result={item} />
       ))}
-      <ResultDisclaimer />
     </div>
   )
 }

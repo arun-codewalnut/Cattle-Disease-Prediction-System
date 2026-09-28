@@ -44,8 +44,9 @@
   min-width: 0;
   background: var(--card-bg);
   border: 1px solid var(--border);
+  border-top: 6px solid var(--accent);
   border-radius: 20px;
-  box-shadow: var(--shadow);
+  box-shadow: var(--shadow), 0 18px 40px -18px rgba(28, 80, 45, 0.35);
   padding: clamp(20px, 4vw, 32px);
   box-sizing: border-box;
   text-align: left;
@@ -558,12 +559,22 @@ button[type='submit']:disabled {
 .diagnosis-result {
   margin-top: 24px;
   border-radius: 16px;
-  border: 2px solid var(--urgency-monitor);
+  border: 2px solid var(--urgency-color);
   background: var(--card-bg);
+  box-shadow: var(--shadow), 0 18px 40px -18px rgba(0, 0, 0, 0.3);
   overflow: hidden;
   animation: fade-in-up 0.25s ease;
   --urgency-color: var(--urgency-monitor);
   --urgency-color-bg: var(--urgency-monitor-bg);
+  /* Solid bar colour: darkened in light mode so white text on it stays readable (amber in
+     particular). Declared here, not on :root, so it follows each card's --urgency-color. */
+  --urgency-bar: color-mix(in srgb, var(--urgency-color) 82%, black);
+}
+
+@media (prefers-color-scheme: dark) {
+  .diagnosis-result {
+    --urgency-bar: var(--urgency-color);
+  }
 }
 
 .diagnosis-result.urgency-consult_vet {
@@ -599,8 +610,14 @@ button[type='submit']:disabled {
   align-items: center;
   gap: 14px;
   padding: 16px 20px;
-  background: var(--urgency-color-bg);
-  border-bottom: 2px solid var(--urgency-color);
+  background: var(--urgency-bar);
+  color: var(--on-urgency);
+}
+
+.diagnosis-result__banner h2 {
+  color: var(--on-urgency);
+  font-size: 20px;
+  font-weight: 700;
 }
 
 .diagnosis-result__icon {
@@ -663,8 +680,8 @@ button[type='submit']:disabled {
   height: 34px;
   border-radius: 50%;
   background: conic-gradient(
-    var(--urgency-color) calc(var(--confidence) * 1%),
-    var(--border) 0
+    var(--on-urgency) calc(var(--confidence) * 1%),
+    color-mix(in srgb, var(--on-urgency) 30%, transparent) 0
   );
   position: relative;
 }
@@ -674,7 +691,7 @@ button[type='submit']:disabled {
   position: absolute;
   inset: 5px;
   border-radius: 50%;
-  background: var(--card-bg);
+  background: var(--urgency-bar);
 }
 
 .diagnosis-result__body {
@@ -727,27 +744,19 @@ button[type='submit']:disabled {
   color: var(--urgency-escalate);
 }
 
-.diagnosis-result .disclaimer {
-  display: block;
-  margin-top: 10px;
-  padding-top: 10px;
-  border-top: 1px dashed var(--border);
-  font-size: 0.9em;
-  opacity: 0.85;
-}
-
 .guidance-block {
   margin-top: 14px;
-  padding: 10px 14px;
-  border-radius: 10px;
-  background: var(--card-bg);
-  border: 1px solid var(--border);
+  padding: 12px 16px;
+  border-radius: 12px;
+  background: var(--info-bg);
+  border: 1px solid color-mix(in srgb, var(--info) 30%, transparent);
+  border-left: 6px solid var(--info);
 }
 
 .guidance-block h3 {
   margin: 0 0 6px;
-  font-size: 1em;
-  color: var(--text-h);
+  font-size: 1.1em;
+  color: var(--info);
 }
 
 .guidance-block ul {
@@ -928,13 +937,16 @@ button[type='submit']:disabled {
      green "Escalate to vet" box inside a red card sent mixed signals. */
   background: var(--urgency-color-bg);
   border: 1px solid color-mix(in srgb, var(--urgency-color) 45%, transparent);
+  border-left: 6px solid var(--urgency-color);
 }
 
 .next-actions__headline {
   margin: 0;
-  font-weight: 700;
-  font-size: 1.05em;
-  color: var(--text-h);
+  font-weight: 800;
+  font-size: 1.2em;
+  /* The bar shade: darker than --urgency-color in light mode (amber on its pale tint was
+     borderline to read), the same bright colour in dark mode. */
+  color: var(--urgency-bar);
 }
 
 .next-actions__steps {
@@ -1016,7 +1028,7 @@ button[type='submit']:disabled {
   border: 1px solid var(--border);
   border-radius: 20px;
   background: var(--card-bg);
-  box-shadow: var(--shadow);
+  box-shadow: var(--shadow), 0 18px 40px -18px rgba(0, 0, 0, 0.3);
   text-align: center;
 }
 

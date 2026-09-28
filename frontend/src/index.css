@@ -11,7 +11,18 @@
   --shadow:
     rgba(0, 0, 0, 0.1) 0 10px 15px -3px, rgba(0, 0, 0, 0.05) 0 4px 6px -2px;
 
-  --card-bg: #fffdf6;
+  --card-bg: #ffffff;
+
+  /* Page backdrop — a distinct sage green, so the white cards stand out from it. */
+  --page-bg-top: #cfe2d3;
+  --page-bg-bottom: #eaf1e8;
+
+  /* "Meanwhile" guidance — its own calm blue, so it never competes with the urgency colour. */
+  --info: #1f6fb2;
+  --info-bg: rgba(31, 111, 178, 0.08);
+
+  /* Text on a solid urgency-coloured bar. */
+  --on-urgency: #ffffff;
 
   --urgency-monitor: #2f8f4e;
   --urgency-monitor-bg: rgba(47, 143, 78, 0.1);
@@ -51,6 +62,15 @@
 
     --card-bg: #1b2a20;
 
+    --page-bg-top: #0f2418;
+    --page-bg-bottom: #0b140f;
+
+    --info: #7cb8f0;
+    --info-bg: rgba(124, 184, 240, 0.1);
+
+    /* Dark mode's urgency colours are light, so text on them is dark. */
+    --on-urgency: #10180f;
+
     --urgency-monitor: #5fd889;
     --urgency-monitor-bg: rgba(95, 216, 137, 0.12);
     --urgency-consult: #e0b84a;
@@ -64,15 +84,16 @@
   }
 }
 
-/* Clean, understated backdrop: the page's own --bg, plus a soft accent-tinted glow anchored
-   top-center. No illustrated scenery — it should read as a calm, professional tool, not a
-   theme. Both layers are built from tokens that already flip for dark mode. */
+/* A distinct sage-green backdrop (deep green in dark mode) so the white cards — form and
+   result — stand out clearly. Still no illustrated scenery: a calm, professional tool, not a
+   theme. Built from tokens that flip for dark mode. */
 body {
   margin: 0;
   min-height: 100svh;
   background:
     radial-gradient(1100px 560px at 50% -12%, var(--accent-bg), transparent 65%),
-    var(--bg);
+    linear-gradient(180deg, var(--page-bg-top) 0%, var(--page-bg-bottom) 55%);
+  background-color: var(--page-bg-bottom);
   background-attachment: fixed;
 }
 

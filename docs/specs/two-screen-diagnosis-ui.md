@@ -75,3 +75,16 @@ workspace whose right column exists only once a submission starts. Keep the resu
 component and every accessible name as they are. Owner-agreed defaults: toggle (not a landing
 page), per-screen species lists, New diagnosis / tab / species change re-centre, errors shown
 in the result area.
+
+## Follow-up: visual emphasis (2026-09-28)
+
+Owner request: a distinct page background, and the main items easy to pick out.
+
+- Page background is a sage-green gradient (deep green in dark mode); form and result sit on
+  white cards with a stronger shadow; the form card has a green accent strip on top.
+- Result header is a solid bar in the urgency colour (red escalate / amber consult / green
+  monitor) with white text — darkened in light mode so white text stays readable.
+- The action block ("Escalate to vet" / "Consult a vet" / "Monitor") has a thick left bar and
+  a larger heading in the urgency colour; "Meanwhile" has its own blue info treatment.
+- The per-result "probabilistic estimate… always consult a vet" line was removed (owner's
+  call); docs/DISCLAIMER.md records how the result still reads as an estimate.

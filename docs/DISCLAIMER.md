@@ -10,6 +10,12 @@ This system is a **learning project**, not a certified veterinary diagnostic too
 - Do not use this system's output as the sole basis for a real animal-health or
   herd-management decision.
 
+How the UI meets this (2026-09-28): every result heading reads "Likely: X (Y% confidence)",
+low-confidence results carry a "treat this as a hint" caveat, and every result shows a vet
+action (monitor / consult / escalate). The separate "This is a probabilistic estimate, not a
+confirmed diagnosis. Always consult a vet…" line under results was removed at the owner's
+request as redundant with those.
+
 Any feature that adds real-world action (notifications, escalation, reporting to an
 authority) must preserve this behavior. See
 [docs/API_CONTRACTS.md](API_CONTRACTS.md) for the `recommended_action` field this maps to.
