@@ -20,7 +20,8 @@ both). Spec: `docs/specs/two-screen-diagnosis-ui.md`.
 - Fixed along the way: the "Escalate to vet" action box is now tinted with the card's
   urgency colour (was always green); alert text uses the theme token, so it's readable in
   dark mode.
-- **Visual emphasis follow-up**: white-and-gray page background (charcoal in dark mode), white cards, solid urgency-
+- **Visual emphasis follow-up**: white-and-gray page background, app is light-only (dark
+  theme removed — an OS in dark mode showed charcoal/green), white cards, solid urgency-
   coloured result header, highlighted action block and blue "Meanwhile" block; the
   "probabilistic estimate… consult a vet" line under results was removed at the owner's
   request (DISCLAIMER.md notes how results still read as estimates).

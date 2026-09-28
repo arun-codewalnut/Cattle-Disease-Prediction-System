@@ -566,15 +566,9 @@ button[type='submit']:disabled {
   animation: fade-in-up 0.25s ease;
   --urgency-color: var(--urgency-monitor);
   --urgency-color-bg: var(--urgency-monitor-bg);
-  /* Solid bar colour: darkened in light mode so white text on it stays readable (amber in
-     particular). Declared here, not on :root, so it follows each card's --urgency-color. */
+  /* Solid bar colour: darkened so white text on it stays readable (amber in particular).
+     Declared here, not on :root, so it follows each card's --urgency-color. */
   --urgency-bar: color-mix(in srgb, var(--urgency-color) 82%, black);
-}
-
-@media (prefers-color-scheme: dark) {
-  .diagnosis-result {
-    --urgency-bar: var(--urgency-color);
-  }
 }
 
 .diagnosis-result.urgency-consult_vet {
