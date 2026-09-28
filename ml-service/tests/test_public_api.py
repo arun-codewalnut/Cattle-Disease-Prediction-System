@@ -113,7 +113,7 @@ def test_submit_symptoms_returns_the_requested_species(fake_agent):
     assert fake_agent.calls[0]["species"] == "SHEEP"
 
 
-@pytest.mark.parametrize("species", ["CAT", "DOG", "GOAT"])
+@pytest.mark.parametrize("species", ["CAT", "DOG"])
 def test_submit_symptoms_image_only_species_rejected_before_model_call(fake_agent, species):
     response = client.post("/api/diagnoses", json={"species": species, "symptoms": {}})
 
@@ -459,6 +459,36 @@ def test_real_sheep_symptom_diagnosis_routes_to_the_sheep_model():
 
     assert response.status_code == 201
     assert response.json()["species"] == "SHEEP"
+
+
+def test_submit_symptoms_goat_is_accepted_and_forwarded(fake_agent):
+    fake_agent.results = [_ml_result("PPR Negative")]
+
+    response = client.post("/api/diagnoses", json={"species": "GOAT", "symptoms": {"temp": False}})
+
+    assert response.status_code == 201
+    assert response.json()["species"] == "GOAT"
+    assert fake_agent.calls[0]["species"] == "GOAT"
+
+
+def test_real_goat_symptom_diagnosis_screens_for_ppr_and_escalates():
+    # The spec's example: the two signs that reliably mean PPR on this model.
+    response = client.post(
+        "/api/diagnoses", json={"species": "GOAT", "symptoms": {"nasal_discharge": True, "oral_nasal_lesion": True}}
+    )
+    body = response.json()
+
+    assert response.status_code == 201
+    assert body["species"] == "GOAT"
+    assert body["diagnosis"] == "PPR (Peste des Petits Ruminants)"
+    assert body["recommendedAction"] == "escalate_to_vet"
+    assert body["precautions"] and body["nextSteps"]
+
+    # Nothing ticked in the UI is every symptom sent as false (an empty {} is "no
+    # information" and comes back uncertain instead).
+    none_ticked = {k: False for k in ["temp", "nasal_discharge", "diarrhea", "difficult_breathing", "eye_discharge", "oral_nasal_lesion"]}
+    negative = client.post("/api/diagnoses", json={"species": "GOAT", "symptoms": none_ticked}).json()
+    assert negative["diagnosis"] == "PPR Negative"
 
 
 def test_real_image_diagnosis_rejects_a_non_animal_picture():

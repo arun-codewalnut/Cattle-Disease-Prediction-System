@@ -748,6 +748,12 @@ _Last updated: 2026-09-27 (Java backend merged into ml-service — two services 
   - `docs/DISCLAIMER.md`, `models/REGISTRY.md`, `data/cattle-images/SOURCE.md` all carry the
     full, real numbers and the curation story — nothing about this shipped quietly.
 
+- **Goat symptom diagnosis = PPR screen** (2026-09-28, branch
+  `feat/goat-and-species-symptom-models`, spec
+  [docs/specs/goat-ppr-symptom-screen.md](docs/specs/goat-ppr-symptom-screen.md)). Goat routes
+  to Sheep's PPR model (measured ~80% on both of the dataset's undecodable species groups);
+  Cat/Dog stay symptom-blocked — a Kaggle search found no usable symptom dataset for Sheep
+  (beyond PPR), Goat, Cat or Dog (seven candidates rejected, listed in the spec).
 - **Ollama removed; complete `requirements.txt`; `.env.example` per folder; README rewrite**
   (2026-09-27, same branch). `explain` is template-only (spec
   [docs/specs/remove-ollama.md](docs/specs/remove-ollama.md) — output byte-identical on 15

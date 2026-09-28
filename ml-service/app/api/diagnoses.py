@@ -45,10 +45,10 @@ class Species(str, Enum):
     GOAT = "GOAT"
 
 
-# Symptom diagnosis: Cow has the cattle model, Sheep its own PPR model (M12). Cat/Dog/Goat stay
-# blocked — the cattle model's disease list and symptom vocabulary don't apply to them, which
-# would be an actively wrong result rather than a disclosed approximation.
-SYMPTOM_SUPPORTED_SPECIES = frozenset({Species.COW, Species.SHEEP})
+# Symptom diagnosis: Cow has the cattle model; Sheep and Goat share the PPR model (M12, and
+# docs/specs/goat-ppr-symptom-screen.md). Cat/Dog stay blocked — no usable symptom dataset
+# exists for them, and the cattle model's disease list doesn't apply to a pet.
+SYMPTOM_SUPPORTED_SPECIES = frozenset({Species.COW, Species.SHEEP, Species.GOAT})
 
 # Photo diagnosis additionally covers the species that have their own trained image model
 # (M13/M14/M16).

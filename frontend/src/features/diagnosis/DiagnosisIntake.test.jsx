@@ -548,18 +548,42 @@ describe('DiagnosisIntake', () => {
     expect(fetchMock).not.toHaveBeenCalled()
   })
 
-  it('shows image-only diagnosis for Goat — binary Healthy/Unhealthy model, no symptom form', async () => {
+  it('gives Goat the PPR symptom screen and still offers photo diagnosis', async () => {
     const user = userEvent.setup()
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse(true, {
+        species: 'GOAT',
+        diagnosis: 'PPR (Peste des Petits Ruminants)',
+        confidence: 0.93,
+        explanation: 'PPR (Peste des Petits Ruminants) is the closest match.',
+        recommendedAction: 'escalate_to_vet',
+        precautions: [],
+        nextSteps: [],
+        createdAt: '2026-01-01T00:00:00Z',
+      })
+    )
 
     render(<DiagnosisIntake />)
     await user.selectOptions(screen.getByLabelText(/species/i), 'GOAT')
 
-    expect(screen.getByText(/photo only.*binary.*can.t name a specific disease/i)).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: /get diagnosis/i })).not.toBeInTheDocument()
-    expect(screen.queryByLabelText(/fever/i)).not.toBeInTheDocument()
+    expect(screen.getByText(/real ppr-only screen.*binary/i)).toBeInTheDocument()
+    // The PPR model's own 6 symptoms, not cattle's — and the photo form is still there.
+    expect(screen.queryByLabelText(/mouth lesions/i)).not.toBeInTheDocument()
+    expect(screen.getByLabelText(/sores in mouth or nose/i)).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /diagnose from photo/i })).toBeInTheDocument()
 
-    expect(fetchMock).not.toHaveBeenCalled()
+    await user.click(screen.getByLabelText(/nasal discharge/i))
+    await user.click(screen.getByLabelText(/sores in mouth or nose/i))
+    await user.click(screen.getByRole('button', { name: /get diagnosis/i }))
+
+    await screen.findByText(/likely: ppr \(peste des petits ruminants\) \(93% confidence\)/i)
+    expect(screen.getByText(/escalate to vet/i)).toBeInTheDocument()
+
+    const [diagnosisCall] = fetchMock.mock.calls
+    expect(JSON.parse(diagnosisCall[1].body)).toMatchObject({
+      species: 'GOAT',
+      symptoms: { nasal_discharge: true, oral_nasal_lesion: true, temp: false },
+    })
   })
 
   it('submits a Cat photo diagnosis end to end', async () => {

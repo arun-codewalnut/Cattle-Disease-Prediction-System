@@ -36,7 +36,7 @@ Five species, each with the models that real data existed for. The trained model
 |---|---|---|
 | **Cow** | ✅ 5 diseases — Foot and Mouth Disease, Lumpy Skin Disease, Mastitis, Bovine Respiratory Disease, Healthy (88.8% accuracy) | ✅ 4 classes — Healthy, Lumpy Skin Disease, Foot and Mouth Disease, Mastitis (82.5%) |
 | **Sheep** | ✅ PPR (Peste des Petits Ruminants) screen only (80.5%) — a negative result means "not PPR", not "healthy" | ⚠️ uses the Cow photo model as a disclosed approximation (no sheep photo dataset exists) |
-| **Goat** | ❌ not available (no symptom data exists) | ✅ Healthy / Unhealthy only (80.1%) — can flag a problem but not name it |
+| **Goat** | ✅ the same PPR screen as Sheep (~80% on goat records) — a negative result means "not PPR" | ✅ Healthy / Unhealthy only (80.1%) — can flag a problem but not name it |
 | **Cat** | ❌ not available | ✅ Flea Allergy, Healthy, Ringworm, Scabies (83.0%) |
 | **Dog** | ❌ not available | ✅ Bacterial Dermatosis, Fungal Infection, Healthy, Hypersensitivity/Allergic Dermatosis (70.5%) |
 
@@ -177,7 +177,7 @@ No setting is secret except `ROBOFLOW_API_KEY`, and the app runs without it.
 
 ### Symptom diagnosis
 
-Pick a species (Cow or Sheep), tick symptoms, press **Get diagnosis**. Combinations that
+Pick a species (Cow, Sheep or Goat), tick symptoms, press **Get diagnosis**. Combinations that
 reliably give a confident result:
 
 | Species | Tick | Result |
@@ -187,8 +187,8 @@ reliably give a confident result:
 | Cow | Fever + Udder swelling + Drop in milk yield | **Mastitis** — consult vet |
 | Cow | Fever + Nasal discharge + Coughing + Labored breathing | **Bovine Respiratory Disease** — consult vet |
 | Cow | nothing | **Healthy** — monitor |
-| Sheep | Nasal discharge + Sores in mouth or nose | **PPR** — escalate to vet |
-| Sheep | nothing | **PPR Negative** |
+| Sheep or Goat | Nasal discharge + Sores in mouth or nose | **PPR** — escalate to vet |
+| Sheep or Goat | nothing | **PPR Negative** |
 
 ### Photo diagnosis
 
@@ -237,7 +237,7 @@ Errors always have the same shape — `{"code": "...", "message": "...", "detail
 |---|---|
 | `species` or `symptoms` missing | `400 VALIDATION_FAILED` |
 | Unknown species, or a malformed body | `400 INVALID_REQUEST_BODY` |
-| Symptom diagnosis for Cat, Dog or Goat | `400 DIAGNOSIS_NOT_SUPPORTED_FOR_SPECIES` |
+| Symptom diagnosis for Cat or Dog | `400 DIAGNOSIS_NOT_SUPPORTED_FOR_SPECIES` |
 | No photo, empty photo, or not a multipart upload | `400 IMAGE_REQUIRED` |
 | More than 5 photos | `400 TOO_MANY_IMAGES` |
 | Not JPEG/PNG | `400 UNSUPPORTED_IMAGE_TYPE` |

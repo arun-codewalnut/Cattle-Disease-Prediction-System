@@ -5,7 +5,21 @@ End-of-session notes. Overwrite this each session — it's a handoff to "next se
 
 ---
 
-## This session (2026-09-27) — Java backend merged into ml-service
+## This session (2026-09-28) — Goat PPR symptom screen + symptom-dataset search
+
+Branch `feat/goat-and-species-symptom-models`. Spec: `docs/specs/goat-ppr-symptom-screen.md`.
+
+- **Goat can now be diagnosed from symptoms** — the same PPR screen as Sheep (routing entry in
+  `app/agent/graph.py`, `GOAT` added to `SYMPTOM_SUPPORTED_SPECIES`, Goat gets the PPR
+  checklist in the frontend and keeps its photo model).
+- **Why it's valid for goats**: the PPR model's accuracy was measured per `animal` code
+  (undecodable goat/sheep column) with the training script's own 5-fold setup — 80.0% and
+  80.7%, PPR recall 78.9% and 87.9%.
+- **Dataset search**: seven Kaggle candidates for Sheep/Goat/Cat/Dog symptom data inspected
+  and rejected (generated data with impossible labels, no disease column, or too small and
+  contradictory) — reasons per dataset in the spec. Cat/Dog stay symptom-blocked per owner.
+
+## Previous session (2026-09-27) — Java backend merged into ml-service
 
 Branch `feat/merge-backend-into-ml-service`. Spec (read this first — it's the source of truth
 for every status/error code): `docs/specs/merge-backend-into-ml-service.md`. Decision entry:

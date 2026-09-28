@@ -38,7 +38,8 @@ anywhere, so this model can flag that a goat looks off but never name what's wro
 `predict_symptoms` is now species-aware too (M12 follow-up): Sheep routes to its own real,
 trained binary PPR (Peste des Petits Ruminants) screen (`app/models/sheep_symptom_model.py`)
 instead of silently sharing the cattle model like it (and the now-removed Buffalo species)
-used to. Everything else still uses the cattle symptom model unchanged.
+used to. Goat uses the same PPR screen (docs/specs/goat-ppr-symptom-screen.md). Everything
+else still uses the cattle symptom model unchanged.
 
 `predict_image` (M15 follow-up) now runs every photo through `app/models/species_gate.py`
 first — a free, pretrained "is this even an animal" check — before calling any
@@ -84,8 +85,10 @@ REPORTABLE_DISEASES = {
 _IMAGE_MODEL_BY_SPECIES = {"CAT": cat_image_model, "DOG": dog_image_model, "GOAT": goat_image_model}
 
 # Which trained symptom model handles which species — anything not listed falls back to the
-# cattle model, same fallback pattern as the image side above.
-_SYMPTOM_MODEL_BY_SPECIES = {"SHEEP": sheep_symptom_model}
+# cattle model, same fallback pattern as the image side above. Goat shares Sheep's PPR model:
+# it was trained on goat and sheep records together, and measured ~80% accurate on each group
+# (docs/specs/goat-ppr-symptom-screen.md).
+_SYMPTOM_MODEL_BY_SPECIES = {"SHEEP": sheep_symptom_model, "GOAT": sheep_symptom_model}
 
 
 class DiagnosisState(TypedDict, total=False):

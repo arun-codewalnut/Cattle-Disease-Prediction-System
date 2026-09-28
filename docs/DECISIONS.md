@@ -1095,3 +1095,26 @@ reading the setup docs. A single install command is what a new contributor expec
 tools too) — accepted for one source of truth. If LLM-written explanations are wanted later,
 that's a new spec with the DISCLAIMER constraints (no invented facts, no percentage in the
 text) re-checked against a real model.
+
+## Goat gets the PPR symptom screen; no other symptom datasets were usable (2026-09-28)
+
+**Decision**: route Goat symptom diagnosis to the existing PPR model (Sheep's), instead of
+blocking it. Cat and Dog stay blocked. Spec:
+[docs/specs/goat-ppr-symptom-screen.md](specs/goat-ppr-symptom-screen.md).
+
+**Why**: the PPR model was trained on goat and sheep field records together; the dataset's
+species code is undocumented, so rather than guess, accuracy was measured on each code
+separately with the training script's own cross-validation — 80.0% and 80.7%, PPR recall
+78.9% and 87.9%. Whichever code is goat, the model is as good for goats as for the flock as a
+whole. PPR is primarily a goat disease, so leaving goat owners with photo-only
+Healthy/Unhealthy was the weaker option.
+
+**Alternatives considered**: a real multi-disease symptom dataset for Sheep, Goat, Cat or
+Dog — searched and rejected (seven candidates, each generated with medically impossible
+labels, missing a disease column, or too small and contradictory; the spec lists each).
+Synthetic data for Cat and Dog — declined by the owner; it would also need a rabies
+escalation rule (docs/DISCLAIMER.md) designed first.
+
+**Consequences**: Goat shows the same 6-symptom PPR checklist as Sheep and keeps its photo
+model. "PPR Negative" means "not PPR", not "healthy", for both species. Revisit if a real,
+species-labelled small-ruminant or companion-animal symptom dataset appears.

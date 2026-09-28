@@ -134,13 +134,17 @@ unchanged, PPR is just no longer part of it. See
 [docs/specs/M12-sheep-disease-detection.md](specs/M12-sheep-disease-detection.md)'s
 "Follow-up" section.
 
-**`CAT`, `DOG`, and `GOAT` are different: SYMPTOM diagnosis is rejected outright** (`400
-DIAGNOSIS_NOT_SUPPORTED_FOR_SPECIES`), not routed through any symptom model at all. For Cat/
-Dog, a companion animal doesn't share the livestock disease family the cattle model was
-trained on, so reusing it would produce an actively wrong result (e.g. "Foot and Mouth
-Disease" for a cat or dog), not just an imprecise one. For Goat, no symptom data exists at
-all — the closest candidate (the PPR dataset Sheep's symptom model uses) can't be reliably
-split by species. See
+**`GOAT` shares Sheep's PPR symptom screen** (same 6 symptoms, same two outcomes, escalates
+when positive): the model was trained on goat and sheep records together, and measured ~80%
+accurate on each group — see
+[docs/specs/goat-ppr-symptom-screen.md](specs/goat-ppr-symptom-screen.md).
+
+**`CAT` and `DOG` are different: SYMPTOM diagnosis is rejected outright** (`400
+DIAGNOSIS_NOT_SUPPORTED_FOR_SPECIES`), not routed through any symptom model at all. A
+companion animal doesn't share the livestock disease family the cattle model was trained on,
+so reusing it would produce an actively wrong result (e.g. "Foot and Mouth Disease" for a cat
+or dog), and a 2026-09-28 search found no usable cat or dog symptom dataset (the goat PPR
+spec lists what was checked). See
 [docs/specs/M13-cat-disease-detection.md](specs/M13-cat-disease-detection.md),
 [docs/specs/M14-dog-disease-detection.md](specs/M14-dog-disease-detection.md),
 [docs/specs/M16-goat-disease-detection.md](specs/M16-goat-disease-detection.md), and
@@ -254,6 +258,6 @@ submission), `VALIDATION_FAILED`
 `INVALID_REQUEST_BODY` (`400`, malformed/non-JSON body or a value that doesn't fit the target type,
 e.g. an invalid `species` string — M11), `DIAGNOSIS_NOT_SUPPORTED_FOR_SPECIES`
 (`400`, M13 — the submitted species doesn't have a real diagnosis model yet for that endpoint;
-`CAT`/`DOG`/`GOAT` on the symptom endpoint specifically, since none of the three has a symptom
+`CAT`/`DOG` on the symptom endpoint specifically, since neither has a symptom
 model — see above for how the image endpoint differs for these species as of the M13/M14/M16
 follow-ups).

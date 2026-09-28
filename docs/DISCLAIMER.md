@@ -77,10 +77,14 @@ validation accuracy. No disease-specific goat image dataset was found anywhere i
 session's search, so **the model can flag that a goat photo looks off, but it can never say
 what's wrong**. An `Unhealthy` result gets generic guidance (isolate the animal, consult a
 vet, take a closer photo of the area of concern) rather than disease-specific precautions,
-because there is no specific disease identified. Goat has no symptom model either — the
-closest candidate data (the PPR dataset Sheep's symptom model uses) can't be reliably split
-by species (see `ml-service/data/sheep-symptoms/SOURCE.md`), so symptom-based diagnosis stays
-blocked for Goat, same as Cat and Dog.
+because there is no specific disease identified.
+
+**Goat symptom diagnosis is a PPR screen only** — the same model Sheep uses, trained on goat
+and sheep records together (their species code can't be decoded, so it was measured on both
+groups instead: ~80% accuracy, 79–88% of PPR cases caught, whichever group is goat — see
+`docs/specs/goat-ppr-symptom-screen.md`). It answers one question — PPR or not — so a
+negative result means "not PPR", never "healthy"; a goat can still have any other disease.
+A positive result always escalates to a vet, as PPR is a notifiable disease.
 
 **The species-mismatch detector was rewritten** (see "Species-mismatch detection" below) —
 the Dog dataset swap above had temporarily weakened it (dog-as-cow catch rate dropped to
