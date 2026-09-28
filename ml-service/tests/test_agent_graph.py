@@ -349,6 +349,31 @@ def test_recommended_action_still_escalates_for_reportable_disease():
     assert result["recommended_action"] == "escalate_to_vet"
 
 
+def test_buffalo_symptoms_use_the_cattle_model():
+    # Buffalo has no model of its own and borrows the cattle one
+    # (docs/specs/buffalo-symptoms-cow-model.md) — same symptoms, same diagnosis as a cow.
+    result = run_diagnosis(CONFIDENT_SYMPTOMS, species="BUFFALO")
+
+    assert result["diagnosis"] == "Foot and Mouth Disease"
+    assert result["recommended_action"] == "escalate_to_vet"
+
+
+@pytest.mark.parametrize(
+    "diagnosis, species, expected",
+    [
+        # A borrowed model's "all clear" isn't enough to say "just watch" — see the spec.
+        ("Healthy", "BUFFALO", "consult_vet"),
+        ("Healthy", "COW", "monitor"),
+        ("Healthy", None, "monitor"),
+        ("Foot and Mouth Disease", "BUFFALO", "escalate_to_vet"),
+        ("Mastitis", "BUFFALO", "consult_vet"),
+        ("uncertain", "BUFFALO", "consult_vet"),
+    ],
+)
+def test_buffalo_never_gets_monitor(diagnosis, species, expected):
+    assert graph_module._recommended_action(diagnosis, species) == expected
+
+
 def test_sources_are_always_empty():
     # The template cites nothing, so the internal contract's `sources` stays empty
     # (docs/specs/remove-ollama.md).

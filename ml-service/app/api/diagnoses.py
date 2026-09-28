@@ -36,23 +36,27 @@ router = APIRouter(prefix="/api")
 class Species(str, Enum):
     """Which trained model runs. Never reorder — values are the wire format.
 
-    BUFFALO was removed (M11): no usable dataset was ever found for it."""
+    BUFFALO was removed on 2026-09-22 and came back on 2026-09-28, symptoms only, using the
+    cattle model as a labelled approximation — see docs/specs/buffalo-symptoms-cow-model.md."""
 
     COW = "COW"
     SHEEP = "SHEEP"
     CAT = "CAT"
     DOG = "DOG"
     GOAT = "GOAT"
+    BUFFALO = "BUFFALO"
 
 
 # Symptom diagnosis: Cow has the cattle model; Sheep and Goat share the PPR model (M12, and
-# docs/specs/goat-ppr-symptom-screen.md). Cat/Dog stay blocked — no usable symptom dataset
-# exists for them, and the cattle model's disease list doesn't apply to a pet.
-SYMPTOM_SUPPORTED_SPECIES = frozenset({Species.COW, Species.SHEEP, Species.GOAT})
+# docs/specs/goat-ppr-symptom-screen.md); Buffalo borrows the cattle model as a labelled
+# approximation (docs/specs/buffalo-symptoms-cow-model.md). Cat/Dog stay blocked — no usable
+# symptom dataset exists for them, and the cattle model's disease list doesn't apply to a pet.
+SYMPTOM_SUPPORTED_SPECIES = frozenset({Species.COW, Species.SHEEP, Species.GOAT, Species.BUFFALO})
 
-# Photo diagnosis additionally covers the species that have their own trained image model
-# (M13/M14/M16).
-IMAGE_SUPPORTED_SPECIES = SYMPTOM_SUPPORTED_SPECIES | {Species.CAT, Species.DOG, Species.GOAT}
+# Photo diagnosis: Cow, plus the species with their own trained image model (M13/M14/M16), plus
+# Sheep on the cattle model. Not Buffalo — the cattle photo model has never seen buffalo skin,
+# so it's listed explicitly rather than derived from the symptom set.
+IMAGE_SUPPORTED_SPECIES = frozenset({Species.COW, Species.SHEEP, Species.GOAT, Species.CAT, Species.DOG})
 
 ALLOWED_IMAGE_TYPES = frozenset({"image/jpeg", "image/png"})
 MAX_IMAGE_SIZE_BYTES = 5 * 1024 * 1024

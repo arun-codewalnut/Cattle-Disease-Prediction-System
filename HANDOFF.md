@@ -5,7 +5,22 @@ End-of-session notes. Overwrite this each session — it's a handoff to "next se
 
 ---
 
-## This session (2026-09-28, part 2) — Two-screen diagnosis UI
+## This session (2026-09-28, part 3) — Buffalo on the cow model (Symptoms only)
+
+Branch `feat/buffalo-symptoms-cow-model`, stacked on `feat/two-screen-diagnosis-ui`. Spec:
+`docs/specs/buffalo-symptoms-cow-model.md`; decision logged (supersedes the 2026-09-22 removal).
+
+- Re-searched for a buffalo dataset first: still none downloadable (two textbook-built sets
+  in papers, unpublished). Owner chose a labelled cow-model estimate over nothing.
+- ml-service: `BUFFALO` appended to `Species`; in `SYMPTOM_SUPPORTED_SPECIES`, not in
+  `IMAGE_SUPPORTED_SPECIES` (now an explicit set); `BORROWED_MODEL_SPECIES` turns `monitor`
+  into `consult_vet`. Routing needed no change — unlisted species already fall back to the
+  cattle model.
+- Frontend: Buffalo after Cow on Symptoms only (Photo tab falls back to Cow); species note and
+  a blue "based on the cow model… can't detect haemorrhagic septicaemia" note on each result.
+- Not pushed; no PR yet.
+
+## Previous session (2026-09-28, part 2) — Two-screen diagnosis UI
 
 Branch `feat/two-screen-diagnosis-ui` (branched from `feat/goat-and-species-symptom-models`,
 so it includes the Goat PPR change — merge that one first, or merge this one alone to get

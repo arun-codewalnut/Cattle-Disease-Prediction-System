@@ -3,6 +3,11 @@
 **Milestone**: M11
 **Status**: superseded — Buffalo removed as a supported species (2026-09-22)
 
+> **Update (2026-09-28):** Buffalo is back on the Symptoms screen only, still on the cattle
+> model, with stronger labelling than this spec had — see
+> [buffalo-symptoms-cow-model.md](buffalo-symptoms-cow-model.md). The note below describes the
+> 2026-09-22 removal and is kept as written.
+
 > **Superseded.** Buffalo support was removed from the application (backend `Species` enum,
 > frontend `SPECIES_OPTIONS`, and a Flyway migration cleaning up any existing
 > `species = 'BUFFALO'` rows). No usable buffalo symptom or image dataset was ever found

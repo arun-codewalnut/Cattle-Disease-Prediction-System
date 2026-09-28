@@ -113,6 +113,14 @@ def test_submit_symptoms_returns_the_requested_species(fake_agent):
     assert fake_agent.calls[0]["species"] == "SHEEP"
 
 
+def test_submit_symptoms_accepts_buffalo_and_forwards_it(fake_agent):
+    # docs/specs/buffalo-symptoms-cow-model.md — the graph routes it to the cattle model.
+    body = client.post("/api/diagnoses", json={"species": "BUFFALO", "symptoms": {"fever": True}}).json()
+
+    assert body["species"] == "BUFFALO"
+    assert fake_agent.calls[0]["species"] == "BUFFALO"
+
+
 @pytest.mark.parametrize("species", ["CAT", "DOG"])
 def test_submit_symptoms_image_only_species_rejected_before_model_call(fake_agent, species):
     response = client.post("/api/diagnoses", json={"species": species, "symptoms": {}})
@@ -330,6 +338,19 @@ def test_submit_image_wrong_content_type_returns_clean_image_required_not_a_500(
 
     assert response.status_code == 400
     assert response.json()["code"] == "IMAGE_REQUIRED"
+
+
+def test_submit_image_buffalo_rejected_before_model_call(fake_agent):
+    # Symptoms only: the cattle photo model has never seen a buffalo.
+    response = _post_images(species="BUFFALO")
+
+    assert response.status_code == 400
+    assert response.json() == {
+        "code": "DIAGNOSIS_NOT_SUPPORTED_FOR_SPECIES",
+        "message": "Image-based diagnosis isn't available for species BUFFALO.",
+        "details": None,
+    }
+    assert fake_agent.calls == []
 
 
 def test_submit_image_missing_species_form_field_returns_validation_failed(fake_agent):

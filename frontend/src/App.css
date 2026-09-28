@@ -962,6 +962,19 @@ button[type='submit']:disabled {
   color: var(--urgency-escalate);
 }
 
+/* "This came from another species' model" (Buffalo) — the same blue note style as the
+   species summary, so it reads as context, not as a second warning. */
+.borrowed-model-note {
+  margin: 4px 0 0;
+  padding: 8px 12px;
+  font-size: 0.9em;
+  text-align: left;
+  color: var(--text-h);
+  background: var(--info-bg);
+  border-left: 4px solid var(--info);
+  border-radius: 8px;
+}
+
 /* What to do, before why. The percentage lives in the heading and nowhere else; this block
    is the part someone standing in a field acts on. */
 .next-actions {

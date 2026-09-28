@@ -748,6 +748,12 @@ _Last updated: 2026-09-27 (Java backend merged into ml-service — two services 
   - `docs/DISCLAIMER.md`, `models/REGISTRY.md`, `data/cattle-images/SOURCE.md` all carry the
     full, real numbers and the curation story — nothing about this shipped quietly.
 
+- **Buffalo back, symptoms only, on the cow model** (2026-09-28, branch
+  `feat/buffalo-symptoms-cow-model`, stacked on the two-screen UI branch; spec
+  [docs/specs/buffalo-symptoms-cow-model.md](docs/specs/buffalo-symptoms-cow-model.md)).
+  Supersedes the 2026-09-22 removal at the owner's request. Symptoms screen only; a note on the
+  form and on every result; `monitor` → `consult_vet` for Buffalo (`BORROWED_MODEL_SPECIES` in
+  `app/agent/graph.py`); photo diagnosis rejected with `DIAGNOSIS_NOT_SUPPORTED_FOR_SPECIES`.
 - **Two-screen UI** (2026-09-28, branch `feat/two-screen-diagnosis-ui`, stacked on the Goat
   branch; spec [docs/specs/two-screen-diagnosis-ui.md](docs/specs/two-screen-diagnosis-ui.md)).
   Symptoms | Photo tabs, per-screen species lists (Cat/Dog on Photo only), form centred until

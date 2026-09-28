@@ -37,9 +37,10 @@ anywhere, so this model can flag that a goat looks off but never name what's wro
 
 `predict_symptoms` is now species-aware too (M12 follow-up): Sheep routes to its own real,
 trained binary PPR (Peste des Petits Ruminants) screen (`app/models/sheep_symptom_model.py`)
-instead of silently sharing the cattle model like it (and the now-removed Buffalo species)
-used to. Goat uses the same PPR screen (docs/specs/goat-ppr-symptom-screen.md). Everything
-else still uses the cattle symptom model unchanged.
+instead of silently sharing the cattle model like it used to. Goat uses the same PPR screen
+(docs/specs/goat-ppr-symptom-screen.md). Everything else uses the cattle symptom model —
+including Buffalo, which has no model of its own and is labelled as an approximation
+(docs/specs/buffalo-symptoms-cow-model.md; see BORROWED_MODEL_SPECIES).
 
 `predict_image` (M15 follow-up) now runs every photo through `app/models/species_gate.py`
 first — a free, pretrained "is this even an animal" check — before calling any
@@ -87,7 +88,8 @@ _IMAGE_MODEL_BY_SPECIES = {"CAT": cat_image_model, "DOG": dog_image_model, "GOAT
 # Which trained symptom model handles which species — anything not listed falls back to the
 # cattle model, same fallback pattern as the image side above. Goat shares Sheep's PPR model:
 # it was trained on goat and sheep records together, and measured ~80% accurate on each group
-# (docs/specs/goat-ppr-symptom-screen.md).
+# (docs/specs/goat-ppr-symptom-screen.md). Buffalo deliberately isn't listed: it falls back to
+# the cattle model (docs/specs/buffalo-symptoms-cow-model.md).
 _SYMPTOM_MODEL_BY_SPECIES = {"SHEEP": sheep_symptom_model, "GOAT": sheep_symptom_model}
 
 
@@ -108,7 +110,12 @@ class DiagnosisState(TypedDict, total=False):
 
 
 # Human-readable species names for the mismatch message — "cow", not "COW".
-SPECIES_LABELS = {"COW": "cow", "SHEEP": "sheep", "CAT": "cat", "DOG": "dog", "GOAT": "goat"}
+SPECIES_LABELS = {"COW": "cow", "SHEEP": "sheep", "CAT": "cat", "DOG": "dog", "GOAT": "goat", "BUFFALO": "buffalo"}
+
+# Species diagnosed by another species' model with no model of their own
+# (docs/specs/buffalo-symptoms-cow-model.md). "All clear" from a borrowed model isn't strong
+# enough to tell someone to just watch, so their `monitor` results become `consult_vet`.
+BORROWED_MODEL_SPECIES = frozenset({"BUFFALO"})
 
 
 def _species_mismatch_message(selected: str | None) -> str:
@@ -127,7 +134,14 @@ def _species_mismatch_message(selected: str | None) -> str:
     )
 
 
-def _recommended_action(diagnosis: str) -> str:
+def _recommended_action(diagnosis: str, species: str | None = None) -> str:
+    action = _action_for_diagnosis(diagnosis)
+    if action == "monitor" and species in BORROWED_MODEL_SPECIES:
+        return "consult_vet"
+    return action
+
+
+def _action_for_diagnosis(diagnosis: str) -> str:
     if diagnosis in REPORTABLE_DISEASES:
         return "escalate_to_vet"
     if diagnosis in ("invalid_image", "species_mismatch"):
@@ -291,7 +305,7 @@ def precautions_node(state: DiagnosisState) -> dict[str, Any]:
 
 
 def recommend_node(state: DiagnosisState) -> dict[str, Any]:
-    return {"recommended_action": _recommended_action(state["diagnosis"])}
+    return {"recommended_action": _recommended_action(state["diagnosis"], state.get("species"))}
 
 
 def _build_graph():

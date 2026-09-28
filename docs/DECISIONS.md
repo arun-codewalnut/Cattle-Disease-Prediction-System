@@ -1118,3 +1118,28 @@ escalation rule (docs/DISCLAIMER.md) designed first.
 **Consequences**: Goat shows the same 6-symptom PPR checklist as Sheep and keeps its photo
 model. "PPR Negative" means "not PPR", not "healthy", for both species. Revisit if a real,
 species-labelled small-ruminant or companion-animal symptom dataset appears.
+
+## Buffalo returns on the Symptoms screen, using the cow model (2026-09-28)
+
+**Decision**: offer Buffalo again, on the Symptoms screen only, diagnosed by the cattle symptom
+model and labelled as an approximation. This supersedes "Buffalo removed" (2026-09-22) above.
+Spec: [docs/specs/buffalo-symptoms-cow-model.md](specs/buffalo-symptoms-cow-model.md).
+
+**Why**: a third search still found no downloadable buffalo dataset — two papers built
+buffalo symptom sets from textbooks, neither published. The owner judged a clearly labelled
+estimate more useful to buffalo keepers than no option. The 2026-09-22 objection was to an
+approximation passed off as an interim state; this one is permanent by design and says so on
+the form and on every result.
+
+**Safeguards (what's different from M11)**: no photo diagnosis for Buffalo (the cattle photo
+model has never seen buffalo skin); a note on every result that it's based on cattle cases and
+can't detect haemorrhagic septicaemia; and `monitor` becomes `consult_vet` for Buffalo, since a
+borrowed model's "Healthy" isn't strong enough to tell someone to just watch.
+
+**Alternatives considered**: keep Buffalo out (the 2026-09-22 position) — rejected by the owner;
+also offer photos — rejected, the photo model's input is too different; drop the percentage for
+Buffalo — rejected, the percentage drives the low-confidence caveat.
+
+**Consequences**: `BUFFALO` is back in the `Species` enum and both frontend species lists.
+Revisit if a buffalo dataset becomes available (e.g. from either paper's authors) — that would
+be a real buffalo model and a new spec.

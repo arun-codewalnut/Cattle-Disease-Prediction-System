@@ -118,10 +118,12 @@ Both renames are breaking changes with no versioning ceremony, acceptable per
 `docs/DECISIONS.md`'s standing position that this is a local/learning project with no
 external consumers.
 
-`species` is `"COW"`, `"SHEEP"`, `"GOAT"`, `"CAT"`, or `"DOG"` — `"BUFFALO"` (M11) was
-**removed** (no usable buffalo dataset was ever found; see
-[docs/specs/M11-buffalo-disease-detection.md](specs/M11-buffalo-disease-detection.md)'s
-superseded note). It is **required on every diagnosis call and has no default** — defaulting
+`species` is `"COW"`, `"SHEEP"`, `"GOAT"`, `"CAT"`, `"DOG"` or `"BUFFALO"`. `"BUFFALO"` was
+removed on 2026-09-22 and came back on 2026-09-28 for **symptom diagnosis only**, using the
+cattle model as a labelled approximation — see
+[docs/specs/buffalo-symptoms-cow-model.md](specs/buffalo-symptoms-cow-model.md). Photo
+diagnosis for `BUFFALO` is `400 DIAGNOSIS_NOT_SUPPORTED_FOR_SPECIES`, and a buffalo result
+that would be `monitor` is returned as `consult_vet`. It is **required on every diagnosis call and has no default** — defaulting
 it would silently run a different trained model than the caller meant.
 
 `POST /api/diagnoses` — submit symptoms; validates, then runs the agent in-process (in a

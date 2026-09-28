@@ -763,15 +763,67 @@ describe('DiagnosisIntake', () => {
       expect(screen.queryByRole('button', { name: /get diagnosis/i })).not.toBeInTheDocument()
     })
 
-    it('lists only species with a symptom model on Symptoms, and all five on Photo', async () => {
+    it('lists each screen’s own species — Buffalo on Symptoms only, Cat and Dog on Photo only', async () => {
       const user = userEvent.setup()
       render(<DiagnosisIntake />)
 
       const optionValues = () => Array.from(screen.getByLabelText(/species/i).options).map((o) => o.value)
-      expect(optionValues()).toEqual(['COW', 'SHEEP', 'GOAT'])
+      expect(optionValues()).toEqual(['COW', 'BUFFALO', 'SHEEP', 'GOAT'])
 
       await openPhotoScreen(user)
       expect(optionValues()).toEqual(['COW', 'SHEEP', 'GOAT', 'CAT', 'DOG'])
+    })
+
+    it('falls back to Cow when switching to Photo with Buffalo selected', async () => {
+      const user = userEvent.setup()
+      render(<DiagnosisIntake />)
+      await user.selectOptions(screen.getByLabelText(/species/i), 'BUFFALO')
+
+      await openPhotoScreen(user)
+
+      expect(screen.getByLabelText(/species/i)).toHaveValue('COW')
+    })
+
+    // docs/specs/buffalo-symptoms-cow-model.md — labelled before and after submitting.
+    it('says Buffalo uses the cow model, on the form and on the result', async () => {
+      const user = userEvent.setup()
+      fetchMock.mockResolvedValueOnce(
+        jsonResponse(true, {
+          species: 'BUFFALO', diagnosis: 'Healthy', confidence: 0.9,
+          explanation: 'Healthy is the closest match.', recommendedAction: 'consult_vet',
+          precautions: [], nextSteps: [], createdAt: '2026-01-01T00:00:00Z',
+        })
+      )
+      render(<DiagnosisIntake />)
+      await user.selectOptions(screen.getByLabelText(/species/i), 'BUFFALO')
+
+      expect(screen.getByText(/uses the cow model as an approximation/i)).toBeInTheDocument()
+      // Same cattle checklist as Cow.
+      expect(screen.getByLabelText(/skin nodules/i)).toBeInTheDocument()
+
+      await fillAndSubmit(user)
+
+      expect(await screen.findByText(/likely: healthy \(90% confidence\)/i)).toBeInTheDocument()
+      expect(screen.getByText(/trained on cattle cases, not buffalo/i)).toBeInTheDocument()
+      expect(screen.getByText(/haemorrhagic septicaemia/i)).toBeInTheDocument()
+      expect(screen.getByText(/consult a vet/i)).toBeInTheDocument()
+      expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toMatchObject({ species: 'BUFFALO', symptoms: { fever: true } })
+    })
+
+    it('shows no cow-model note on a Cow result', async () => {
+      const user = userEvent.setup()
+      fetchMock.mockResolvedValueOnce(
+        jsonResponse(true, {
+          species: 'COW', diagnosis: 'Healthy', confidence: 0.9,
+          explanation: 'Healthy is the closest match.', recommendedAction: 'monitor',
+          precautions: [], nextSteps: [], createdAt: '2026-01-01T00:00:00Z',
+        })
+      )
+      render(<DiagnosisIntake />)
+      await fillAndSubmit(user)
+
+      expect(await screen.findByText(/likely: healthy/i)).toBeInTheDocument()
+      expect(screen.queryByText(/trained on cattle cases/i)).not.toBeInTheDocument()
     })
 
     it('falls back to Cow when switching to Symptoms with Cat selected', async () => {

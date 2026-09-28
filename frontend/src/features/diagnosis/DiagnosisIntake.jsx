@@ -174,7 +174,7 @@ export default function DiagnosisIntake() {
       <header className="app-header">
         <h1>Animal health checker</h1>
         <p className="app-tagline">
-          Find the likely disease from symptoms or photos — for cattle, sheep, goats, cats and dogs.
+          Find the likely disease from symptoms or photos — for cattle, buffalo, sheep, goats, cats and dogs.
         </p>
       </header>
 

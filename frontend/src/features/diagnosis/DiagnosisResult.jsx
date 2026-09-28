@@ -1,3 +1,5 @@
+import { BORROWED_MODEL_NOTES } from './species'
+
 const ACTION_LABELS = {
   escalate_to_vet: 'Escalate to vet',
   consult_vet: 'Consult a vet',
@@ -76,6 +78,7 @@ function DiagnosisResultCard({ result }) {
   const isUrgent = result.recommendedAction === 'escalate_to_vet'
   const urgencyIcon = ACTION_ICONS[result.recommendedAction] ?? 'ℹ️'
   const lowConfidence = isLowConfidence(confidencePercent)
+  const borrowedModelNote = BORROWED_MODEL_NOTES[result.species]
 
   return (
     <section data-urgent={isUrgent} className={`diagnosis-result urgency-${result.recommendedAction}`}>
@@ -105,6 +108,14 @@ function DiagnosisResultCard({ result }) {
       </div>
 
       <div className="diagnosis-result__body">
+        {/* A species with no model of its own (Buffalo) — the percentage above is the cow
+            model's, so say so on every result. docs/specs/buffalo-symptoms-cow-model.md */}
+        {borrowedModelNote && (
+          <p className="borrowed-model-note">
+            <span aria-hidden="true">ℹ️</span> {borrowedModelNote}
+          </p>
+        )}
+
         {lowConfidence && (
           <p className="confidence__caveat">
             <span aria-hidden="true">⚠️</span> Low confidence — treat this as a hint to look

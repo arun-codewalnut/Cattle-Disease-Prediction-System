@@ -36,6 +36,15 @@ roughly 2 in 5 "Mastitis" predictions are a false positive (a Lumpy Skin Disease
 Mouth Disease photo misclassified as Mastitis), and the other 3 classes each lost 2-4 points
 of F1 from before Mastitis was added. Full numbers: `ml-service/models/REGISTRY.md`.
 
+## Buffalo (cow model, symptoms only — 2026-09-28)
+
+Buffalo has no model of its own and is diagnosed by the **cattle symptom model**
+([docs/specs/buffalo-symptoms-cow-model.md](specs/buffalo-symptoms-cow-model.md)). Every
+buffalo result carries a note that it's based on cattle cases and can't detect haemorrhagic
+septicaemia (a major buffalo disease the cattle model has no class for); a buffalo result
+never says "Monitor" — `monitor` becomes `consult_vet`; and photos aren't offered for Buffalo
+at all. Any change to this logic keeps all three.
+
 ## Companion animals (M13+)
 
 This project started as livestock-only (cattle/buffalo/sheep), where "reportable disease"
