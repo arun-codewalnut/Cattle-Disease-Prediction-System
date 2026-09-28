@@ -68,7 +68,7 @@ export default function ImageUploadForm({ images, onImagesChange, onSubmit, disa
       <div>
         <p className="image-upload-form__label">
           <span aria-hidden="true">📷 </span>
-          Or upload photos instead — up to {MAX_IMAGES}, selectable in one go
+          Photos of the affected area — up to {MAX_IMAGES}, selectable in one go
         </p>
 
         <label className={`photo-picker${isFull ? ' photo-picker--full' : ''}`}>

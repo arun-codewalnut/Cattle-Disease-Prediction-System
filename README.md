@@ -4,7 +4,8 @@ A web app that suggests the likely disease of a farm or pet animal from its **sy
 **photos**, explains the result in plain language, and tells the user what to do next —
 including when to call a vet immediately.
 
-A farmer or vet picks a species, ticks the symptoms they see (or uploads 1–5 photos), and
+A farmer or vet chooses the **Symptoms** or **Photo** screen, picks a species, ticks the
+symptoms they see (or uploads 1–5 photos), and
 gets back a result card: the likely diagnosis, how confident the model is, a short
 explanation, precautions, next steps, and a recommended action (`monitor`, `consult_vet`,
 or `escalate_to_vet` for reportable diseases such as Foot and Mouth Disease).
@@ -175,9 +176,15 @@ No setting is secret except `ROBOFLOW_API_KEY`, and the app runs without it.
 
 ## Using the app
 
+The app has two screens, switched with the **Symptoms | Photo** toggle at the top of the
+form. The form starts centred; when you submit, it moves to the left and the result appears
+on the right (on a phone, the result appears below the form). **New diagnosis** under the
+result — or switching screen or species — clears it and re-centres the form.
+
 ### Symptom diagnosis
 
-Pick a species (Cow, Sheep or Goat), tick symptoms, press **Get diagnosis**. Combinations that
+On **Symptoms**, pick a species (Cow, Sheep or Goat — the species with a symptom model), tick
+what you see, press **Get diagnosis**. Combinations that
 reliably give a confident result:
 
 | Species | Tick | Result |
@@ -192,7 +199,7 @@ reliably give a confident result:
 
 ### Photo diagnosis
 
-Upload 1–5 JPEG or PNG photos (up to 5 MB each). Each photo is diagnosed separately; if
+On **Photo**, pick any of the five species and upload 1–5 JPEG or PNG photos (up to 5 MB each). Each photo is diagnosed separately; if
 they don't all agree, the result shows a **"diagnoses disagree"** warning so the user looks
 more closely. Sample photos to try: the training datasets, if you've downloaded them (see
 [Retraining models](#retraining-models)), or any photo of the animal's affected area.

@@ -6,9 +6,40 @@ import SymptomForm from './SymptomForm'
 import ImageUploadForm from './ImageUploadForm'
 import DiagnosisResult from './DiagnosisResult'
 import { emptySymptoms, getSymptomFields } from './symptomFields'
-import { DIAGNOSIS_SUPPORTED_SPECIES, IMAGE_ONLY_SUPPORTED_SPECIES, SPECIES_OPTIONS } from './species'
+import { DIAGNOSIS_SUPPORTED_SPECIES, PHOTO_SUPPORTED_SPECIES, SPECIES_SUMMARIES } from './species'
+
+// Two screens, one toggle: the user picks how to get a diagnosis rather than scrolling past
+// both forms. See docs/specs/two-screen-diagnosis-ui.md.
+const MODES = [
+  { id: 'symptoms', label: 'Symptoms', icon: '🩺', speciesValues: DIAGNOSIS_SUPPORTED_SPECIES },
+  { id: 'photo', label: 'Photo', icon: '📷', speciesValues: PHOTO_SUPPORTED_SPECIES },
+]
+
+// Matches the CSS breakpoint where the result stops sitting beside the form and moves below
+// it — only then does the page need scrolling to reach the result.
+const STACKED_LAYOUT_QUERY = '(max-width: 899px)'
+
+function isStackedLayout() {
+  return typeof window !== 'undefined' && window.matchMedia?.(STACKED_LAYOUT_QUERY).matches === true
+}
+
+function ResultLoading({ mode, photoCount }) {
+  const what = mode === 'photo' ? `${photoCount} ${photoCount === 1 ? 'photo' : 'photos'}` : 'symptoms'
+  return (
+    <div className="result-loading">
+      <span className="result-loading__spinner" aria-hidden="true" />
+      <p className="result-loading__text">Analysing {what}…</p>
+      <div className="result-loading__skeleton" aria-hidden="true">
+        <span />
+        <span />
+        <span />
+      </div>
+    </div>
+  )
+}
 
 export default function DiagnosisIntake() {
+  const [mode, setMode] = useState('symptoms')
   const [species, setSpecies] = useState('COW')
   const [symptoms, setSymptoms] = useState(emptySymptoms('COW'))
   const [images, setImages] = useState([])
@@ -21,14 +52,17 @@ export default function DiagnosisIntake() {
   const [announcement, setAnnouncement] = useState('')
   const resultRef = useRef(null)
   const speciesFieldRef = useRef(null)
+  const tabRefs = useRef({})
 
-  // Sighted users on a phone had the same problem from the other direction: the result lands
-  // below the fold, so submitting looked like nothing happened. Moving focus fixes the
-  // screen-reader case and the scroll case at once.
+  // Focus moves to the result so screen readers land on it. On a phone the result sits below
+  // the form, so the page also scrolls there — otherwise submitting looks like nothing
+  // happened. Side by side, it's already in view and scrolling would only jolt the page.
   useEffect(() => {
-    if (status !== 'success' || !resultRef.current) return
-    resultRef.current.focus()
-    resultRef.current.scrollIntoView?.({ behavior: 'smooth', block: 'start' })
+    if ((status !== 'success' && status !== 'error') || !resultRef.current) return
+    resultRef.current.focus({ preventScroll: true })
+    if (isStackedLayout()) {
+      resultRef.current.scrollIntoView?.({ behavior: 'smooth', block: 'start' })
+    }
   }, [status, result])
 
   function summarize(diagnosis) {
@@ -42,20 +76,47 @@ export default function DiagnosisIntake() {
     return `Result ready. Likely ${diagnosis?.diagnosis}, ${Math.round((diagnosis?.confidence ?? 0) * 100)}% confidence.`
   }
 
+  // Removes the result area, which puts the form panel back in the centre.
+  function clearOutcome() {
+    setResult(null)
+    setError(null)
+    setStatus('idle')
+  }
+
+  function handleModeChange(nextMode) {
+    if (nextMode === mode) return
+    setMode(nextMode)
+    clearOutcome()
+    setAnnouncement('')
+    // Cat and Dog have no symptom model, so they aren't on the Symptoms screen.
+    const allowed = MODES.find((m) => m.id === nextMode).speciesValues
+    if (!allowed.includes(species)) {
+      setSpecies('COW')
+      setSymptoms(emptySymptoms('COW'))
+    }
+  }
+
+  // Arrow keys move between tabs, as for any tab list (WAI-ARIA tabs pattern).
+  function handleTabKeyDown(event) {
+    const index = MODES.findIndex((m) => m.id === mode)
+    const moves = { ArrowRight: 1, ArrowLeft: -1, Home: -index, End: MODES.length - 1 - index }
+    if (!(event.key in moves)) return
+    event.preventDefault()
+    const next = MODES[(index + moves[event.key] + MODES.length) % MODES.length]
+    handleModeChange(next.id)
+    tabRefs.current[next.id]?.focus()
+  }
+
   // The single post-result action: clears the result (and any error) *and* whatever was
   // submitted — symptoms and any uploaded photo(s) — so the form looks genuinely fresh, then
   // sends focus back to the species picker. Deliberately not "keep the photo, just change the
   // species": a wrong-species result means the uploaded photo was of the wrong animal in the
   // first place, so re-running the same photo against a different species model isn't a real
-  // fix — the user needs to pick correctly and attach the right photo. Also the recovery path
-  // when a result looks off for a reason other than a photo mismatch and the automatic check
-  // (a disclosed, imperfect heuristic — see docs/DISCLAIMER.md) didn't catch it.
-  function handleCheckOtherSpecies() {
+  // fix — the user needs to pick correctly and attach the right photo.
+  function handleNewDiagnosis() {
     setSymptoms(emptySymptoms(species))
     setImages([])
-    setResult(null)
-    setError(null)
-    setStatus('idle')
+    clearOutcome()
     setAnnouncement('Form cleared. Pick a species and check again.')
     speciesFieldRef.current?.focus()
   }
@@ -64,15 +125,17 @@ export default function DiagnosisIntake() {
     setSymptoms((prev) => ({ ...prev, [key]: checked }))
   }
 
-  // Sheep's symptom vocabulary is completely different from cattle's (see
+  // Sheep and Goat's symptom vocabulary is completely different from cattle's (see
   // symptomFields.js) — switching species must reset to that species' own empty shape, not
-  // carry over stale keys the new species' model wouldn't recognize.
+  // carry over stale keys the new species' model wouldn't recognize. A result for the old
+  // species no longer describes what's on screen, so it goes too.
   function handleSpeciesChange(nextSpecies) {
     setSpecies(nextSpecies)
     setSymptoms(emptySymptoms(nextSpecies))
+    clearOutcome()
   }
 
-  async function handleSubmit() {
+  async function runDiagnosis(request) {
     setStatus('submitting')
     setError(null)
     setResult(null)
@@ -80,116 +143,126 @@ export default function DiagnosisIntake() {
     const correlationId = crypto.randomUUID()
 
     try {
-      const diagnosis = await submitSymptoms(species, symptoms, correlationId)
+      const diagnosis = await request(correlationId)
       setResult(diagnosis)
       setStatus('success')
       setAnnouncement(summarize(diagnosis))
     } catch (err) {
       const apiError = err instanceof ApiError ? err : new ApiError('UNKNOWN_ERROR', 'Something went wrong.', null)
+      console.error(`Diagnosis failed (correlation id ${correlationId}):`, apiError)
       setError(apiError)
       setStatus('error')
       setAnnouncement('')
     }
   }
 
-  async function handleImageSubmit() {
-    if (images.length === 0) {
-      return
-    }
+  function handleSubmit() {
+    return runDiagnosis((correlationId) => submitSymptoms(species, symptoms, correlationId))
+  }
 
-    setStatus('submitting')
-    setError(null)
-    setResult(null)
-
-    const correlationId = crypto.randomUUID()
-
-    try {
-      const diagnosis = await submitImage(species, images, correlationId)
-      setResult(diagnosis)
-      setStatus('success')
-      setAnnouncement(summarize(diagnosis))
-    } catch (err) {
-      const apiError = err instanceof ApiError ? err : new ApiError('UNKNOWN_ERROR', 'Something went wrong.', null)
-      setError(apiError)
-      setStatus('error')
-      setAnnouncement('')
-    }
+  function handleImageSubmit() {
+    if (images.length === 0) return
+    return runDiagnosis((correlationId) => submitImage(species, images, correlationId))
   }
 
   const disabled = status === 'submitting'
-  const diagnosisSupported = DIAGNOSIS_SUPPORTED_SPECIES.includes(species)
-  const imageOnlySupported = IMAGE_ONLY_SUPPORTED_SPECIES.includes(species)
+  const showResultArea = status !== 'idle'
+  const activeMode = MODES.find((m) => m.id === mode)
 
   return (
     <div className="app-shell">
       <header className="app-header">
-        <h1>Livestock symptom checker</h1>
-        <p className="app-tagline">Quick symptom check for your herd, right from the field.</p>
+        <h1>Animal health checker</h1>
+        <p className="app-tagline">
+          Find the likely disease from symptoms or photos — for cattle, sheep, goats, cats and dogs.
+        </p>
       </header>
 
-      <main className="diagnosis-card">
-        <SpeciesField
-          ref={speciesFieldRef}
-          species={species}
-          onSpeciesChange={handleSpeciesChange}
-          disabled={disabled}
-        />
+      <main className={`workspace${showResultArea ? ' workspace--split' : ''}`}>
+        <div className="diagnosis-card">
+          <div className="mode-tabs" role="tablist" aria-label="Diagnose from" onKeyDown={handleTabKeyDown}>
+            {MODES.map((m) => (
+              <button
+                key={m.id}
+                ref={(node) => {
+                  tabRefs.current[m.id] = node
+                }}
+                type="button"
+                role="tab"
+                id={`tab-${m.id}`}
+                aria-selected={mode === m.id}
+                aria-controls={`panel-${m.id}`}
+                tabIndex={mode === m.id ? 0 : -1}
+                className="mode-tab"
+                onClick={() => handleModeChange(m.id)}
+                disabled={disabled}
+              >
+                <span aria-hidden="true">{m.icon}</span> {m.label}
+              </button>
+            ))}
+          </div>
 
-        {diagnosisSupported && (
-          <>
-            <SymptomForm
-              fields={getSymptomFields(species)}
-              symptoms={symptoms}
-              onSymptomChange={handleSymptomChange}
-              onSubmit={handleSubmit}
+          <div role="tabpanel" id={`panel-${mode}`} aria-labelledby={`tab-${mode}`} className="mode-panel">
+            <SpeciesField
+              ref={speciesFieldRef}
+              species={species}
+              speciesValues={activeMode.speciesValues}
+              summary={SPECIES_SUMMARIES[mode][species]}
+              onSpeciesChange={handleSpeciesChange}
               disabled={disabled}
             />
 
-            <div className="form-divider" role="separator">
-              <span>or</span>
-            </div>
-          </>
-        )}
-
-        {(diagnosisSupported || imageOnlySupported) && (
-          <ImageUploadForm
-            images={images}
-            onImagesChange={setImages}
-            onSubmit={handleImageSubmit}
-            disabled={disabled}
-          />
-        )}
-
-        {!diagnosisSupported && !imageOnlySupported && (
-          <div className="species-unavailable">
-            <span className="species-unavailable__icon" aria-hidden="true">
-              🚧
-            </span>
-            <p>
-              <strong>
-                Diagnosis for {SPECIES_OPTIONS.find((option) => option.value === species)?.label} isn't
-                available yet.
-              </strong>
-            </p>
-            <p>This is tracked as future work — check back in a later update.</p>
+            {mode === 'symptoms' ? (
+              <SymptomForm
+                fields={getSymptomFields(species)}
+                symptoms={symptoms}
+                onSymptomChange={handleSymptomChange}
+                onSubmit={handleSubmit}
+                disabled={disabled}
+              />
+            ) : (
+              <ImageUploadForm
+                images={images}
+                onImagesChange={setImages}
+                onSubmit={handleImageSubmit}
+                disabled={disabled}
+              />
+            )}
           </div>
-        )}
+        </div>
 
-        {status === 'error' && error && (
-          <p role="alert" className="form-error">
-            <span aria-hidden="true">⚠️</span> {error.message}
-          </p>
-        )}
+        {showResultArea && (
+          <section
+            className="result-pane"
+            aria-label="Diagnosis result"
+            aria-busy={status === 'submitting'}
+            ref={resultRef}
+            tabIndex={-1}
+          >
+            <div className="result-pane__inner">
+              {status === 'submitting' && <ResultLoading mode={mode} photoCount={images.length} />}
 
-        {status === 'success' && result && (
-          <div className="diagnosis-outcome" ref={resultRef} tabIndex={-1}>
-            <DiagnosisResult result={result} />
-            <div className="diagnosis-outcome__actions">
-              <button type="button" className="retry-species-button" onClick={handleCheckOtherSpecies}>
-                <span aria-hidden="true">🔍</span> Check for Other Species
-              </button>
+              {status === 'error' && error && (
+                <div className="result-error">
+                  <p role="alert" className="form-error">
+                    <span aria-hidden="true">⚠️</span> {error.message}
+                  </p>
+                  <p className="result-error__hint">Check the form and try again.</p>
+                </div>
+              )}
+
+              {status === 'success' && result && (
+                <>
+                  <DiagnosisResult result={result} />
+                  <div className="diagnosis-outcome__actions">
+                    <button type="button" className="new-diagnosis-button" onClick={handleNewDiagnosis}>
+                      <span aria-hidden="true">🔄</span> New diagnosis
+                    </button>
+                  </div>
+                </>
+              )}
             </div>
-          </div>
+          </section>
         )}
       </main>
 

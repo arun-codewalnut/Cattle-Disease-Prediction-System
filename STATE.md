@@ -748,6 +748,12 @@ _Last updated: 2026-09-27 (Java backend merged into ml-service — two services 
   - `docs/DISCLAIMER.md`, `models/REGISTRY.md`, `data/cattle-images/SOURCE.md` all carry the
     full, real numbers and the curation story — nothing about this shipped quietly.
 
+- **Two-screen UI** (2026-09-28, branch `feat/two-screen-diagnosis-ui`, stacked on the Goat
+  branch; spec [docs/specs/two-screen-diagnosis-ui.md](docs/specs/two-screen-diagnosis-ui.md)).
+  Symptoms | Photo tabs, per-screen species lists (Cat/Dog on Photo only), form centred until
+  submit then split (form left, result right; stacked below 900px), loading and error states
+  in the result area, "New diagnosis" replaces "Check for Other Species". Title is now
+  "Animal health checker". Presentation only — no API or result-content change.
 - **Goat symptom diagnosis = PPR screen** (2026-09-28, branch
   `feat/goat-and-species-symptom-models`, spec
   [docs/specs/goat-ppr-symptom-screen.md](docs/specs/goat-ppr-symptom-screen.md)). Goat routes

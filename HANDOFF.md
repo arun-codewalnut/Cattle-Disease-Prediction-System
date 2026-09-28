@@ -5,6 +5,25 @@ End-of-session notes. Overwrite this each session — it's a handoff to "next se
 
 ---
 
+## This session (2026-09-28, part 2) — Two-screen diagnosis UI
+
+Branch `feat/two-screen-diagnosis-ui` (branched from `feat/goat-and-species-symptom-models`,
+so it includes the Goat PPR change — merge that one first, or merge this one alone to get
+both). Spec: `docs/specs/two-screen-diagnosis-ui.md`.
+
+- **Symptoms | Photo tabs** (real ARIA tab list, arrow keys work). Symptoms lists Cow, Sheep,
+  Goat; Photo lists all five.
+- **Layout**: form centred until submit; then the result pane grows in on the right and the
+  form glides left (CSS only, ~0.6s, off under reduced motion); below 900px the result stacks
+  under the form and the page scrolls to it. Loading skeleton and API errors appear in the
+  result area.
+- Fixed along the way: the "Escalate to vet" action box is now tinted with the card's
+  urgency colour (was always green); alert text uses the theme token, so it's readable in
+  dark mode.
+- **Gotcha for local dev**: Vite inside Docker on Windows doesn't see file changes through
+  the bind mount — `docker compose restart frontend` after editing, or run `npm run dev`
+  natively.
+
 ## This session (2026-09-28) — Goat PPR symptom screen + symptom-dataset search
 
 Branch `feat/goat-and-species-symptom-models`. Spec: `docs/specs/goat-ppr-symptom-screen.md`.

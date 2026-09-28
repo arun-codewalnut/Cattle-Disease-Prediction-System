@@ -7,7 +7,7 @@ export default function SymptomForm({ fields, symptoms, onSymptomChange, onSubmi
   return (
     <form onSubmit={handleSubmit}>
       <fieldset disabled={disabled}>
-        <legend>🩺 Symptoms</legend>
+        <legend>🩺 What signs do you see?</legend>
         <div className="symptom-grid">
           {fields.map((field) => (
             <label key={field.key} htmlFor={field.key} className="symptom-chip">
